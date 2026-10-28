@@ -17,7 +17,6 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 - `dev-container.config.ts`: the stack.
 - `services/*/Dockerfile`: image for each service. `services/hub/dist` is built output.
 - `src/hub`: the hub stub.
-- `src/sync.ts`, `src/launchd.ts`: auto-sync.
 - `vendor/dev-container`, `vendor/vi`: git submodules, pinned by commit.
 
 ## Set up the host
@@ -34,13 +33,13 @@ pnpm run up          # build and start the containers
 
 Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
 
-## Auto-sync
+## Daemon and auto-upgrade
 
-`pnpm sync` runs `git pull --ff-only`, updates the submodules, and redeploys only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. Use `pnpm sync --force` to redeploy anyway.
+`pnpm daemon:install` registers `dev-container daemon run` to start at login: a launchd agent on macOS, a systemd user unit on Linux. The daemon serves the dashboard API and page on `127.0.0.1:7357`, and with `selfUpgrade.auto` it runs `dev-container upgrade` every `selfUpgrade.interval` seconds: pull the repo, update the submodules, run `selfUpgrade.command`, and redeploy only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. The dashboard's **Upgrade** button, or `pnpm selfupgrade --force`, redeploys on demand. The dashboard token is in `.dev-container/dashboard-token`.
 
 ```sh
-pnpm autosync:install     # launchd agent, every 5 minutes, log in .sync/sync.log
-pnpm autosync:uninstall
+pnpm daemon:install
+pnpm daemon:uninstall
 ```
 
 ## Upgrade the submodules
@@ -51,7 +50,7 @@ pnpm vendor:upgrade dev-container
 pnpm vendor:upgrade vi
 ```
 
-This moves each to its remote's latest commit and rebuilds dev-container if it moved. It does not commit. Review with `git diff --submodule`, then commit the new pointers. The host picks them up on its next sync.
+This moves each to its remote's latest commit and rebuilds dev-container if it moved. It does not commit. Review with `git diff --submodule`, then commit the new pointers. The host picks them up on its next upgrade.
 
 ## Secrets
 

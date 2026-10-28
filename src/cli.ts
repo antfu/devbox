@@ -1,23 +1,10 @@
 import process from 'node:process'
-import { installAgent, uninstallAgent } from './launchd'
-import { sync } from './sync'
 import { upgrade } from './upgrade'
 import { buildDevContainer, initSubmodules, isSubmoduleName } from './vendor'
 
 const [command, subcommand, ...rest] = process.argv.slice(2)
 
 switch (`${command} ${subcommand ?? ''}`.trim()) {
-  case 'sync':
-    sync({
-      force: process.argv.includes('--force'),
-    })
-    break
-  case 'launchd install':
-    installAgent()
-    break
-  case 'launchd uninstall':
-    uninstallAgent()
-    break
   case 'vendor setup':
     initSubmodules()
     buildDevContainer()
@@ -34,6 +21,6 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
     break
   }
   default:
-    console.error('usage: cli.ts sync [--force] | launchd install|uninstall | vendor setup|upgrade [dev-container|vi]')
+    console.error('usage: cli.ts vendor setup|upgrade [dev-container|vi]')
     process.exit(1)
 }

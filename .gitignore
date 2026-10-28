@@ -17,7 +17,6 @@ temp
 .env
 .env.secret
 .dev-container
-.sync
 library
 workspace
 .turbo

@@ -12,16 +12,24 @@ catch {
 
 export default defineConfig({
   name: 'containers',
-  // .env holds what the containers receive; .env.secret holds what the broker and sidecars keep to themselves.
-  envFile: ['.env', '.env.secret'],
-  // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
-  builtins: { npm: false },
+  // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm. The gpg builtin
+  // signs the agents' commits when GPG_PRIVATE_KEY is set in .env.
+  builtins: { npm: false, gpg: 'auto' },
+  // The daemon (pnpm daemon:install) serves the dashboard and pulls, rebuilds and restarts every 5 minutes.
+  // The dashboard is also served at https://monitor.<tailnet>.ts.net by the tailscale-dashboard sidecar.
+  dashboard: {
+    tailscale: { hostname: 'monitor', domain: process.env.TAILNET_DOMAIN },
+  },
+  selfUpgrade: {
+    auto: true,
+    command: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm run build:hub'],
+  },
   services: {
     // Placeholder until the standalone hub UI exists; same port as the real one.
     hub: {
       build: 'services/hub',
       ports: [
-        { port: 8100, tailnet: 443 },
+        { port: 8100, tailnet: true },
       ],
       tailscale: { hostname: 'hub' },
     },
@@ -32,22 +40,26 @@ export default defineConfig({
         PASEO_PASSWORD: { env: 'PASEO_PASSWORD' },
         // Lets the daemon accept the tailnet hostname served by the Tailscale sidecar.
         PASEO_HOSTNAMES: '.ts.net',
+        // Vercel AI Gateway: pi and opencode read AI_GATEWAY_API_KEY themselves; Claude Code needs the
+        // Anthropic-compatible endpoint, with ANTHROPIC_API_KEY emptied because it wins over the token.
+        ...process.env.AI_GATEWAY_API_KEY && {
+          AI_GATEWAY_API_KEY: { env: 'AI_GATEWAY_API_KEY' },
+          ANTHROPIC_BASE_URL: 'https://ai-gateway.vercel.sh/claude-code',
+          ANTHROPIC_AUTH_TOKEN: { env: 'AI_GATEWAY_API_KEY' },
+          ANTHROPIC_API_KEY: '',
+          CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '1',
+        },
         // The sidecar terminates TLS and sends X-Forwarded-Proto. Without trusting it, the web UI
         // takes its daemon connection as ws://<host>:80 instead of wss://<host>:443.
         PASEO_TRUSTED_PROXIES: 'loopback,uniquelocal',
-        // Base64 GPG keys, imported at startup by services/paseo/git-setup.sh. Commits are signed only
-        // when the private key is set, and the cage has to hold it.
-        ...process.env.GPG_PRIVATE_KEY && { GPG_PRIVATE_KEY: process.env.GPG_PRIVATE_KEY },
-        ...process.env.GPG_PUBLIC_KEY && { GPG_PUBLIC_KEY: process.env.GPG_PUBLIC_KEY },
-        // Commit identity for the agents; GIT_NAME and GIT_EMAIL live in .env.
-        ...process.env.GIT_NAME && { GIT_AUTHOR_NAME: process.env.GIT_NAME, GIT_COMMITTER_NAME: process.env.GIT_NAME },
-        ...process.env.GIT_EMAIL && { GIT_AUTHOR_EMAIL: process.env.GIT_EMAIL, GIT_COMMITTER_EMAIL: process.env.GIT_EMAIL },
         // The web UI's websocket comes from the tailnet origin, which the daemon rejects unless listed.
         ...process.env.TAILNET_DOMAIN && { PASEO_CORS_ORIGINS: `https://paseo.${process.env.TAILNET_DOMAIN}` },
       },
       ports: [
-        { port: 6767, tailnet: 443 },
+        { port: 6767, tailnet: true },
       ],
+      // Commit identity for the agents; GIT_NAME and GIT_EMAIL live in .env.
+      git: { name: process.env.GIT_NAME, email: process.env.GIT_EMAIL },
       volumes: ['./workspace:/workspace'],
       persist: ['/home/paseo'],
       tailscale: { hostname: 'paseo' },
@@ -60,7 +72,7 @@ export default defineConfig({
         __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: '.ts.net',
       },
       ports: [
-        { port: 5656, tailnet: 443 },
+        { port: 5656, tailnet: true },
       ],
       volumes: [`${resolve(process.env.VI_LIBRARY ?? './library')}:/app/example`],
       tailscale: { hostname: 'vi' },
