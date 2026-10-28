@@ -26,8 +26,8 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 git clone --recurse-submodules <this repo> && cd containers
 pnpm install
 pnpm vendor:setup            # build the dev-container CLI
-cp .env.example .env         # non-secret settings, e.g. VI_LIBRARY
-cp .env.secret.example .env.secret   # fill in TS_AUTHKEY and PASEO_PASSWORD
+cp .env.example .env         # passed into the containers: VI_LIBRARY, git identity, PASEO_PASSWORD, GPG key
+cp .env.secret.example .env.secret   # isolated by the broker: TS_AUTHKEY, GITHUB_TOKEN
 pnpm build           # bundle the hub stub, build the images
 pnpm run up          # build and start the containers
 ```
@@ -55,4 +55,7 @@ This moves each to its remote's latest commit and rebuilds dev-container if it m
 
 ## Secrets
 
-`.env.secret` lives only on the host and is gitignored. `.env` is gitignored too, and `.env.example` documents it.
+Both files live only on the host and are gitignored; the `.example` files document them.
+
+- `.env` is passed into the containers. It holds `PASEO_PASSWORD` and `GPG_PRIVATE_KEY` (optional; empty means unsigned commits) and `GPG_PUBLIC_KEY`, which a process has to hold itself, plus settings such as `VI_LIBRARY`, `TAILNET_DOMAIN`, `GIT_NAME` and `GIT_EMAIL`. Use a dedicated GPG signing key, since any agent in the paseo cage can use it.
+- `.env.secret` is isolated. The broker swaps `GITHUB_TOKEN` in on the wire, so the containers only see a placeholder. `TS_AUTHKEY` is read by the Tailscale sidecars only.

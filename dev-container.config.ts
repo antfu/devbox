@@ -3,7 +3,7 @@ import process from 'node:process'
 import { defineConfig } from '@antfu/dev-container'
 
 try {
-  // Non-secret settings such as VI_LIBRARY; the config itself is evaluated before envFile is read.
+  // Settings such as VI_LIBRARY; the config itself is evaluated before envFile is read.
   process.loadEnvFile('.env')
 }
 catch {
@@ -12,10 +12,10 @@ catch {
 
 export default defineConfig({
   name: 'containers',
-  // .env.secret holds TS_AUTHKEY and PASEO_PASSWORD and stays on the host.
+  // .env holds what the containers receive; .env.secret holds what the broker and sidecars keep to themselves.
   envFile: ['.env', '.env.secret'],
-  // No service here calls GitHub or npm through the broker.
-  builtins: { github: false, npm: false },
+  // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
+  builtins: { npm: false },
   services: {
     // Placeholder until the standalone hub UI exists; same port as the real one.
     hub: {
@@ -32,6 +32,18 @@ export default defineConfig({
         PASEO_PASSWORD: { env: 'PASEO_PASSWORD' },
         // Lets the daemon accept the tailnet hostname served by the Tailscale sidecar.
         PASEO_HOSTNAMES: '.ts.net',
+        // The sidecar terminates TLS and sends X-Forwarded-Proto. Without trusting it, the web UI
+        // takes its daemon connection as ws://<host>:80 instead of wss://<host>:443.
+        PASEO_TRUSTED_PROXIES: 'loopback,uniquelocal',
+        // Base64 GPG keys, imported at startup by services/paseo/git-setup.sh. Commits are signed only
+        // when the private key is set, and the cage has to hold it.
+        ...process.env.GPG_PRIVATE_KEY && { GPG_PRIVATE_KEY: process.env.GPG_PRIVATE_KEY },
+        ...process.env.GPG_PUBLIC_KEY && { GPG_PUBLIC_KEY: process.env.GPG_PUBLIC_KEY },
+        // Commit identity for the agents; GIT_NAME and GIT_EMAIL live in .env.
+        ...process.env.GIT_NAME && { GIT_AUTHOR_NAME: process.env.GIT_NAME, GIT_COMMITTER_NAME: process.env.GIT_NAME },
+        ...process.env.GIT_EMAIL && { GIT_AUTHOR_EMAIL: process.env.GIT_EMAIL, GIT_COMMITTER_EMAIL: process.env.GIT_EMAIL },
+        // The web UI's websocket comes from the tailnet origin, which the daemon rejects unless listed.
+        ...process.env.TAILNET_DOMAIN && { PASEO_CORS_ORIGINS: `https://paseo.${process.env.TAILNET_DOMAIN}` },
       },
       ports: [
         { port: 6767, tailnet: 443 },
