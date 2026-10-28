@@ -4,11 +4,13 @@ Configs and setup for my personal container workflow. This repo stays private. I
 
 It deploys one [dev-container](https://github.com/antfu/dev-container) stack on an always-on Mac at home. Every service is reachable only over Tailscale, each on its own node.
 
-| Service | Tailnet host | Port | What it is |
+| Service | Tailnet host | Listens on | What it is |
 | --- | --- | --- | --- |
 | `hub` | `hub` | 8100 | Placeholder server. The standalone hub UI from agent-container replaces it. |
 | `paseo` | `paseo` | 6767 | Paseo daemon with web UI, plus Claude Code, OpenCode and Pi. |
 | `vi` | `vi` | 5656 | [vi](https://github.com/antfu/vi) video library, served from `VI_LIBRARY`. |
+
+Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `https://hub.kudu-cardassian.ts.net`. The port column is where the service listens inside the stack and on `127.0.0.1`.
 
 ## Layout
 

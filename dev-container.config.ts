@@ -21,7 +21,7 @@ export default defineConfig({
     hub: {
       build: 'services/hub',
       ports: [
-        { port: 8100, tailnet: true },
+        { port: 8100, tailnet: 443 },
       ],
       tailscale: { hostname: 'hub' },
     },
@@ -34,7 +34,7 @@ export default defineConfig({
         PASEO_HOSTNAMES: '.ts.net',
       },
       ports: [
-        { port: 6767, tailnet: true },
+        { port: 6767, tailnet: 443 },
       ],
       volumes: ['./workspace:/workspace'],
       persist: ['/home/paseo'],
@@ -48,7 +48,7 @@ export default defineConfig({
         __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: '.ts.net',
       },
       ports: [
-        { port: 5656, tailnet: true },
+        { port: 5656, tailnet: 443 },
       ],
       volumes: [`${resolve(process.env.VI_LIBRARY ?? './library')}:/app/example`],
       tailscale: { hostname: 'vi' },
