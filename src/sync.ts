@@ -67,8 +67,7 @@ export function sync({ force = false }: { force?: boolean } = {}): void {
   run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'])
   if (plan.rebuildDevContainer)
     buildDevContainer()
-  run('pnpm', ['build'])
-  run('pnpm', ['dc', 'up'])
+  run('pnpm', ['run', 'up'])
   writeDeployed(current)
   console.log(`deployed ${current.head.slice(0, 7)}`)
 }

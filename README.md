@@ -26,8 +26,8 @@ pnpm install
 pnpm vendor:setup            # build the dev-container CLI
 cp .env.example .env         # non-secret settings, e.g. VI_LIBRARY
 cp .env.secret.example .env.secret   # fill in TS_AUTHKEY and PASEO_PASSWORD
-pnpm build
-pnpm dc up
+pnpm build           # bundle the hub stub, build the images
+pnpm run up          # build and start the containers
 ```
 
 Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
@@ -37,8 +37,8 @@ Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
 `pnpm sync` runs `git pull --ff-only`, updates the submodules, and redeploys only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. Use `pnpm sync --force` to redeploy anyway.
 
 ```sh
-pnpm sync:install     # launchd agent, every 5 minutes, log in .sync/sync.log
-pnpm sync:uninstall
+pnpm autosync:install     # launchd agent, every 5 minutes, log in .sync/sync.log
+pnpm autosync:uninstall
 ```
 
 ## Upgrade the submodules
