@@ -1,5 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "project": ["src/**/*.ts"],
+  "entry": ["dev-container.config.ts"],
+  "project": ["src/**/*.ts", "*.ts"],
+  "ignore": ["vendor/**"],
   "ignoreDependencies": ["@antfu/utils", "taze", "@antfu/skills"]
 }

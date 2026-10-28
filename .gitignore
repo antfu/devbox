@@ -12,3 +12,11 @@ node_modules
 temp
 .eslintcache
 .agents/skills
+
+# Host-only state and secrets
+.env
+.env.secret
+.dev-container
+.sync
+library
+workspace

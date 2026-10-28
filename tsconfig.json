@@ -10,5 +10,7 @@
     "verbatimModuleSyntax": true,
     "skipDefaultLibCheck": true,
     "skipLibCheck": true
-  }
+  },
+  "include": ["src", "test", "*.ts"],
+  "exclude": ["vendor", "services/*/dist"]
 }

@@ -1,0 +1,6 @@
+[submodule "vendor/dev-container"]
+	path = vendor/dev-container
+	url = https://github.com/antfu/dev-container.git
+[submodule "vendor/vi"]
+	path = vendor/vi
+	url = https://github.com/antfu/vi.git

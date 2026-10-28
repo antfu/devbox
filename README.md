@@ -1,42 +1,56 @@
-# pkg-placeholder
+# @antfu/containers
 
-[![npm version][npm-version-src]][npm-version-href]
-[![npm downloads][npm-downloads-src]][npm-downloads-href]
-[![bundle][bundle-src]][bundle-href]
-[![JSDocs][jsdocs-src]][jsdocs-href]
-[![License][license-src]][license-href]
+Configs and setup for my personal container workflow. This repo stays private. It holds specific configs and non-secret env, never secrets.
 
-_description_
+It deploys one [dev-container](https://github.com/antfu/dev-container) stack on an always-on Mac at home. Every service is reachable only over Tailscale, each on its own node.
 
-## Note for Developers
+| Service | Tailnet host | Port | What it is |
+| --- | --- | --- | --- |
+| `hub` | `hub` | 8100 | Placeholder server. The standalone hub UI from agent-container replaces it. |
+| `paseo` | `paseo` | 6767 | Paseo daemon with web UI, plus Claude Code, OpenCode and Pi. |
+| `vi` | `vi` | 5656 | [vi](https://github.com/antfu/vi) video library, served from `VI_LIBRARY`. |
 
-This starter recommands using [npm Trusted Publisher](https://github.com/e18e/ecosystem-issues/issues/201), where the release is done on CI to ensure the security of the packages.
+## Layout
 
-To do so, you need to run `pnpm publish` manually for the very first time to create the package on npm, and then go to `https://www.npmjs.com/package/<your-package-name>/access` to set the connection to your GitHub repo.
+- `dev-container.config.ts`: the stack.
+- `services/*/Dockerfile`: image for each service. `services/hub/dist` is built output.
+- `src/hub`: the hub stub.
+- `src/sync.ts`, `src/launchd.ts`: auto-sync.
+- `vendor/dev-container`, `vendor/vi`: git submodules, pinned by commit.
 
-Then for the future releases, you can run `pnpm run release` to do the release and the GitHub Actions will take care of the release process.
+## Set up the host
 
-## Sponsors
+```sh
+git clone --recurse-submodules <this repo> && cd containers
+pnpm install
+pnpm vendor:setup            # build the dev-container CLI
+cp .env.example .env         # non-secret settings, e.g. VI_LIBRARY
+cp .env.secret.example .env.secret   # fill in TS_AUTHKEY and PASEO_PASSWORD
+pnpm build
+pnpm dc up
+```
 
-<p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/antfu/static/sponsors.svg">
-    <img src="https://cdn.jsdelivr.net/gh/antfu/static/sponsors.svg" alt="Sponsors"/>
-  </a>
-</p>
+Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
 
-## License
+## Auto-sync
 
-[MIT](./LICENSE) License © [Anthony Fu](https://github.com/antfu)
+`pnpm sync` runs `git pull --ff-only`, updates the submodules, and redeploys only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. Use `pnpm sync --force` to redeploy anyway.
 
-<!-- Badges -->
+```sh
+pnpm sync:install     # launchd agent, every 5 minutes, log in .sync/sync.log
+pnpm sync:uninstall
+```
 
-[npm-version-src]: https://img.shields.io/npm/v/pkg-placeholder?style=flat&colorA=080f12&colorB=1fa669
-[npm-version-href]: https://npmx.dev/package/pkg-placeholder
-[npm-downloads-src]: https://img.shields.io/npm/dm/pkg-placeholder?style=flat&colorA=080f12&colorB=1fa669
-[npm-downloads-href]: https://npmx.dev/package/pkg-placeholder
-[bundle-src]: https://img.shields.io/bundlephobia/minzip/pkg-placeholder?style=flat&colorA=080f12&colorB=1fa669&label=minzip
-[bundle-href]: https://bundlephobia.com/result?p=pkg-placeholder
-[license-src]: https://img.shields.io/github/license/antfu/pkg-placeholder.svg?style=flat&colorA=080f12&colorB=1fa669
-[license-href]: https://github.com/antfu/pkg-placeholder/blob/main/LICENSE
-[jsdocs-src]: https://img.shields.io/badge/jsdocs-reference-080f12?style=flat&colorA=080f12&colorB=1fa669
-[jsdocs-href]: https://www.jsdocs.io/package/pkg-placeholder
+## Upgrade the submodules
+
+```sh
+pnpm vendor:upgrade              # both
+pnpm vendor:upgrade dev-container
+pnpm vendor:upgrade vi
+```
+
+This moves each to its remote's latest commit and rebuilds dev-container if it moved. It does not commit. Review with `git diff --submodule`, then commit the new pointers. The host picks them up on its next sync.
+
+## Secrets
+
+`.env.secret` lives only on the host and is gitignored. `.env` is gitignored too, and `.env.example` documents it.

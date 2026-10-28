@@ -1,14 +1,9 @@
 import { defineConfig } from 'tsdown'
-import { StaleGuardRecorder } from 'tsdown-stale-guard'
 
+/** The hub stub is the only thing that ships as built output: its Dockerfile copies the bundle. */
 export default defineConfig({
-  entry: [
-    'src/index.ts',
-  ],
-  dts: true,
-  exports: true,
-  publint: true,
-  plugins: [
-    StaleGuardRecorder(),
-  ],
+  entry: { hub: 'src/hub/main.ts' },
+  outDir: 'services/hub/dist',
+  platform: 'node',
+  dts: false,
 })
