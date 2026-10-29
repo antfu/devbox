@@ -5,6 +5,11 @@
 # it, `lody start` prints a sign-in link in the container logs and waits for you to open it.
 set -euo pipefail
 
+# Lody's startup lock holds the owner's pid and is only removed on a clean exit. The lock lives in the
+# persisted home, and the daemon is always the same pid in a container, so after a restart the stale lock
+# names the new process and Lody refuses to start (local_ipc_lock_in_use). Only one daemon runs here.
+rm -f "${HOME}/.lody/run/daemon.lock"
+
 if [[ -n "${LODY_AUTH:-}" ]]; then
   exec lody start --auth "$LODY_AUTH"
 fi
