@@ -19,4 +19,6 @@ temp
 .dev-container
 library
 workspace
+volumes
+signing
 .turbo

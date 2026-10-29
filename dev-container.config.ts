@@ -12,9 +12,8 @@ catch {
 
 export default defineConfig({
   name: 'containers',
-  // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm. The gpg builtin
-  // signs the agents' commits when GPG_PRIVATE_KEY is set in .env.
-  builtins: { npm: false, gpg: 'auto' },
+  // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
+  builtins: { npm: false },
   // The daemon (pnpm daemon:install) serves the dashboard and pulls, rebuilds and restarts every 5 minutes.
   // The dashboard is also served at https://monitor.<tailnet>.ts.net by the tailscale-dashboard sidecar.
   dashboard: {
@@ -38,8 +37,13 @@ export default defineConfig({
       env: {
         // Checked by the daemon itself, so it has to live in the cage.
         PASEO_PASSWORD: { env: 'PASEO_PASSWORD' },
+        // Which agents `skills add` installs for; see services/paseo/install-skills.
+        SKILLS_AGENTS: 'claude-code opencode pi',
+        // The CLI reports installs to its own service, which the cage has no need to reach.
+        DISABLE_TELEMETRY: '1',
         // Lets the daemon accept the tailnet hostname served by the Tailscale sidecar.
         PASEO_HOSTNAMES: '.ts.net',
+        GIT_CONFIG_SYSTEM: '/etc/paseo-signing/gitconfig',
         // Vercel AI Gateway: pi and opencode read AI_GATEWAY_API_KEY themselves; Claude Code needs the
         // Anthropic-compatible endpoint, with ANTHROPIC_API_KEY emptied because it wins over the token.
         ...process.env.AI_GATEWAY_API_KEY && {
@@ -60,7 +64,13 @@ export default defineConfig({
       ],
       // Commit identity for the agents; GIT_NAME and GIT_EMAIL live in .env.
       git: { name: process.env.GIT_NAME, email: process.env.GIT_EMAIL },
-      volumes: ['./workspace:/workspace'],
+      // The home folder (logins, models, caches) lives on the host, where it is easy to back up.
+      // Commits and tags are signed with the SSH key in ./signing. Its gitconfig is git's system config.
+      volumes: [
+        // Read on every start, so editing it needs a restart, not a rebuild.
+        './services/paseo/skills.txt:/etc/paseo/skills.txt:ro',
+        './signing:/etc/paseo-signing:ro',
+      ],
       persist: ['/home/paseo'],
       tailscale: { hostname: 'paseo' },
     },

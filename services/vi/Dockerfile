@@ -7,7 +7,9 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
-# The video library is mounted here; gallery.config.ts reads ./example.
+# Production build: vite bundles the app into dist/, and `vite preview` serves it with the same API plugin.
+RUN pnpm run build
+# The video library is mounted here; vi.config.ts reads ./example.
 VOLUME /app/example
 EXPOSE 5656
-CMD ["pnpm", "dev:lan"]
+CMD ["pnpm", "exec", "vite", "preview", "--port", "5656", "--host"]

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Installs the global skills listed in skills.txt in the background, then runs the base entrypoint.
+#
+# Each line is `<source> [skill ...]`: a GitHub repo, a URL or a local path, then the names of the skills
+# to take from it. With no names, every skill in the source is installed. Blank lines and `#` comments
+# are skipped. Global skills land in ~/.agents, which lives on the host mount, so they survive recreation.
+set -uo pipefail
+
+LIST="${SKILLS_FILE:-/etc/paseo/skills.txt}"
+AGENTS="${SKILLS_AGENTS:-claude-code opencode pi}"
+HOME_DIR=/home/paseo
+
+sync_skills() {
+  if [[ ! -f "$LIST" ]]; then
+    echo "install-skills: no $LIST, nothing to install" >&2
+    return 0
+  fi
+  # The home folder is a host mount that the base entrypoint may still be chowning.
+  until gosu paseo test -w "$HOME_DIR"; do sleep 1; done
+
+  local source skills
+  # One failed source must not stop the rest, so report it and go on.
+  while read -r source skills; do
+    echo "install-skills: $source ${skills:-(all skills)}"
+    # A bare `*` is a name for `skills`, not a pattern for the shell, and the lists are split on purpose.
+    # shellcheck disable=SC2086
+    (set -f; gosu paseo env HOME="$HOME_DIR" skills add "$source" --global --yes --agent $AGENTS --skill ${skills:-*}) \
+      || echo "install-skills: could not install $source" >&2
+  done < <(grep -v -E '^[[:space:]]*(#|$)' "$LIST")
+  echo "install-skills: done"
+}
+
+sync_skills &
+
+exec /usr/local/bin/paseo-docker-entrypoint "$@"
