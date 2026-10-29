@@ -5,10 +5,19 @@
 # it, `lody start` prints a sign-in link in the container logs and waits for you to open it.
 set -euo pipefail
 
-# Lody's startup lock holds the owner's pid and is only removed on a clean exit. The lock lives in the
-# persisted home, and the daemon is always the same pid in a container, so after a restart the stale lock
-# names the new process and Lody refuses to start (local_ipc_lock_in_use). Only one daemon runs here.
-rm -f "${HOME}/.lody/run/daemon.lock"
+# Lody keeps its unix sockets and a startup lock in ~/.lody/run, which has two problems here.
+# - ~/.lody is the persisted home, a bind mount from the host. On a macOS host that mount does not
+#   support unix sockets, and Lody crashes with ENOTSUP.
+# - The lock holds the owner's pid and is only removed on a clean exit. The daemon is always the same pid
+#   in a container, so after a restart the stale lock names the new process and Lody refuses to start
+#   (local_ipc_lock_in_use).
+# So run/ is a symlink to a fresh folder on the container's own filesystem, rebuilt on every start. The
+# sign-in and the cloned repos stay in the persisted home. Only one daemon runs here.
+RUN_DIR=/tmp/lody-run
+DATA_DIR="${LODY_DATA_DIR:-$HOME/.lody}"
+rm -rf "$RUN_DIR" "$DATA_DIR/run"
+mkdir -p -m 700 "$RUN_DIR" "$DATA_DIR"
+ln -s "$RUN_DIR" "$DATA_DIR/run"
 
 if [[ -n "${LODY_AUTH:-}" ]]; then
   exec lody start --auth "$LODY_AUTH"

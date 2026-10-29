@@ -46,6 +46,12 @@ RUN --mount=type=cache,target=/root/.npm \
 # unless a project pins one.
 RUN jup enable
 
-# Installs the skills in /etc/paseo/skills.txt in the background on start, then runs the base entrypoint.
+# The GPG keyring lives on the container's own filesystem, not in /home/paseo. gpg-agent puts its socket
+# in the keyring folder, and the home is a host mount that cannot hold unix sockets (on macOS hosts),
+# which leaves gpg with "can't connect to the agent". install-skills imports the key on every start.
+ENV GNUPGHOME=/opt/gnupg
+RUN install -d -m 700 -o paseo -g paseo /opt/gnupg
+
+# Imports the signing key and installs the skills in /etc/paseo/skills.txt in the background on start, then runs the base entrypoint.
 COPY install-skills /usr/local/bin/install-skills
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/install-skills"]

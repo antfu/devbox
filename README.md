@@ -57,7 +57,7 @@ This moves each to its remote's latest commit and rebuilds dev-container if it m
 
 ## Commit signing
 
-Paseo's agents sign commits and tags with a GPG key. `keys/gpg/` is git-ignored and mounted read-only into paseo at `/etc/paseo-keys/gpg`; its `gitconfig` is read through `GIT_CONFIG_SYSTEM`, and `private.asc` is imported into the agents' keyring on every start. To create or rotate the key:
+Paseo's agents sign commits and tags with a GPG key. `keys/gpg/` is git-ignored and mounted read-only into paseo at `/etc/paseo-keys/gpg`; its `gitconfig` is read through `GIT_CONFIG_SYSTEM`, and `private.asc` is imported on every start into a keyring on the container's own filesystem (`GNUPGHOME=/opt/gnupg`), because gpg-agent's socket cannot live on the host mount. To create or rotate the key:
 
 ```sh
 pnpm keys:setup            # add --force to replace an existing key
