@@ -29,6 +29,7 @@ cp .env.example .env         # passed into the containers: VI_LIBRARY, git ident
 cp .env.secret.example .env.secret   # isolated by the broker: TS_AUTHKEY, GITHUB_TOKEN
 pnpm build           # bundle the hub stub, build the images
 pnpm run up          # build and start the containers
+pnpm down            # stop and remove the containers
 ```
 
 Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
