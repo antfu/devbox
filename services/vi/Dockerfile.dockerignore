@@ -1,0 +1,5 @@
+# Keeps host-only files out of `COPY . .`, so they cannot invalidate the layers below it.
+.git
+.github
+node_modules
+dist

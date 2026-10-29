@@ -36,7 +36,7 @@ Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
 
 ## Daemon and auto-upgrade
 
-`pnpm daemon:install` registers `dev-container daemon run` to start at login: a launchd agent on macOS, a systemd user unit on Linux. The daemon serves the dashboard API and page on `127.0.0.1:7357`, and with `selfUpgrade.auto` it runs `dev-container upgrade` every `selfUpgrade.interval` seconds: pull the repo, update the submodules, run `selfUpgrade.command`, and redeploy only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. The dashboard's **Upgrade** button, or `pnpm selfupgrade --force`, redeploys on demand. The dashboard token is in `.dev-container/dashboard-token`.
+`pnpm daemon:install` registers `dev-container daemon run` to start at login: a launchd agent on macOS, a systemd user unit on Linux. The daemon serves the dashboard API and page on `127.0.0.1:7357`, and with `selfUpgrade.auto` it runs `dev-container upgrade` every `selfUpgrade.interval` seconds: pull the repo, update the submodules, run `selfUpgrade.command`, and redeploy only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. The dashboard's **Upgrade** button, or `pnpm selfupgrade --force`, redeploys on demand. The dashboard token is `DEV_CONTAINER_DASHBOARD_TOKEN` from `.env` when set, else the random one in `.dev-container/dashboard-token`.
 
 ```sh
 pnpm daemon:install

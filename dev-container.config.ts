@@ -14,6 +14,7 @@ export default defineConfig({
   name: 'containers',
   // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
   builtins: { npm: false },
+  // The dashboard's bearer token is DEV_CONTAINER_DASHBOARD_TOKEN from .env, loaded above.
   // The daemon (pnpm daemon:install) serves the dashboard and pulls, rebuilds and restarts every 5 minutes.
   // The dashboard is also served at https://monitor.<tailnet>.ts.net by the tailscale-dashboard sidecar.
   dashboard: {

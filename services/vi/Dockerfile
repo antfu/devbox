@@ -5,7 +5,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certi
   && npm install -g pnpm@12.5.1
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# The store is a build cache, so a changed lockfile only downloads what is new.
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 # Production build: vite bundles the app into dist/, and `vite preview` serves it with the same API plugin.
 RUN pnpm run build
