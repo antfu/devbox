@@ -55,13 +55,13 @@ This moves each to its remote's latest commit and rebuilds dev-container if it m
 
 ## Commit signing
 
-Paseo's agents sign commits and tags with an SSH key. `signing/` is git-ignored and mounted read-only into paseo at `/etc/paseo-signing`; its `gitconfig` is read through `GIT_CONFIG_SYSTEM`. To create or rotate the key:
+Paseo's agents sign commits and tags with a GPG key. `keys/gpg/` is git-ignored and mounted read-only into paseo at `/etc/paseo-keys/gpg`; its `gitconfig` is read through `GIT_CONFIG_SYSTEM`, and `private.asc` is imported into the agents' keyring on every start. To create or rotate the key:
 
 ```sh
-ssh-keygen -t ed25519 -N '' -C 'paseo signing' -f signing/id_ed25519
+pnpm keys:setup            # add --force to replace an existing key
 ```
 
-Then add `signing/id_ed25519.pub` to GitHub as a **signing** key at [github.com/settings/keys](https://github.com/settings/keys). The private key sits in the cage, so never reuse a key that can log in anywhere.
+It uses `GIT_NAME` and `GIT_EMAIL` from `.env`, builds the key in a throwaway keyring and prints the public key. Add that to GitHub at [github.com/settings/gpg/new](https://github.com/settings/gpg/new), then restart paseo. The key has no passphrase and any agent in the cage can use it, so make it a dedicated one.
 
 ## Secrets
 

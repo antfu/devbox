@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Installs the global skills listed in skills.txt in the background, then runs the base entrypoint.
+# Imports the GPG signing key and installs the global skills listed in skills.txt in the background,
+# then runs the base entrypoint.
 #
 # Each line is `<source> [skill ...]`: a GitHub repo, a URL or a local path, then the names of the skills
 # to take from it. With no names, every skill in the source is installed. Blank lines and `#` comments
@@ -9,6 +10,16 @@ set -uo pipefail
 LIST="${SKILLS_FILE:-/etc/paseo/skills.txt}"
 AGENTS="${SKILLS_AGENTS:-claude-code opencode pi}"
 HOME_DIR=/home/paseo
+
+KEY=/etc/paseo-keys/gpg/private.asc
+
+# The keyring lives in the home folder, so the key has to be imported once that is writable.
+import_key() {
+  [[ -f "$KEY" ]] || return 0
+  until gosu paseo test -w "$HOME_DIR"; do sleep 1; done
+  gosu paseo env HOME="$HOME_DIR" gpg --batch --import "$KEY" \
+    || echo "install-skills: could not import the signing key" >&2
+}
 
 sync_skills() {
   if [[ ! -f "$LIST" ]]; then
@@ -30,6 +41,7 @@ sync_skills() {
   echo "install-skills: done"
 }
 
+import_key &
 sync_skills &
 
 exec /usr/local/bin/paseo-docker-entrypoint "$@"

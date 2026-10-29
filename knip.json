@@ -3,5 +3,6 @@
   "entry": ["dev-container.config.ts"],
   "project": ["src/**/*.ts", "*.ts"],
   "ignore": ["vendor/**"],
+  "ignoreBinaries": ["gpg", "gpgconf"],
   "ignoreDependencies": ["@antfu/utils", "taze", "@antfu/skills"]
 }

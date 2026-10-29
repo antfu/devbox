@@ -43,7 +43,7 @@ export default defineConfig({
         DISABLE_TELEMETRY: '1',
         // Lets the daemon accept the tailnet hostname served by the Tailscale sidecar.
         PASEO_HOSTNAMES: '.ts.net',
-        GIT_CONFIG_SYSTEM: '/etc/paseo-signing/gitconfig',
+        GIT_CONFIG_SYSTEM: '/etc/paseo-keys/gpg/gitconfig',
         // Vercel AI Gateway: pi and opencode read AI_GATEWAY_API_KEY themselves; Claude Code needs the
         // Anthropic-compatible endpoint, with ANTHROPIC_API_KEY emptied because it wins over the token.
         ...process.env.AI_GATEWAY_API_KEY && {
@@ -65,11 +65,11 @@ export default defineConfig({
       // Commit identity for the agents; GIT_NAME and GIT_EMAIL live in .env.
       git: { name: process.env.GIT_NAME, email: process.env.GIT_EMAIL },
       // The home folder (logins, models, caches) lives on the host, where it is easy to back up.
-      // Commits and tags are signed with the SSH key in ./signing. Its gitconfig is git's system config.
+      // Commits and tags are signed with the GPG key in ./keys/gpg (pnpm keys:setup). Its gitconfig is git's system config.
       volumes: [
         // Read on every start, so editing it needs a restart, not a rebuild.
         './services/paseo/skills.txt:/etc/paseo/skills.txt:ro',
-        './signing:/etc/paseo-signing:ro',
+        './keys/gpg:/etc/paseo-keys/gpg:ro',
       ],
       persist: ['/home/paseo'],
       tailscale: { hostname: 'paseo' },

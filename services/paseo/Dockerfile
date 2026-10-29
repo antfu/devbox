@@ -7,8 +7,9 @@ USER root
 
 # One apt layer for every system package. gh comes from GitHub's apt repo, since Debian's copy is old.
 # It reads the placeholder GITHUB_TOKEN, which the broker swaps for the real token on api.github.com.
+# gnupg signs the agents' commits; install-skills imports the key on start.
 # Python for the agents: pip is blocked system-wide (PEP 668), so projects use venv or uv.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
   && apt-get update && apt-get install -y --no-install-recommends gh python3 python3-pip python3-venv python-is-python3 \

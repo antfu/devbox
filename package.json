@@ -23,6 +23,7 @@
     "down": "pnpm dc compose down",
     "vendor:setup": "tsx src/cli.ts vendor setup",
     "vendor:upgrade": "tsx src/cli.ts vendor upgrade",
+    "keys:setup": "tsx src/cli.ts keys setup",
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run test --run",
     "prepare": "git config core.hooksPath .githooks && simple-git-hooks && pnpm run vendor:setup && skills experimental_sync -y"
   },
@@ -42,6 +43,7 @@
     "down": "Stop and remove the containers",
     "vendor:setup": "Init the submodules and build dev-container",
     "vendor:upgrade": "Move the submodules to their latest remote commit",
+    "keys:setup": "Generate the GPG key paseo signs commits and tags with, in keys/gpg",
     "ci": "Run the full continuous integration pipeline",
     "prepare": "Set up git hooks and skills"
   },
