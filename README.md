@@ -8,7 +8,7 @@ It deploys one [dev-container](https://github.com/antfu/dev-container) stack on 
 | --- | --- | --- | --- |
 | `hub` | `hub` | 8100 | Placeholder server. The standalone hub UI from agent-container replaces it. |
 | `paseo` | `paseo` | 6767 | Paseo daemon with web UI, plus Claude Code, OpenCode and Pi. |
-| `amp` | `amp` | 7681 | [Amp](https://ampcode.com) CLI in a browser terminal (ttyd and tmux), on paseo's toolchain. |
+| `lody` | none | none | [Lody](https://lody.ai) daemon: connects out to Lody so you can dispatch Claude Code, OpenCode and Pi from its apps. |
 | `vi` | `vi` | 5656 | [vi](https://github.com/antfu/vi) video library, served from `VI_LIBRARY`. |
 
 Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `https://hub.kudu-cardassian.ts.net`. The port column is where the service listens inside the stack and on `127.0.0.1`.
@@ -17,8 +17,7 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 
 - `dev-container.config.ts`: the stack.
 - `services/*/Dockerfile`: image for each service. `services/hub/dist` is built output.
-- `services/base`: the toolchain paseo and amp start FROM (system packages, jup, uv, Chromium, agent CLIs, GPG, skills installer) and `skills.txt`. `pnpm build:base` builds it as `containers/base`; `build`, `up` and the self-upgrade run it first.
-- `workspace/`: git-ignored projects folder, mounted at `/workspace` in both paseo and amp. On a Linux host, `chown 1000:1000` it so the agents can write.
+- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub and lody start FROM (system packages, jup, uv, Chromium, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG, skills installer) and `skills.txt`. `pnpm build:dev-base` builds it as `dev-base`; `build`, `up` and the self-upgrade run it first.
 - `src/hub`: the hub stub.
 - `vendor/dev-container`, `vendor/vi`: git submodules, pinned by commit.
 
@@ -28,9 +27,9 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 git clone --recurse-submodules <this repo> && cd containers
 pnpm install
 pnpm vendor:setup            # build the dev-container CLI
-cp .env.example .env         # passed into the containers: VI_LIBRARY, git identity, PASEO_PASSWORD, AMP_PASSWORD
-cp .env.secret.example .env.secret   # isolated by the broker: TS_AUTHKEY, GITHUB_TOKEN, AMP_API_KEY
-pnpm build           # bundle the hub stub, build the base image and the service images
+cp .env.example .env         # passed into the containers: VI_LIBRARY, git identity, PASEO_PASSWORD, LODY_AUTH
+cp .env.secret.example .env.secret   # isolated by the broker: TS_AUTHKEY, GITHUB_TOKEN
+pnpm build           # bundle the hub stub, build dev-base and the service images
 pnpm run up          # build and start the containers
 pnpm down            # stop and remove the containers
 ```

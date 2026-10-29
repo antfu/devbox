@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Serves a tmux session as a web terminal. Reached over the tailnet, behind basic auth.
-set -euo pipefail
-
-: "${AMP_PASSWORD:?AMP_PASSWORD is not set; the terminal is reachable from the whole tailnet}"
-
-exec ttyd --port 7681 --writable --credential "amp:${AMP_PASSWORD}" tmux new-session -A -s amp

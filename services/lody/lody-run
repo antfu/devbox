@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Runs the Lody daemon in the foreground, so the container lives as long as it does.
+#
+# With LODY_AUTH (a CLI token from Settings > Account in the Lody app) it signs in on its own. Without
+# it, `lody start` prints a sign-in link in the container logs and waits for you to open it.
+set -euo pipefail
+
+if [[ -n "${LODY_AUTH:-}" ]]; then
+  exec lody start --auth "$LODY_AUTH"
+fi
+
+echo "lody-run: LODY_AUTH is not set; open the sign-in link below" >&2
+exec lody start

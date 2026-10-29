@@ -1,5 +1,5 @@
-# The toolchain shared by paseo and amp: system packages, jup, uv, Chromium, the agent CLIs, GPG and the
-# skills installer. Built as `containers/base` by `pnpm build:base`, before the services that start FROM it.
+# The toolchain shared by paseo, hub and lody: system packages, jup, uv, Chromium, the agent CLIs, GPG and the
+# skills installer. Built as `dev-base` by `pnpm build:dev-base`, before the services that start FROM it.
 # It starts from paseo's image because that supplies the `paseo` user (uid 1000), tini, gosu, /workspace
 # and an entrypoint that runs any command it is given as that user; paseo's daemon only starts when no
 # command is given.
@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # The npm tools move fastest, so they come last of the installs. Add or bump packages here only.
 RUN --mount=type=cache,target=/root/.npm \
-  npm install -g @anthropic-ai/claude-code @sourcegraph/amp opencode-ai @mariozechner/pi-coding-agent skills taze @antfu/ni
+  npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai @mariozechner/pi-coding-agent lody skills taze @antfu/ni
 
 # After every npm install, because it replaces the npm, npx and yarn shims with jup's: each project then
 # runs the package manager version it pins, and pnpm becomes available. Node stays the base image's
