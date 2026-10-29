@@ -9,9 +9,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
   pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
-# Production build: vite bundles the app into dist/, and `vite preview` serves it with the same API plugin.
+# Production build: Nuxt writes a self-contained server to .output/, which already allows .ts.net hosts.
 RUN pnpm run build
 # The video library is mounted here; vi.config.ts reads ./example.
 VOLUME /app/example
 EXPOSE 5656
-CMD ["pnpm", "exec", "vite", "preview", "--port", "5656", "--host"]
+ENV HOST=0.0.0.0 PORT=5656
+CMD ["node", ".output/server/index.mjs"]

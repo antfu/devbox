@@ -78,10 +78,6 @@ export default defineConfig({
     vi: {
       // Built from the vi submodule; its Dockerfile lives here because vi has none.
       build: { context: 'vendor/vi', dockerfile: '../../services/vi/Dockerfile' },
-      env: {
-        // vi's Vite server only answers hosts it knows; this adds the tailnet's.
-        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: '.ts.net',
-      },
       ports: [
         { port: 5656, tailnet: true },
       ],
