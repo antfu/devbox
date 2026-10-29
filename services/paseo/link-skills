@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Links the skills mounted at SKILLS_DIR into the agents' global skill folders, then runs dev-base's entrypoint.
+#
+# The host fills the mount with `pnpm skills:sync` (see skills.txt): each skill is a folder in
+# $SKILLS_DIR/.agents/skills. Claude Code reads ~/.claude/skills, and the other agents (OpenCode, Pi, Codex)
+# read ~/.agents/skills, which Paseo also writes its own skills to, so the skills are linked in rather than
+# the folder mounted over it. Links run on every start: new skills appear and removed ones go.
+set -uo pipefail
+
+SKILLS_DIR="${SKILLS_DIR:-/opt/skills}"
+
+# Runs as the image's unprivileged user, with HOME set.
+link_all() {
+  local source="$SKILLS_DIR/.agents/skills" target skill
+  for target in "$HOME/.agents/skills" "$HOME/.claude/skills"; do
+    mkdir -p "$target"
+    # Drop links into the mount whose skill is gone; the user's own skills and Paseo's are not links into it.
+    find "$target" -maxdepth 1 -type l -lname "$SKILLS_DIR/*" ! -exec test -e {} \; -delete
+    [[ -d "$source" ]] || continue
+    for skill in "$source"/*/; do
+      [[ -d "$skill" ]] && ln -sfn "${skill%/}" "$target/$(basename "$skill")"
+    done
+  done
+  echo "link-skills: linked $(find "$HOME/.agents/skills" -maxdepth 1 -type l -lname "$SKILLS_DIR/*" | wc -l | tr -d ' ') skills"
+}
+
+if [[ "${1:-}" == --link ]]; then
+  link_all
+  exit 0
+fi
+
+RUN_USER="$(getent passwd 1000 | cut -d: -f1)"
+RUN_HOME="$(getent passwd 1000 | cut -d: -f6)"
+
+# The home is a host mount that the base entrypoint may still be chowning.
+(
+  until gosu "$RUN_USER" test -w "$RUN_HOME"; do sleep 1; done
+  gosu "$RUN_USER" env HOME="$RUN_HOME" SKILLS_DIR="$SKILLS_DIR" "$0" --link
+) &
+
+exec /usr/local/bin/dev-base-entrypoint "$@"

@@ -1,5 +1,5 @@
-# The toolchain shared by paseo, hub and lody: system packages, jup, uv, Chromium, the agent CLIs, GPG and the
-# skills installer. Built as `dev-base` by `pnpm build:dev-base`, before the services that start FROM it.
+# The toolchain shared by paseo, hub and lody: system packages, jup, uv, Chromium, the agent CLIs and GPG.
+# Built as `dev-base` by `pnpm build:dev-base`, before the services that start FROM it.
 # It starts from paseo's image because that supplies the `paseo` user (uid 1000), tini, gosu, /workspace
 # and an entrypoint that runs any command it is given as that user; paseo's daemon only starts when no
 # command is given.
@@ -12,7 +12,7 @@ USER root
 
 # One apt layer for every system package. gh comes from GitHub's apt repo, since Debian's copy is old.
 # It reads the placeholder GITHUB_TOKEN, which the broker swaps for the real token on api.github.com.
-# gnupg signs the agents' commits; install-skills imports the key on start.
+# gnupg signs the agents' commits; the entrypoint imports the key on start.
 # Python for the agents: pip is blocked system-wide (PEP 668), so projects use venv or uv.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -48,10 +48,10 @@ RUN jup enable
 
 # The GPG keyring lives on the container's own filesystem, not in /home/paseo. gpg-agent puts its socket
 # in the keyring folder, and the home is a host mount that cannot hold unix sockets (on macOS hosts),
-# which leaves gpg with "can't connect to the agent". install-skills imports the key on every start.
+# which leaves gpg with "can't connect to the agent". The entrypoint imports the key on every start.
 ENV GNUPGHOME=/opt/gnupg
-RUN install -d -m 700 -o paseo -g paseo /opt/gnupg
+RUN install -d -m 700 -o 1000 -g 1000 /opt/gnupg
 
-# Imports the signing key and installs the skills in /etc/paseo/skills.txt in the background on start, then runs the base entrypoint.
-COPY install-skills /usr/local/bin/install-skills
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/install-skills"]
+# Imports the signing key mounted at /etc/signing on start, then runs the base entrypoint.
+COPY dev-base-entrypoint /usr/local/bin/dev-base-entrypoint
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/dev-base-entrypoint"]

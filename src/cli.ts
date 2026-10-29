@@ -1,5 +1,6 @@
 import process from 'node:process'
 import { setupGpgKey } from './keys'
+import { syncSkills } from './skills'
 import { upgrade } from './upgrade'
 import { buildDevContainer, initSubmodules, isSubmoduleName } from './vendor'
 
@@ -21,10 +22,13 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
       : undefined)
     break
   }
+  case 'skills sync':
+    syncSkills()
+    break
   case 'keys setup':
     setupGpgKey(rest.includes('--force'))
     break
   default:
-    console.error('usage: cli.ts vendor setup|upgrade [dev-container|vi] | keys setup [--force]')
+    console.error('usage: cli.ts vendor setup|upgrade [dev-container|vi] | keys setup [--force] | skills sync')
     process.exit(1)
 }

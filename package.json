@@ -25,6 +25,7 @@
     "vendor:setup": "tsx src/cli.ts vendor setup",
     "vendor:upgrade": "tsx src/cli.ts vendor upgrade",
     "keys:setup": "tsx src/cli.ts keys setup",
+    "skills:sync": "tsx src/cli.ts skills sync",
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run test --run",
     "prepare": "git config core.hooksPath .githooks && simple-git-hooks && pnpm run vendor:setup && skills experimental_sync -y"
   },
@@ -37,7 +38,7 @@
     "knip": "Find unused files, exports and dependencies",
     "lint": "Check for code style issues",
     "selfupgrade": "Pull this repo and redeploy when it changed",
-    "daemon:install": "Install the daemon that serves the dashboard and upgrades on a schedule",
+    "daemon:install": "Install the daemon that serves the dashboard, with an Upgrade button",
     "daemon:uninstall": "Remove the daemon",
     "test": "Run the test suite",
     "typecheck": "Check types",
@@ -45,6 +46,7 @@
     "down": "Stop and remove the containers",
     "vendor:setup": "Init the submodules and build dev-container",
     "vendor:upgrade": "Move the submodules to their latest remote commit",
+    "skills:sync": "Install the skills in services/paseo/skills.txt into ./skills, which paseo mounts",
     "keys:setup": "Generate the GPG key paseo signs commits and tags with, in keys/gpg",
     "ci": "Run the full continuous integration pipeline",
     "prepare": "Set up git hooks and skills"

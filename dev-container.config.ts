@@ -12,12 +12,8 @@ catch {
 
 // What paseo and lody share: the dev-base toolchain (services/dev-base), and so the same agent setup around it.
 const agentEnv = {
-  // Which agents `skills add` installs for; see services/dev-base/install-skills.
-  SKILLS_AGENTS: 'claude-code codex opencode pi',
-  // The CLI reports installs to its own service, which the cage has no need to reach.
-  DISABLE_TELEMETRY: '1',
   // Signs commits and tags with the GPG key below; its gitconfig is git's system config.
-  GIT_CONFIG_SYSTEM: '/etc/paseo-keys/gpg/gitconfig',
+  GIT_CONFIG_SYSTEM: '/etc/signing/gitconfig',
   // Vercel AI Gateway: pi and opencode read AI_GATEWAY_API_KEY themselves; Claude Code needs the
   // Anthropic-compatible endpoint, with ANTHROPIC_API_KEY emptied because it wins over the token.
   ...process.env.AI_GATEWAY_API_KEY && {
@@ -29,10 +25,8 @@ const agentEnv = {
   },
 }
 const agentVolumes = [
-  // Read on every start, so editing it needs a restart, not a rebuild.
-  './services/dev-base/skills.txt:/etc/paseo/skills.txt:ro',
-  // The signing key, made by `pnpm keys:setup`.
-  './keys/gpg:/etc/paseo-keys/gpg:ro',
+  // The signing key, made by `pnpm keys:setup`; dev-base's entrypoint imports it on every start.
+  './keys/gpg:/etc/signing:ro',
 ]
 // Commit identity for the agents; GIT_NAME and GIT_EMAIL live in .env.
 const git = { name: process.env.GIT_NAME, email: process.env.GIT_EMAIL }
@@ -42,13 +36,12 @@ export default defineConfig({
   // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
   builtins: { npm: false },
   // The dashboard's bearer token is DEV_CONTAINER_DASHBOARD_TOKEN from .env, loaded above.
-  // The daemon (pnpm daemon:install) serves the dashboard and pulls, rebuilds and restarts every 5 minutes.
+  // The daemon (pnpm daemon:install) serves the dashboard, whose Upgrade button pulls, rebuilds and restarts.
   // The dashboard is also served at https://monitor.<tailnet>.ts.net by the tailscale-dashboard sidecar.
   dashboard: {
     tailscale: { hostname: 'monitor', domain: process.env.TAILNET_DOMAIN },
   },
   selfUpgrade: {
-    auto: true,
     command: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm run build:hub', 'pnpm run build:dev-base'],
   },
   services: {
@@ -79,7 +72,13 @@ export default defineConfig({
       ],
       git,
       // The home folder (logins, models, caches) lives on the host, where it is easy to back up.
-      volumes: agentVolumes,
+      volumes: [
+        ...agentVolumes,
+        // The global skills, installed on the host by `pnpm skills:sync` from services/paseo/skills.txt.
+        // The folder is emptied and refilled in place, so a running paseo sees changes; link-skills links
+        // them into the agents' home on every start.
+        './skills:/opt/skills:ro',
+      ],
       persist: ['/home/paseo'],
       tailscale: { hostname: 'paseo' },
     },

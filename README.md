@@ -17,7 +17,7 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 
 - `dev-container.config.ts`: the stack.
 - `services/*/Dockerfile`: image for each service. `services/hub/dist` is built output.
-- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub and lody start FROM (system packages, jup, uv, Chromium, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG, skills installer) and `skills.txt`. `pnpm build:dev-base` builds it as `dev-base`; `build`, `up` and the self-upgrade run it first.
+- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub and lody start FROM (system packages, jup, uv, Chromium, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG) and a generic entrypoint that imports the signing key. It knows nothing about skills; those belong to paseo. `pnpm build:dev-base` builds it as `dev-base`; `build`, `up` and the self-upgrade run it first.
 - `src/hub`: the hub stub.
 - `vendor/dev-container`, `vendor/vi`: git submodules, pinned by commit.
 
@@ -36,9 +36,9 @@ pnpm down            # stop and remove the containers
 
 Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
 
-## Daemon and auto-upgrade
+## Daemon and upgrade
 
-`pnpm daemon:install` registers `dev-container daemon run` to start at login: a launchd agent on macOS, a systemd user unit on Linux. The daemon serves the dashboard API and page on `127.0.0.1:7357`, and with `selfUpgrade.auto` it runs `dev-container upgrade` every `selfUpgrade.interval` seconds: pull the repo, update the submodules, run `selfUpgrade.command`, and redeploy only if HEAD moved since the last good deploy. A failed deploy keeps the old containers running and is retried on the next run. The dashboard's **Upgrade** button, or `pnpm selfupgrade --force`, redeploys on demand. The dashboard token is `DEV_CONTAINER_DASHBOARD_TOKEN` from `.env` when set, else the random one in `.dev-container/dashboard-token`.
+`pnpm daemon:install` registers `dev-container daemon run` to start at login: a launchd agent on macOS, a systemd user unit on Linux. The daemon serves the dashboard API and page on `127.0.0.1:7357`, and shows how many new commits the checkout is behind. Nothing upgrades on its own. The dashboard's **Upgrade** button (or `pnpm selfupgrade`) pulls the repo, updates the submodules, runs `selfUpgrade.command`, builds the images and only then restarts the services, so a failed build keeps the old containers running. The dashboard token is `DEV_CONTAINER_DASHBOARD_TOKEN` from `.env` when set, else the random one in `.dev-container/dashboard-token`.
 
 ```sh
 pnpm daemon:install
@@ -57,13 +57,24 @@ This moves each to its remote's latest commit and rebuilds dev-container if it m
 
 ## Commit signing
 
-Paseo's agents sign commits and tags with a GPG key. `keys/gpg/` is git-ignored and mounted read-only into paseo at `/etc/paseo-keys/gpg`; its `gitconfig` is read through `GIT_CONFIG_SYSTEM`, and `private.asc` is imported on every start into a keyring on the container's own filesystem (`GNUPGHOME=/opt/gnupg`), because gpg-agent's socket cannot live on the host mount. To create or rotate the key:
+The agents in paseo and lody sign commits and tags with a GPG key. `keys/gpg/` is git-ignored and mounted read-only at `/etc/signing`; its `gitconfig` is read through `GIT_CONFIG_SYSTEM`, and `private.asc` is imported on every start into a keyring on the container's own filesystem (`GNUPGHOME=/opt/gnupg`), because gpg-agent's socket cannot live on the host mount. To create or rotate the key:
 
 ```sh
 pnpm keys:setup            # add --force to replace an existing key
 ```
 
 It uses `GIT_NAME` and `GIT_EMAIL` from `.env`, builds the key in a throwaway keyring and prints the public key. Add that to GitHub at [github.com/settings/gpg/new](https://github.com/settings/gpg/new), then restart paseo. The key has no passphrase and any agent in the cage can use it, so make it a dedicated one.
+
+## Skills
+
+Paseo's agents get the global skills listed in `services/paseo/skills.txt`. The host installs them, and paseo only mounts them:
+
+```sh
+pnpm skills:sync                  # install the list into ./skills (git-ignored)
+pnpm dc compose restart paseo     # link-skills relinks them into the agents' home
+```
+
+`./skills` is mounted read-only at `/opt/skills`. On every start paseo's `link-skills` entrypoint links each skill into `~/.agents/skills` (OpenCode, Pi, Codex) and `~/.claude/skills` (Claude Code), next to the skills Paseo writes itself. Nothing is installed or fetched when the container starts. lody does not get these skills.
 
 ## Secrets
 
