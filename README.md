@@ -65,6 +65,14 @@ pnpm keys:setup            # add --force to replace an existing key
 
 It uses `GIT_NAME` and `GIT_EMAIL` from `.env`, builds the key in a throwaway keyring and prints the public key. Add that to GitHub at [github.com/settings/gpg/new](https://github.com/settings/gpg/new), then restart paseo. The key has no passphrase and any agent in the cage can use it, so make it a dedicated one.
 
+## Bypass mode
+
+Paseo has no setting for a default permission mode: each provider's default is fixed (Claude `auto`, Codex `auto-review`), and the app only remembers the last mode you picked, per device. The container is the isolation here, so paseo's entrypoint adds two agent profiles to `config.json` on start, **Claude (bypass)** and **Codex (full access)**. Pick one under **Profiles** in the new-agent model picker, and choose the bypass mode once per provider, per device, to make it stick. `services/paseo/seed-profiles.mjs` only adds profiles that are missing, so your edits stay, and it skips a `config.json` that does not exist yet, so on a fresh home start paseo once and restart it. OpenCode and Pi have no bypass mode.
+
+## Claude Code attribution
+
+On every start dev-base adds `"attribution": { "commit": "", "pr": "" }` to Claude Code's user settings (`~/.claude/settings.json`) in paseo and lody, so its commits carry no `Co-Authored-By: Claude` trailer and its pull requests no "Generated with Claude Code" line. It is only a default: it adds the key when it is missing, so a value you set later, here or in a project's own `.claude/settings.json`, wins. If the home is not writable on the first start, the next start applies it.
+
 ## Skills
 
 Paseo's agents get the global skills listed in `services/paseo/skills.txt`. The host installs them, and paseo only mounts them:

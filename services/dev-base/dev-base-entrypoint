@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Imports the GPG signing key, then runs the image's original entrypoint.
+# Imports the GPG signing key and sets Claude Code's defaults, then runs the image's original entrypoint.
 #
 # The key is a read-only mount: private.asc in the folder GPG_KEY_FILE points into. The keyring is
 # $GNUPGHOME, off the home mount (see the Dockerfile), so the key is imported on every start and before
@@ -24,5 +24,8 @@ import_key() {
 }
 
 import_key
+
+# Claude Code adds no co-author trailer or PR line unless the user's settings say otherwise.
+gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/seed-claude-settings.mjs
 
 exec /usr/local/bin/paseo-docker-entrypoint "$@"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Links the skills mounted at SKILLS_DIR into the agents' global skill folders, then runs dev-base's entrypoint.
+# Prepares paseo's home, then runs dev-base's entrypoint: adds the bypass agent profiles (seed-profiles.mjs)
+# and links the skills mounted at SKILLS_DIR into the agents' global skill folders.
 #
 # The host fills the mount with `pnpm skills:sync` (see skills.txt): each skill is a folder in
 # $SKILLS_DIR/.agents/skills. Claude Code reads ~/.claude/skills, and the other agents (OpenCode, Pi, Codex)
@@ -31,6 +32,10 @@ fi
 
 RUN_USER="$(getent passwd 1000 | cut -d: -f1)"
 RUN_HOME="$(getent passwd 1000 | cut -d: -f6)"
+
+# Before the daemon starts, so it loads the profiles. A home that is not writable yet is skipped until the
+# next start.
+gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/seed-profiles.mjs
 
 # The home is a host mount that the base entrypoint may still be chowning.
 (

@@ -26,6 +26,7 @@
     "vendor:upgrade": "tsx src/cli.ts vendor upgrade",
     "keys:setup": "tsx src/cli.ts keys setup",
     "skills:sync": "tsx src/cli.ts skills sync",
+    "projects:setup": "tsx src/cli.ts projects setup",
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run test --run",
     "prepare": "git config core.hooksPath .githooks && simple-git-hooks && pnpm run vendor:setup && skills experimental_sync -y"
   },
@@ -46,6 +47,7 @@
     "down": "Stop and remove the containers",
     "vendor:setup": "Init the submodules and build dev-container",
     "vendor:upgrade": "Move the submodules to their latest remote commit",
+    "projects:setup": "Give every pnpm repo in a folder a paseo.json that runs pnpm install on new worktrees",
     "skills:sync": "Install the skills in services/paseo/skills.txt into ./skills, which paseo mounts",
     "keys:setup": "Generate the GPG key paseo signs commits and tags with, in keys/gpg",
     "ci": "Run the full continuous integration pipeline",

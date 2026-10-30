@@ -52,6 +52,8 @@ RUN jup enable
 ENV GNUPGHOME=/opt/gnupg
 RUN install -d -m 700 -o 1000 -g 1000 /opt/gnupg
 
-# Imports the signing key mounted at /etc/signing on start, then runs the base entrypoint.
+# On start, imports the signing key mounted at /etc/signing and turns off Claude Code's co-author trailer by
+# default, then runs the base entrypoint.
+COPY seed-claude-settings.mjs /usr/local/bin/seed-claude-settings.mjs
 COPY dev-base-entrypoint /usr/local/bin/dev-base-entrypoint
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/dev-base-entrypoint"]
