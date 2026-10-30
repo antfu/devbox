@@ -1,6 +1,5 @@
 import process from 'node:process'
 import { setupGpgKey } from './keys'
-import { setupProjects } from './projects'
 import { syncSkills } from './skills'
 import { upgrade } from './upgrade'
 import { buildDevContainer, initSubmodules, isSubmoduleName } from './vendor'
@@ -23,15 +22,6 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
       : undefined)
     break
   }
-  case 'projects setup': {
-    const folder = rest.find(arg => !arg.startsWith('--'))
-    if (!folder) {
-      console.error('usage: cli.ts projects setup <folder> [--dry-run]')
-      process.exit(1)
-    }
-    setupProjects(folder, rest.includes('--dry-run'))
-    break
-  }
   case 'skills sync':
     syncSkills()
     break
@@ -39,6 +29,6 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
     setupGpgKey(rest.includes('--force'))
     break
   default:
-    console.error('usage: cli.ts vendor setup|upgrade [dev-container|vi] | keys setup [--force] | skills sync | projects setup <folder> [--dry-run]')
+    console.error('usage: cli.ts vendor setup|upgrade [dev-container|vi] | keys setup [--force] | skills sync')
     process.exit(1)
 }
