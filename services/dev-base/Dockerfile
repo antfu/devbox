@@ -1,4 +1,5 @@
-# The toolchain shared by paseo, hub and lody: system packages, jup, uv, Chromium, the agent CLIs and GPG.
+# The toolchain shared by paseo, hub, lody and vi: system packages, jup, uv, Rust, Chromium and Chrome, agent-browser,
+# the agent CLIs and GPG.
 # Built as `dev-base` by `pnpm build:dev-base`, before the services that start FROM it.
 # It starts from paseo's image because that supplies the `paseo` user (uid 1000), tini, gosu, /workspace
 # and an entrypoint that runs any command it is given as that user; paseo's daemon only starts when no
@@ -16,10 +17,11 @@ USER root
 # It reads the placeholder GITHUB_TOKEN, which the broker swaps for the real token on api.github.com.
 # gnupg signs the agents' commits; the entrypoint imports the key on start.
 # Python for the agents: pip is blocked system-wide (PEP 668), so projects use venv or uv.
+# build-essential supplies the C compiler and linker that Rust and native npm modules need.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update && apt-get install -y --no-install-recommends gh python3 python3-pip python3-venv python-is-python3 \
+  && apt-get update && apt-get install -y --no-install-recommends gh build-essential python3 python3-pip python3-venv python-is-python3 \
   && rm -rf /var/lib/apt/lists/*
 
 # Tools that have to live outside /home/paseo, which is a host mount and hides anything installed there.
@@ -30,18 +32,33 @@ RUN curl -fsSL https://jup.unjs.io/install.sh | JUP_SHIM_DIRECTORY=/usr/local/bi
   && mkdir -p /opt/jup && chown -R paseo:paseo /opt/jup \
   && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 
-# Chromium for Playwright, with the system libraries it needs, shared by every user. It is the largest
+# The Rust toolchain, outside /home/paseo for the same reason. The minimal profile keeps the layer small;
+# clippy and rustfmt are added back. The daemon's user owns both folders, so cargo can fetch crates
+# and `rustup` can add targets.
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:${PATH}
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --component clippy --component rustfmt \
+  && chown -R paseo:paseo /opt/rustup /opt/cargo
+
+# Chromium for Playwright, with the system libraries it needs, shared by every user. Google Chrome comes
+# too where Google ships it (amd64 only; on arm64 Chromium is the only browser). It is the largest
 # layer and rarely changes, so it stays above the npm tools.
+# /usr/local/bin/chrome points at Chrome, or at Chromium without it, and is the browser agent-browser uses,
+# so it needs no download of its own.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/local/bin/chrome
 RUN --mount=type=cache,target=/root/.npm \
   npm install -g playwright \
   && playwright install --with-deps chromium \
+  && if [ "$(dpkg --print-architecture)" = amd64 ]; then playwright install --with-deps chrome; fi \
   && chmod -R a+rX /opt/playwright \
+  && if [ -x /opt/google/chrome/chrome ]; then ln -s /opt/google/chrome/chrome /usr/local/bin/chrome; \
+     else ln -s "$(find /opt/playwright -type f -name chrome -path '*chromium-*' | head -n 1)" /usr/local/bin/chrome; fi \
+  && test -x /usr/local/bin/chrome \
   && rm -rf /var/lib/apt/lists/*
 
 # The npm tools move fastest, so they come last of the installs. Add or bump packages here only.
 RUN --mount=type=cache,target=/root/.npm \
-  npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai @mariozechner/pi-coding-agent lody skills taze @antfu/ni
+  npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai @mariozechner/pi-coding-agent agent-browser lody skills taze @antfu/ni
 
 # After every npm install, because it replaces the npm, npx and yarn shims with jup's: each project then
 # runs the package manager version it pins, and pnpm becomes available. Node stays the base image's

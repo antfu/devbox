@@ -17,7 +17,7 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 
 - `dev-container.config.ts`: the stack.
 - `services/*/Dockerfile`: image for each service. `services/hub/dist` is built output.
-- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub and lody start FROM (system packages, jup, uv, Chromium, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG) and a generic entrypoint that imports the signing key. It knows nothing about skills; those belong to paseo. `pnpm build:dev-base` builds it as `dev-base`; `build`, `up` and the self-upgrade run it first.
+- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub, lody and vi start FROM (system packages, jup, uv, Rust, Chromium, Chrome on amd64, Playwright, agent-browser, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG) and a generic entrypoint that imports the signing key. It knows nothing about skills; those belong to paseo. `pnpm build:dev-base` builds it as `dev-base`; `build`, `up` and the self-upgrade run it first.
 - `src/hub`: the hub stub.
 - `vendor/dev-container`, `vendor/vi`: git submodules, pinned by commit.
 

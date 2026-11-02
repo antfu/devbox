@@ -34,7 +34,7 @@
     "build": "Build the container images",
     "bundle:hub": "Run the hub stub bundler, uncached",
     "build:hub": "Bundle the hub stub into its image context, cached by turbo",
-    "build:dev-base": "Build the dev-base toolchain image that paseo, hub and lody start FROM",
+    "build:dev-base": "Build the dev-base toolchain image that paseo, hub, lody and vi start FROM",
     "dc": "Run the vendored dev-container CLI",
     "knip": "Find unused files, exports and dependencies",
     "lint": "Check for code style issues",
