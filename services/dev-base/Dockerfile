@@ -3,7 +3,9 @@
 # It starts from paseo's image because that supplies the `paseo` user (uid 1000), tini, gosu, /workspace
 # and an entrypoint that runs any command it is given as that user; paseo's daemon only starts when no
 # command is given.
-FROM ghcr.io/getpaseo/paseo:latest
+# Pinned to a stable release: bump it here, then rebuild. The pnpm-install plugin needs 0.14 or newer.
+ARG PASEO_VERSION=0.14.0
+FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
 # Stay root: the base entrypoint drops the daemon and its agents to the `paseo` user.
 USER root
 

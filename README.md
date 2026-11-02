@@ -69,6 +69,17 @@ It uses `GIT_NAME` and `GIT_EMAIL` from `.env`, builds the key in a throwaway ke
 
 Paseo has no setting for a default permission mode: each provider's default is fixed (Claude `auto`, Codex `auto-review`), and the app only remembers the last mode you picked, per device. The container is the isolation here, so paseo's entrypoint adds two agent profiles to `config.json` on start, **Claude (bypass)** and **Codex (full access)**. Pick one under **Profiles** in the new-agent model picker, and choose the bypass mode once per provider, per device, to make it stick. `services/paseo/seed-profiles.mjs` only adds profiles that are missing, so your edits stay, and it skips a `config.json` that does not exist yet, so on a fresh home start paseo once and restart it. OpenCode and Pi have no bypass mode.
 
+## pnpm install on new worktrees
+
+Paseo reads `worktree.setup` only from a repo's committed `paseo.json`, and there is no global default. To get `pnpm install` for every project without a `paseo.json` in each repo, paseo ships a plugin, `services/paseo/plugins/pnpm-install`. It hooks `worktree.create.after` and runs `pnpm install` in each new worktree of a pnpm project (a `pnpm-lock.yaml` or a `packageManager: pnpm@...`). A repo whose `paseo.json` sets `worktree.setup` keeps its own setup and is skipped.
+
+Plugins are trusted code and Paseo keeps them off by default, so two steps are yours, once per paseo home:
+
+1. Turn on **Settings → Plugins → Enable plugins** on the paseo host in the app.
+2. `pnpm plugins:install`, which installs `/opt/paseo-plugins/pnpm-install` from the image into the running daemon. Rerun it after the plugin changes.
+
+Watch it with `pnpm dc compose exec -T --user paseo paseo paseo plugin logs pnpm-install`. The install runs detached, because Paseo aborts a worktree's creation when a hook takes over 30 seconds. So the first agent can start before the install is done, and a failed install is only reported in those logs.
+
 ## Claude Code attribution
 
 On every start dev-base adds `"attribution": { "commit": "", "pr": "" }` to Claude Code's user settings (`~/.claude/settings.json`) in paseo and lody, so its commits carry no `Co-Authored-By: Claude` trailer and its pull requests no "Generated with Claude Code" line. It is only a default: it adds the key when it is missing, so a value you set later, here or in a project's own `.claude/settings.json`, wins. If the home is not writable on the first start, the next start applies it.

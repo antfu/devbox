@@ -2,6 +2,10 @@
 # and lody reuse the same layers. Paseo's daemon is dev-base's default command.
 FROM dev-base
 
+# Paseo plugins, installed into the daemon with `pnpm plugins:install`. Owned by the paseo user, since the
+# daemon may write into a plugin's folder when it installs it.
+COPY --chown=1000:1000 plugins/ /opt/paseo-plugins/
+
 # On start, adds the bypass agent profiles to paseo's config and links the skills mounted at /opt/skills into
 # the agents' home, then runs dev-base's entrypoint.
 COPY seed-profiles.mjs /usr/local/bin/seed-profiles.mjs
