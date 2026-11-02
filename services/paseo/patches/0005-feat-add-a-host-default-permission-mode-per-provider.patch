@@ -1,0 +1,1023 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:45:44 +0000
+Subject: [PATCH] feat: add a host default permission mode per provider
+
+New agents took their mode from whatever each device last remembered, so a
+host owner could not make every client start agents in the same mode. The
+host config now stores an optional defaultModeId per provider
+(agents.providers.<id>.defaultModeId), editable through the mutable daemon
+config; null clears it.
+
+When the mode still exists in the provider's catalog, the daemon reports it
+as the provider's defaultModeId (so clients with nothing remembered use it)
+plus a new hostDefaultModeId snapshot field, and uses it for top-level,
+attended creates that omit a mode. Parent inheritance, unattended selection
+and explicit modes are unchanged, and a stale id falls back to the
+provider's own default.
+
+The app gates on the new server_info.features.providerDefaultMode flag: Host
+settings > Agents gets a per-provider picker, and agent form resolution lets
+a host default beat the per-device remembered mode while explicit initial
+modes still win.
+
+Fork-Change: F-3
+---
+ .../app/src/hooks/use-agent-form-state.ts     |  37 +++-
+ packages/app/src/i18n/resources/ar.ts         |   1 +
+ packages/app/src/i18n/resources/en.ts         |   6 +
+ packages/app/src/i18n/resources/es.ts         |   1 +
+ packages/app/src/i18n/resources/fr.ts         |   1 +
+ packages/app/src/i18n/resources/ja.ts         |   1 +
+ packages/app/src/i18n/resources/ko.ts         |   1 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   1 +
+ packages/app/src/i18n/resources/ru.ts         |   1 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   1 +
+ .../host-default-mode.test.ts                 | 110 +++++++++++
+ .../provider-selection/host-default-mode.ts   |  40 ++++
+ .../app/src/screens/settings/host-page.tsx    |   2 +
+ .../settings/provider-default-mode-card.tsx   | 152 +++++++++++++++
+ packages/protocol/src/agent-types.ts          |   1 +
+ packages/protocol/src/messages.ts             |   7 +
+ packages/protocol/src/provider-config.ts      |   2 +
+ .../src/server/agent/agent-sdk-types.ts       |   1 +
+ .../server/agent/host-default-mode.test.ts    | 177 ++++++++++++++++++
+ .../src/server/agent/host-default-mode.ts     |  39 ++++
+ .../server/agent/provider-snapshot-manager.ts |  17 +-
+ .../src/server/daemon-config-store.test.ts    |  32 ++++
+ .../server/src/server/websocket-server.ts     |   2 +
+ .../public/schemas/paseo.config.v1.json       |  11 ++
+ 24 files changed, 637 insertions(+), 7 deletions(-)
+ create mode 100644 packages/app/src/provider-selection/host-default-mode.test.ts
+ create mode 100644 packages/app/src/provider-selection/host-default-mode.ts
+ create mode 100644 packages/app/src/screens/settings/provider-default-mode-card.tsx
+ create mode 100644 packages/server/src/server/agent/host-default-mode.test.ts
+ create mode 100644 packages/server/src/server/agent/host-default-mode.ts
+
+diff --git a/packages/app/src/hooks/use-agent-form-state.ts b/packages/app/src/hooks/use-agent-form-state.ts
+index 1522ce082edb2a68a14f04622ec617b7572a0c05..7c0562378e7e126a98219fdad15de01bcce39181 100644
+--- a/packages/app/src/hooks/use-agent-form-state.ts
++++ b/packages/app/src/hooks/use-agent-form-state.ts
+@@ -36,6 +36,12 @@ import {
+   type FormState,
+   type ProviderModelsByProvider,
+ } from "@/provider-selection/resolve-agent-form";
++import {
++  applyHostDefaultMode,
++  applyHostDefaultModes,
++  resolveHostDefaultModes,
++} from "@/provider-selection/host-default-mode";
++import { useHostFeature } from "@/runtime/host-features";
+ import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+ import type { MaterializedAgentProfile } from "@/agent-profiles";
+ 
+@@ -188,6 +194,15 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+   } = useProvidersSnapshot(serverId, { cwd: workingDir });
+ 
+   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
++  const isHostDefaultModeSupported = useHostFeature(serverId, "providerDefaultMode");
++  const hostDefaultModes = useMemo(
++    () => resolveHostDefaultModes(snapshotEntries, isHostDefaultModeSupported),
++    [snapshotEntries, isHostDefaultModeSupported],
++  );
++  const resolutionPreferences = useMemo(
++    () => applyHostDefaultModes(preferences, hostDefaultModes),
++    [preferences, hostDefaultModes],
++  );
+ 
+   const allProviderEntries = useMemo(() => snapshotEntries ?? [], [snapshotEntries]);
+   const snapshotProviderDefinitions = useMemo(
+@@ -263,7 +278,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+       isPreferencesLoading,
+       hasSnapshot: snapshotEntries !== undefined,
+       initialValues,
+-      preferences,
++      preferences: resolutionPreferences,
+       providerModelsByProvider: snapshotProviderModelsByProvider,
+       allowedProviderMap: snapshotResolvableProviderDefinitionMap,
+     });
+@@ -274,7 +289,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+     isPreferencesLoading,
+     snapshotEntries,
+     initialValues,
+-    preferences,
++    resolutionPreferences,
+     snapshotProviderModelsByProvider,
+     snapshotResolvableProviderDefinitionMap,
+   ]);
+@@ -286,7 +301,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+       }
+       const providerDef = selectableProviderDefinitionMap.get(provider);
+       const providerModels = allProviderModels.get(provider) ?? null;
+-      const providerPrefs = preferenceOverlayRef.current.current().providerPreferences?.[provider];
++      const providerPrefs = applyHostDefaultMode(
++        preferenceOverlayRef.current.current().providerPreferences?.[provider],
++        hostDefaultModes.get(provider),
++      );
+       const normalizedModelId = normalizeSelectedModelId(modelId);
+       const nextModelId = normalizedModelId || resolveDefaultModelId(providerModels);
+ 
+@@ -308,7 +326,12 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+         }),
+       );
+     },
+-    [allProviderModels, selectableProviderDefinitionMap, updateCurrentPreferences],
++    [
++      allProviderModels,
++      hostDefaultModes,
++      selectableProviderDefinitionMap,
++      updateCurrentPreferences,
++    ],
+   );
+ 
+   const clearProviderSelectionFromUser = useCallback(() => {
+@@ -325,7 +348,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+       const previousProvider = formState.provider;
+       const providerDef = selectableProviderDefinitionMap.get(provider);
+       const providerModels = allProviderModels.get(provider) ?? null;
+-      const providerPrefs = preferenceOverlayRef.current.current().providerPreferences?.[provider];
++      const providerPrefs = applyHostDefaultMode(
++        preferenceOverlayRef.current.current().providerPreferences?.[provider],
++        hostDefaultModes.get(provider),
++      );
+       const action = {
+         type: "APPLY_PROFILE_FROM_USER" as const,
+         provider,
+@@ -361,6 +387,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+     [
+       allProviderModels,
+       formState,
++      hostDefaultModes,
+       providerDefinitionMap,
+       resolution,
+       selectableProviderDefinitionMap,
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index 81050ae5ee237ee8768e0fb093ff584070ed3176..c2ffa0179dd2e5df8d016f2686cf3a1f903369cf 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -2783,6 +2783,7 @@ export const ar: TranslationResources = {
+           hint: "تحرير الذاكرة بعد ساعة من الخمول.",
+           info: "يوقف عملية الوكيل مع الاحتفاظ بمحادثته. أرسل رسالة لاستئنافها.\n\nيمنع العمل النشط والإشعارات المعلّقة وفحوصات أمان المزوّد عملية التنظيف.",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "Connect to this host to manage workspaces",
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index 655f041ecd1c77a5a3d73a0a0b5895a05ce09ddf..b34c88482471e3d2e8c3ab0afa47fc4fbb08bb19 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -2875,6 +2875,12 @@ export const en = {
+           hint: "Free up memory after an hour of inactivity.",
+           info: "Stops the agent's process while keeping its conversation. Send a message to resume.\n\nActive work, pending notifications, and provider safety checks prevent cleanup.",
+         },
++        defaultMode: {
++          title: "Default mode",
++          hint: "New agents start in this mode on every device unless a draft, parent agent or schedule sets one.",
++          providerDefault: "Provider default",
++          accessibilityLabel: "Default mode for {{provider}}: {{value}}",
++        },
+       },
+       workspaces: {
+         unavailable: "Connect to this host to manage workspaces",
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index f7e3472134c0e13d9498ef2ef6d47eeb78a37325..1399ddc96a4e84874badcde0d30e7cd0f20ed5c1 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -2805,6 +2805,7 @@ export const es: TranslationResources = {
+           hint: "Libera memoria tras una hora de inactividad.",
+           info: "Detiene el proceso del agente y conserva la conversación. Envía un mensaje para reanudarla.\n\nEl trabajo activo, las notificaciones pendientes y las comprobaciones de seguridad del proveedor impiden la limpieza.",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "Connect to this host to manage workspaces",
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index 86ff05375010f16f97cc85509a00f7b02c6fc651..f7b075c0de5658cbe76722b0c3762474f5251041 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -2808,6 +2808,7 @@ export const fr: TranslationResources = {
+           hint: "Libère de la mémoire après une heure d’inactivité.",
+           info: "Arrête le processus de l’agent tout en conservant sa conversation. Envoyez un message pour la reprendre.\n\nLe travail en cours, les notifications en attente et les vérifications de sécurité du fournisseur empêchent le nettoyage.",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "Connectez-vous à cet hôte pour gérer les espaces de travail",
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index 5a4b594a249a7abb130a8a3e0ab646e82d43ed88..83c08bab59238bd4765240548d0c9a9d76ab2d67 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -2772,6 +2772,7 @@ export const ja: TranslationResources = {
+           hint: "1 時間のアイドル状態の後にメモリを解放します。",
+           info: "会話を保持したままエージェントのプロセスを停止します。メッセージを送信すると再開します。\n\n実行中の作業、保留中の通知、プロバイダーの安全性チェックがある場合は解放しません。",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "ワークスペースを管理するにはこのホストに接続してください",
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index 242324dd20aba346b9af88c4960c09ebc493cdec..a37460910d44acce6f89fee44aee57afe463b89b 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -2760,6 +2760,7 @@ export const ko: TranslationResources = {
+           hint: "1시간 동안 활동이 없으면 메모리를 확보합니다.",
+           info: "대화를 유지하면서 에이전트 프로세스를 중지합니다. 메시지를 보내면 다시 이어집니다.\n\n진행 중인 작업, 대기 중인 알림, 프로바이더 안전 검사가 있으면 정리하지 않습니다.",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index bbef1d73c5cdb46d9ddc7dad558ba410fae003f7..28850e0d4a53e901e2d90db61650d15675ae73ab 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -2787,6 +2787,7 @@ export const ptBR: TranslationResources = {
+           hint: "Libera memória após uma hora de inatividade.",
+           info: "Encerra o processo do agente e mantém a conversa. Envie uma mensagem para retomar.\n\nTrabalho ativo, notificações pendentes e verificações de segurança do provedor impedem a limpeza.",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "Conecte-se a este host para gerenciar workspaces",
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index aa06a9b919d185b5d12cd312479ac759156f5ec7..7e5dc1f6f3f8e18f9578b6abc146171e8a9451a9 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -2797,6 +2797,7 @@ export const ru: TranslationResources = {
+           hint: "Освобождает память после часа бездействия.",
+           info: "Останавливает процесс агента, сохраняя разговор. Отправьте сообщение, чтобы продолжить.\n\nАктивная работа, ожидающие уведомления и проверки безопасности провайдера предотвращают очистку.",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index f5d0c44eeec98d46ead2bd319d4c483548e9a1c7..ea6aaf0d7fc2b337b508fd81bf3accf5e94b73b4 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -2718,6 +2718,7 @@ export const zhCN: TranslationResources = {
+           hint: "空闲一小时后释放内存。",
+           info: "停止 Agent 进程，但保留对话。发送消息即可继续。\n\n进行中的工作、待处理的通知和 Provider 安全检查会阻止清理。",
+         },
++        defaultMode: en.settings.host.agents.defaultMode,
+       },
+       workspaces: {
+         unavailable: "连接到这个 Host 以管理 Workspace",
+diff --git a/packages/app/src/provider-selection/host-default-mode.test.ts b/packages/app/src/provider-selection/host-default-mode.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..654a4b490eedcc1c4c42ca2a13c9eb15b3a8851d
+--- /dev/null
++++ b/packages/app/src/provider-selection/host-default-mode.test.ts
+@@ -0,0 +1,110 @@
++import { describe, expect, it } from "vitest";
++import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
++import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
++import type { FormPreferences } from "@/hooks/use-form-preferences";
++import {
++  applyHostDefaultMode,
++  applyHostDefaultModes,
++  resolveHostDefaultModes,
++  type HostDefaultModes,
++} from "./host-default-mode";
++import {
++  INITIAL_USER_MODIFIED,
++  PENDING_AGENT_FORM_RESOLUTION,
++  resolveAgentForm,
++  type FormInitialValues,
++} from "./resolve-agent-form";
++
++const CLAUDE: AgentProviderDefinition = {
++  id: "claude",
++  label: "Claude",
++  description: "Claude test provider",
++  defaultModeId: "plan",
++  modes: [
++    { id: "default", label: "Always Ask", icon: "ShieldCheck", colorTier: "safe" },
++    { id: "acceptEdits", label: "Accept File Edits", icon: "ShieldAlert", colorTier: "moderate" },
++    { id: "plan", label: "Plan Mode", icon: "ShieldCheck", colorTier: "planning" },
++  ],
++};
++
++const ENTRIES: ProviderSnapshotEntry[] = [
++  { provider: "claude", status: "ready", enabled: true, hostDefaultModeId: "plan" },
++  { provider: "codex", status: "ready", enabled: true, defaultModeId: "auto" },
++];
++
++const REMEMBERED: FormPreferences = {
++  provider: "claude",
++  providerPreferences: { claude: { model: "opus", mode: "acceptEdits" } },
++};
++
++function resolveMode(input: {
++  preferences: FormPreferences;
++  hostDefaultModes: HostDefaultModes;
++  initialValues?: FormInitialValues;
++}): string {
++  const state = resolveAgentForm(
++    {
++      form: { provider: null, modeId: "", model: "", thinkingOptionId: "" },
++      userModified: INITIAL_USER_MODIFIED,
++      resolution: PENDING_AGENT_FORM_RESOLUTION,
++    },
++    {
++      type: "INPUTS_CHANGED",
++      serverId: "host",
++      isVisible: true,
++      isCreateFlow: true,
++      isPreferencesLoading: false,
++      hasSnapshot: true,
++      initialValues: input.initialValues,
++      preferences: applyHostDefaultModes(input.preferences, input.hostDefaultModes),
++      providerModelsByProvider: new Map([["claude", null]]),
++      allowedProviderMap: new Map([["claude", CLAUDE]]),
++    },
++  );
++  return state.form.modeId;
++}
++
++describe("resolveHostDefaultModes", () => {
++  it("collects the modes the host pins", () => {
++    expect(resolveHostDefaultModes(ENTRIES, true)).toEqual(new Map([["claude", "plan"]]));
++  });
++
++  it("ignores host defaults when the host does not advertise the feature", () => {
++    expect(resolveHostDefaultModes(ENTRIES, false).size).toBe(0);
++  });
++});
++
++describe("host default mode in agent form resolution", () => {
++  const hostDefaultModes: HostDefaultModes = new Map([["claude", "plan"]]);
++
++  it("beats the mode this device remembered", () => {
++    expect(resolveMode({ preferences: REMEMBERED, hostDefaultModes })).toBe("plan");
++  });
++
++  it("keeps the remembered mode when the host pins none", () => {
++    expect(resolveMode({ preferences: REMEMBERED, hostDefaultModes: new Map() })).toBe(
++      "acceptEdits",
++    );
++  });
++
++  it("yields to an explicit initial mode", () => {
++    expect(
++      resolveMode({
++        preferences: REMEMBERED,
++        hostDefaultModes,
++        initialValues: { modeId: "default" },
++      }),
++    ).toBe("default");
++  });
++
++  it("keeps the other remembered provider fields", () => {
++    expect(applyHostDefaultModes(REMEMBERED, hostDefaultModes)).toEqual({
++      provider: "claude",
++      providerPreferences: { claude: { model: "opus", mode: "plan" } },
++    });
++    expect(applyHostDefaultMode({ model: "opus" }, "plan")).toEqual({
++      model: "opus",
++      mode: "plan",
++    });
++  });
++});
+diff --git a/packages/app/src/provider-selection/host-default-mode.ts b/packages/app/src/provider-selection/host-default-mode.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..49f25b1527af1a7f0fb33e9fba213cacb1c7b8cd
+--- /dev/null
++++ b/packages/app/src/provider-selection/host-default-mode.ts
+@@ -0,0 +1,40 @@
++import type { AgentProvider, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
++import type { FormPreferences, ProviderPreferences } from "@/hooks/use-form-preferences";
++
++export type HostDefaultModes = ReadonlyMap<AgentProvider, string>;
++
++const NO_HOST_DEFAULT_MODES: HostDefaultModes = new Map();
++
++export function resolveHostDefaultModes(
++  entries: readonly ProviderSnapshotEntry[] | undefined,
++  isSupported: boolean,
++): HostDefaultModes {
++  if (!isSupported || !entries) return NO_HOST_DEFAULT_MODES;
++  const configured = entries.flatMap((entry) =>
++    entry.hostDefaultModeId ? [[entry.provider, entry.hostDefaultModeId] as const] : [],
++  );
++  return configured.length > 0 ? new Map(configured) : NO_HOST_DEFAULT_MODES;
++}
++
++// A host default replaces the mode this device remembered for the provider.
++// Explicit initial modes (drafts, parents, schedules) are resolved before
++// preferences, so they still win.
++export function applyHostDefaultMode(
++  providerPrefs: ProviderPreferences | undefined,
++  hostDefaultModeId: string | undefined,
++): ProviderPreferences | undefined {
++  if (!hostDefaultModeId) return providerPrefs;
++  return { ...providerPrefs, mode: hostDefaultModeId };
++}
++
++export function applyHostDefaultModes(
++  preferences: FormPreferences | null,
++  hostDefaultModes: HostDefaultModes,
++): FormPreferences | null {
++  if (!preferences || hostDefaultModes.size === 0) return preferences;
++  const providerPreferences = { ...preferences.providerPreferences };
++  for (const [provider, modeId] of hostDefaultModes) {
++    providerPreferences[provider] = { ...providerPreferences[provider], mode: modeId };
++  }
++  return { ...preferences, providerPreferences };
++}
+diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
+index 0fb6fb5aa9306723cc3f453c8c63bb83a2384efc..4761e3948cd420672abb10c72a80d19e1cebeedd 100644
+--- a/packages/app/src/screens/settings/host-page.tsx
++++ b/packages/app/src/screens/settings/host-page.tsx
+@@ -66,6 +66,7 @@ import type { Theme } from "@/styles/theme";
+ import { useProviderIcon } from "@/components/provider-icons";
+ import { BrowserToolsOptInCard } from "./browser-tools-card";
+ import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
++import { ProviderDefaultModeCard } from "./provider-default-mode-card";
+ import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
+ 
+ const ThemedRestart = withUnistyles(RotateCw);
+@@ -293,6 +294,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
+           <BrowserToolsOptInCard serverId={serverId} />
+           <AppendSystemPromptCard serverId={serverId} />
+           <IdleRuntimeCleanupCard serverId={serverId} />
++          <ProviderDefaultModeCard serverId={serverId} />
+         </SettingsSection>
+       ) : (
+         <View style={[settingsStyles.card, styles.emptyCard]}>
+diff --git a/packages/app/src/screens/settings/provider-default-mode-card.tsx b/packages/app/src/screens/settings/provider-default-mode-card.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab54e3158c511e6b4b6b2e999e32413165d3885f
+--- /dev/null
++++ b/packages/app/src/screens/settings/provider-default-mode-card.tsx
+@@ -0,0 +1,152 @@
++import { useCallback, useMemo } from "react";
++import { Text, View } from "react-native";
++import { useMutation } from "@tanstack/react-query";
++import { useTranslation } from "react-i18next";
++import type { AgentMode, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
++import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
++import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
++import { useDaemonConfig } from "@/hooks/use-daemon-config";
++import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
++import { useHostFeature } from "@/runtime/host-features";
++import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
++import { settingsStyles } from "@/styles/settings";
++
++interface DefaultModeChange {
++  provider: string;
++  modeId: string | null;
++}
++
++// Host-wide default mode per provider. New agents use it unless they carry an
++// explicit mode; null hands the choice back to the provider.
++export function ProviderDefaultModeCard({ serverId }: { serverId: string }) {
++  const { t } = useTranslation();
++  const isConnected = useHostRuntimeIsConnected(serverId);
++  const isSupported = useHostFeature(serverId, "providerDefaultMode");
++  const { config, patchConfig } = useDaemonConfig(serverId);
++  const { entries } = useProvidersSnapshot(serverId);
++  const providers = useMemo(
++    () => (entries ?? []).filter((entry) => entry.enabled && (entry.modes?.length ?? 0) > 0),
++    [entries],
++  );
++  const mutation = useMutation({
++    mutationFn: async ({ provider, modeId }: DefaultModeChange) => {
++      const result = await patchConfig({ providers: { [provider]: { defaultModeId: modeId } } });
++      if (!result) {
++        throw new Error(t("workspace.terminal.hostDisconnected"));
++      }
++      return result;
++    },
++  });
++  const handleChange = useCallback(
++    (change: DefaultModeChange) => mutation.mutate(change),
++    [mutation],
++  );
++
++  if (!isConnected || !isSupported || !config || providers.length === 0) return null;
++
++  return (
++    <View style={settingsStyles.card} testID="host-page-provider-default-mode-card">
++      <View style={settingsStyles.row}>
++        <View style={settingsStyles.rowContent}>
++          <Text style={settingsStyles.rowTitle}>{t("settings.host.agents.defaultMode.title")}</Text>
++          <Text style={settingsStyles.rowHint}>{t("settings.host.agents.defaultMode.hint")}</Text>
++          {mutation.error ? (
++            <Text style={settingsStyles.rowError} testID="host-page-provider-default-mode-error">
++              {mutation.error.message}
++            </Text>
++          ) : null}
++        </View>
++      </View>
++      {providers.map((entry) => (
++        <ProviderDefaultModeRow
++          key={entry.provider}
++          entry={entry}
++          modeId={config.providers[entry.provider]?.defaultModeId ?? null}
++          disabled={mutation.isPending}
++          onChange={handleChange}
++        />
++      ))}
++    </View>
++  );
++}
++
++function ProviderDefaultModeRow({
++  entry,
++  modeId,
++  disabled,
++  onChange,
++}: {
++  entry: ProviderSnapshotEntry;
++  modeId: string | null;
++  disabled: boolean;
++  onChange: (change: DefaultModeChange) => void;
++}) {
++  const { t } = useTranslation();
++  const providerLabel = entry.label ?? entry.provider;
++  const modes = entry.modes ?? [];
++  const providerDefaultLabel = t("settings.host.agents.defaultMode.providerDefault");
++  const selectedLabel = modeId
++    ? (modes.find((mode) => mode.id === modeId)?.label ?? modeId)
++    : providerDefaultLabel;
++  const handleProviderDefault = useCallback(
++    () => onChange({ provider: entry.provider, modeId: null }),
++    [entry.provider, onChange],
++  );
++
++  return (
++    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
++      <View style={settingsStyles.rowContent}>
++        <Text style={settingsStyles.rowTitle}>{providerLabel}</Text>
++      </View>
++      <DropdownMenu>
++        <DropdownTrigger
++          testID={`host-page-provider-default-mode-${entry.provider}`}
++          accessibilityRole="button"
++          accessibilityLabel={t("settings.host.agents.defaultMode.accessibilityLabel", {
++            provider: providerLabel,
++            value: selectedLabel,
++          })}
++          disabled={disabled}
++        >
++          {selectedLabel}
++        </DropdownTrigger>
++        <DropdownMenuContent side="bottom" align="end" width={240}>
++          <DropdownMenuItem selected={modeId === null} onSelect={handleProviderDefault}>
++            {providerDefaultLabel}
++          </DropdownMenuItem>
++          {modes.map((mode) => (
++            <ModeMenuItem
++              key={mode.id}
++              provider={entry.provider}
++              mode={mode}
++              selected={mode.id === modeId}
++              onChange={onChange}
++            />
++          ))}
++        </DropdownMenuContent>
++      </DropdownMenu>
++    </View>
++  );
++}
++
++function ModeMenuItem({
++  provider,
++  mode,
++  selected,
++  onChange,
++}: {
++  provider: string;
++  mode: AgentMode;
++  selected: boolean;
++  onChange: (change: DefaultModeChange) => void;
++}) {
++  const handleSelect = useCallback(
++    () => onChange({ provider, modeId: mode.id }),
++    [mode.id, onChange, provider],
++  );
++  return (
++    <DropdownMenuItem selected={selected} description={mode.description} onSelect={handleSelect}>
++      {mode.label}
++    </DropdownMenuItem>
++  );
++}
+diff --git a/packages/protocol/src/agent-types.ts b/packages/protocol/src/agent-types.ts
+index c7fffe8ce97d73d6fa35ba1e160f33c95de10e0b..a0e6dd35124ea592babe39ae0e9032044e16ad72 100644
+--- a/packages/protocol/src/agent-types.ts
++++ b/packages/protocol/src/agent-types.ts
+@@ -127,6 +127,7 @@ export interface ProviderSnapshotEntry {
+   description?: string;
+   iconSvg?: string;
+   defaultModeId?: string | null;
++  hostDefaultModeId?: string;
+ }
+ 
+ export interface AgentFeatureToggle {
+diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
+index 9ca1b899ce10f3f3b4e4abb3dda3c96c6266c4a3..492ff90108af6eab3044380eff1e43a801b66f29 100644
+--- a/packages/protocol/src/messages.ts
++++ b/packages/protocol/src/messages.ts
+@@ -172,6 +172,8 @@ const MutableDaemonProviderConfigSchema = z
+     paseoTools: ProviderPaseoToolsPolicySchema.optional(),
+     enabled: z.boolean().optional(),
+     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
++    // Host default mode for new agents; null clears it. Gated on features.providerDefaultMode.
++    defaultModeId: z.string().min(1).nullable().optional(),
+   })
+   .passthrough();
+ 
+@@ -380,6 +382,9 @@ export const ProviderSnapshotEntrySchema = z.object({
+   description: z.string().optional(),
+   iconSvg: z.string().optional(),
+   defaultModeId: z.string().nullable().optional(),
++  // Set only when the host config pins this provider's default mode; clients that
++  // support features.providerDefaultMode prefer it over a remembered per-device mode.
++  hostDefaultModeId: z.string().optional(),
+ });
+ 
+ export const CompactProviderSnapshotModelSchema = AgentModelDefinitionSchema.omit({
+@@ -3840,6 +3845,8 @@ export const ServerInfoStatusPayloadSchema = z
+         agentProfiles: z.boolean().optional(),
+         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
+         agentConfigApply: z.boolean().optional(),
++        // COMPAT(providerDefaultMode): added in v0.14.0, remove gate after 2027-05-02.
++        providerDefaultMode: z.boolean().optional(),
+       })
+       .optional(),
+   })
+diff --git a/packages/protocol/src/provider-config.ts b/packages/protocol/src/provider-config.ts
+index c94f8ca965d6b2ce3475836e45d1c57a69bb944b..b61d2a6c8f49728c5bdee139cea7a40e16f99bc7 100644
+--- a/packages/protocol/src/provider-config.ts
++++ b/packages/protocol/src/provider-config.ts
+@@ -63,6 +63,8 @@ export const ProviderOverrideSchema = z.object({
+   paseoTools: ProviderPaseoToolsPolicySchema.optional(),
+   enabled: z.boolean().optional(),
+   order: z.number().optional(),
++  // Host default mode for new agents that do not request one; null clears it.
++  defaultModeId: z.string().min(1).nullable().optional(),
+ });
+ 
+ const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi", "omp"] as const;
+diff --git a/packages/server/src/server/agent/agent-sdk-types.ts b/packages/server/src/server/agent/agent-sdk-types.ts
+index 507cfbceb88fe80c154e35f1a690ba8f00b65d5e..d9a67e1ebf8e430cac8cac1b101b18ea00aba084 100644
+--- a/packages/server/src/server/agent/agent-sdk-types.ts
++++ b/packages/server/src/server/agent/agent-sdk-types.ts
+@@ -137,6 +137,7 @@ export interface ProviderSnapshotEntry {
+   description?: string;
+   iconSvg?: string;
+   defaultModeId?: string | null;
++  hostDefaultModeId?: string;
+ }
+ 
+ export interface AgentCreateConfigParent {
+diff --git a/packages/server/src/server/agent/host-default-mode.test.ts b/packages/server/src/server/agent/host-default-mode.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f91ba5a115ca9c01a3d5a1b5473d9dc14b9c860
+--- /dev/null
++++ b/packages/server/src/server/agent/host-default-mode.test.ts
+@@ -0,0 +1,177 @@
++import { describe, expect, test } from "vitest";
++
++import { createTestLogger } from "../../test-utils/test-logger.js";
++import type {
++  AgentClient,
++  AgentMode,
++  AgentModelDefinition,
++  ResolveAgentCreateConfigInput,
++} from "./agent-sdk-types.js";
++import { resolveHostDefaultCreateMode } from "./host-default-mode.js";
++import { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
++
++const MODES: AgentMode[] = [
++  { id: "default", label: "Always Ask" },
++  { id: "plan", label: "Plan" },
++  { id: "bypass", label: "Bypass", isUnattended: true },
++];
++
++const OTHER_PROVIDERS_DISABLED = {
++  claude: { enabled: false },
++  copilot: { enabled: false },
++  opencode: { enabled: false },
++  pi: { enabled: false },
++};
++
++function createCodexClient(resolverInputs: ResolveAgentCreateConfigInput[]): AgentClient {
++  return {
++    provider: "codex",
++    capabilities: {
++      supportsStreaming: false,
++      supportsSessionPersistence: false,
++      supportsDynamicModes: false,
++      supportsMcpServers: false,
++      supportsReasoningStream: false,
++      supportsToolInvocations: false,
++    },
++    async createSession() {
++      throw new Error("not implemented");
++    },
++    async resumeSession() {
++      throw new Error("not implemented");
++    },
++    async isAvailable() {
++      return true;
++    },
++    async fetchCatalog() {
++      return { models: [] as AgentModelDefinition[], modes: MODES, defaultModeId: "default" };
++    },
++    resolveCreateConfig(input) {
++      resolverInputs.push(input);
++      return { modeId: input.requestedMode, featureValues: input.featureValues };
++    },
++  };
++}
++
++function createManager(input: {
++  defaultModeId?: string | null;
++  resolverInputs?: ResolveAgentCreateConfigInput[];
++}): ProviderSnapshotManager {
++  return new ProviderSnapshotManager({
++    logger: createTestLogger(),
++    providerOverrides: {
++      ...OTHER_PROVIDERS_DISABLED,
++      ...(input.defaultModeId !== undefined
++        ? { codex: { defaultModeId: input.defaultModeId } }
++        : {}),
++    },
++    extraClients: { codex: createCodexClient(input.resolverInputs ?? []) },
++  });
++}
++
++describe("host default mode", () => {
++  test("publishes a configured mode as the provider default", async () => {
++    const manager = createManager({ defaultModeId: "plan" });
++    try {
++      const entry = await manager.getProvider({ provider: "codex", wait: true });
++      expect(entry).toMatchObject({
++        status: "ready",
++        defaultModeId: "plan",
++        hostDefaultModeId: "plan",
++      });
++    } finally {
++      manager.destroy();
++    }
++  });
++
++  test("keeps the provider's default when the configured mode is not offered", async () => {
++    const manager = createManager({ defaultModeId: "removed-mode" });
++    try {
++      const entry = await manager.getProvider({ provider: "codex", wait: true });
++      expect(entry.defaultModeId).toBe("default");
++      expect(entry.hostDefaultModeId).toBeUndefined();
++    } finally {
++      manager.destroy();
++    }
++  });
++
++  test("applies and clears the host default through a live provider config change", async () => {
++    const manager = createManager({});
++    try {
++      await manager.getProvider({ provider: "codex", wait: true });
++
++      manager.applyMutableProviderConfig({ codex: { defaultModeId: "plan" } });
++      expect(await manager.getProvider({ provider: "codex", wait: true })).toMatchObject({
++        defaultModeId: "plan",
++        hostDefaultModeId: "plan",
++      });
++
++      manager.applyMutableProviderConfig({ codex: { defaultModeId: null } });
++      const cleared = await manager.getProvider({ provider: "codex", wait: true });
++      expect(cleared.defaultModeId).toBe("default");
++      expect(cleared.hostDefaultModeId).toBeUndefined();
++    } finally {
++      manager.destroy();
++    }
++  });
++
++  test("creates without a mode use the host default", async () => {
++    const resolverInputs: ResolveAgentCreateConfigInput[] = [];
++    const manager = createManager({ defaultModeId: "plan", resolverInputs });
++    try {
++      const resolved = await manager.resolveCreateConfig({
++        provider: "codex",
++        requestedMode: undefined,
++        featureValues: undefined,
++        parent: null,
++        unattended: false,
++      });
++      expect(resolved).toEqual({ modeId: "plan", featureValues: undefined });
++      expect(resolverInputs.map((input) => input.requestedMode)).toEqual(["plan"]);
++    } finally {
++      manager.destroy();
++    }
++  });
++
++  test("an explicit mode wins over the host default", async () => {
++    const manager = createManager({ defaultModeId: "plan" });
++    try {
++      const resolved = await manager.resolveCreateConfig({
++        provider: "codex",
++        requestedMode: "default",
++        featureValues: undefined,
++        parent: null,
++        unattended: false,
++      });
++      expect(resolved.modeId).toBe("default");
++    } finally {
++      manager.destroy();
++    }
++  });
++});
++
++describe("resolveHostDefaultCreateMode", () => {
++  const base = {
++    requestedMode: undefined,
++    configured: "plan",
++    hasParent: false,
++    unattended: false,
++    availableModes: MODES,
++  };
++
++  test("leaves parent inheritance to the provider", () => {
++    expect(resolveHostDefaultCreateMode({ ...base, hasParent: true })).toBeUndefined();
++  });
++
++  test("leaves unattended selection to the provider", () => {
++    expect(resolveHostDefaultCreateMode({ ...base, unattended: true })).toBeUndefined();
++  });
++
++  test("ignores a configured mode the provider does not offer", () => {
++    expect(resolveHostDefaultCreateMode({ ...base, configured: "gone" })).toBeUndefined();
++  });
++
++  test("ignores a cleared host default", () => {
++    expect(resolveHostDefaultCreateMode({ ...base, configured: null })).toBeUndefined();
++  });
++});
+diff --git a/packages/server/src/server/agent/host-default-mode.ts b/packages/server/src/server/agent/host-default-mode.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a99868bc3c36519d4c77dc24840503f53320745
+--- /dev/null
++++ b/packages/server/src/server/agent/host-default-mode.ts
+@@ -0,0 +1,39 @@
++import type { AgentMode, ProviderSnapshotEntry } from "./agent-sdk-types.js";
++
++// A configured id the provider no longer offers is ignored, so a stale host
++// default falls back to the provider's own default instead of failing creates.
++export function resolveHostDefaultModeId(
++  configured: string | null | undefined,
++  modes: readonly Pick<AgentMode, "id">[] | undefined,
++): string | undefined {
++  if (!configured || !modes?.some((mode) => mode.id === configured)) return undefined;
++  return configured;
++}
++
++export function applyHostDefaultMode(
++  entry: ProviderSnapshotEntry,
++  configured: string | null | undefined,
++): ProviderSnapshotEntry {
++  const hostDefaultModeId = resolveHostDefaultModeId(configured, entry.modes);
++  if (!hostDefaultModeId) return entry;
++  return { ...entry, defaultModeId: hostDefaultModeId, hostDefaultModeId };
++}
++
++export interface ResolveHostDefaultCreateModeInput {
++  requestedMode: string | undefined;
++  configured: string | null | undefined;
++  hasParent: boolean;
++  unattended: boolean;
++  availableModes: readonly Pick<AgentMode, "id">[];
++}
++
++// Only a top-level, attended create without a mode takes the host default.
++// Parent inheritance and unattended selection keep the provider's rules.
++export function resolveHostDefaultCreateMode(
++  input: ResolveHostDefaultCreateModeInput,
++): string | undefined {
++  if (input.requestedMode !== undefined || input.hasParent || input.unattended) {
++    return input.requestedMode;
++  }
++  return resolveHostDefaultModeId(input.configured, input.availableModes);
++}
+diff --git a/packages/server/src/server/agent/provider-snapshot-manager.ts b/packages/server/src/server/agent/provider-snapshot-manager.ts
+index b10a4f8e02db9fa8d3e9e49e8a78937cf93072c6..73d8b343662dc009586a7e18d0b79373effaceeb 100644
+--- a/packages/server/src/server/agent/provider-snapshot-manager.ts
++++ b/packages/server/src/server/agent/provider-snapshot-manager.ts
+@@ -51,6 +51,7 @@ import {
+ } from "./agent-configuration-validator.js";
+ import type { ProviderRegistration } from "@getpaseo/plugin/server/provider";
+ import { PluginAgentClientRegistry } from "./plugin-provider.js";
++import { applyHostDefaultMode, resolveHostDefaultCreateMode } from "./host-default-mode.js";
+ 
+ const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
+ const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
+@@ -562,7 +563,13 @@ export class ProviderSnapshotManager {
+     const parent = input.parent ? this.resolveParent(input.parent) : null;
+     return definition.resolveCreateConfig({
+       provider: input.provider,
+-      requestedMode: input.requestedMode,
++      requestedMode: resolveHostDefaultCreateMode({
++        requestedMode: input.requestedMode,
++        configured: this.providerOverrides?.[input.provider]?.defaultModeId,
++        hasParent: parent !== null,
++        unattended: input.unattended,
++        availableModes: entry.modes ?? [],
++      }),
+       featureValues: input.featureValues,
+       parent,
+       unattended: input.unattended || parent?.isUnattended === true,
+@@ -1081,7 +1088,13 @@ export class ProviderSnapshotManager {
+         const result = binding?.key
+           ? this.catalogs.get(binding.key)?.get(provider)?.result
+           : undefined;
+-        return binding?.failure ?? result ?? this.generation.providerStates.get(provider)!.initial;
++        const record =
++          binding?.failure ?? result ?? this.generation.providerStates.get(provider)!.initial;
++        const entry = applyHostDefaultMode(
++          record.entry,
++          this.providerOverrides?.[provider]?.defaultModeId,
++        );
++        return entry === record.entry ? record : identifyEntry(entry);
+       });
+       const previous = target.snapshot;
+       if (sameSnapshotRecords(previous.records, records)) continue;
+diff --git a/packages/server/src/server/daemon-config-store.test.ts b/packages/server/src/server/daemon-config-store.test.ts
+index e3b6f4889567da6c94f7f4f9e8d0e5ee6fe777a0..4fc28d78d554fd5a1ecbf4340195e2fb9e709861 100644
+--- a/packages/server/src/server/daemon-config-store.test.ts
++++ b/packages/server/src/server/daemon-config-store.test.ts
+@@ -779,6 +779,38 @@ describe("DaemonConfigStore", () => {
+     });
+   });
+ 
++  test("patch persists and clears a provider's host default mode", async () => {
++    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
++    tempDirs.push(paseoHome);
++
++    const store = new DaemonConfigStore(
++      paseoHome,
++      {
++        mcp: { injectIntoAgents: false },
++        browserTools: { enabled: false },
++        providers: { claude: { enabled: true } },
++        metadataGeneration: { providers: [] },
++        autoArchiveAfterMerge: false,
++        enableTerminalAgentHooks: false,
++        appendSystemPrompt: "",
++      },
++      undefined,
++    );
++
++    const patched = await store.patch({ providers: { claude: { defaultModeId: "plan" } } });
++    expect(patched.providers.claude).toEqual({ enabled: true, defaultModeId: "plan" });
++    expect(loadPersistedConfig(paseoHome).agents?.providers?.claude).toEqual({
++      defaultModeId: "plan",
++    });
++    expect(loadConfig(paseoHome, { env: {} }).providerOverrides?.claude?.defaultModeId).toBe(
++      "plan",
++    );
++
++    const cleared = await store.patch({ providers: { claude: { defaultModeId: null } } });
++    expect(cleared.providers.claude?.defaultModeId).toBeNull();
++    expect(loadConfig(paseoHome, { env: {} }).providerOverrides?.claude?.defaultModeId).toBeNull();
++  });
++
+   test("patch persists daemon append system prompt into config.json", async () => {
+     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+     tempDirs.push(paseoHome);
+diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
+index 1f625d4503f0cc9fc2dfa3f2a2a522d98f8fc9dc..e628b872eb60a9ba71f3e4aaa62583c7b6fb71b1 100644
+--- a/packages/server/src/server/websocket-server.ts
++++ b/packages/server/src/server/websocket-server.ts
+@@ -2117,6 +2117,8 @@ export class VoiceAssistantWebSocketServer {
+         agentProfiles: true,
+         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
+         agentConfigApply: true,
++        // COMPAT(providerDefaultMode): added in v0.14.0, remove gate after 2027-05-02.
++        providerDefaultMode: true,
+       },
+     };
+   }
+diff --git a/packages/website/public/schemas/paseo.config.v1.json b/packages/website/public/schemas/paseo.config.v1.json
+index c1c32ed20a4d5e6b882f1d67f2b1bd8b5e9fda17..aac1bce4085baf9421e9a4c82c73e47949c09f0f 100644
+--- a/packages/website/public/schemas/paseo.config.v1.json
++++ b/packages/website/public/schemas/paseo.config.v1.json
+@@ -506,6 +506,17 @@
+               },
+               "order": {
+                 "type": "number"
++              },
++              "defaultModeId": {
++                "anyOf": [
++                  {
++                    "type": "string",
++                    "minLength": 1
++                  },
++                  {
++                    "type": "null"
++                  }
++                ]
+               }
+             }
+           }

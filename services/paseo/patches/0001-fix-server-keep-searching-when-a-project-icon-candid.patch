@@ -1,0 +1,436 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:17:19 +0000
+Subject: [PATCH] fix(server): keep searching when a project icon candidate is
+ rejected
+
+Project icon discovery stopped at the first file whose name matched, even
+when it then failed the size or square check, so a valid icon next to it
+was never found. Each candidate is now validated during the search, and
+discovery also covers docs/, res/ and .github/, ranks logo above icon, and
+accepts WebP and JPEG.
+
+Squashed from upstream PR https://github.com/getpaseo/paseo/pull/8529
+(ff44e1067, 526adb216).
+
+Fork-Change: F-1
+---
+ .../server/src/utils/project-icon.test.ts     |  94 +++++++++++++
+ packages/server/src/utils/project-icon.ts     | 130 +++++++++++++-----
+ 2 files changed, 190 insertions(+), 34 deletions(-)
+
+diff --git a/packages/server/src/utils/project-icon.test.ts b/packages/server/src/utils/project-icon.test.ts
+index e424fd1ded6afd2845e7b4b278ae88b5ca6fa7a3..2cd5536a596cfd3e7c00d305b761fec4d0fe5fe2 100644
+--- a/packages/server/src/utils/project-icon.test.ts
++++ b/packages/server/src/utils/project-icon.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, beforeEach, afterEach } from "vitest";
++import { execFileSync } from "child_process";
+ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "fs";
+ import { join } from "path";
+ import { tmpdir } from "os";
+@@ -230,6 +231,42 @@ describe("findProjectIcon", () => {
+     expect(result).toBe(join(tempDir, "favicon.ico"));
+   });
+ 
++  it("prioritizes the directory over the file name", async () => {
++    mkdirSync(join(tempDir, "docs"));
++    writeFileSync(join(tempDir, "docs", "logo.png"), "docs logo");
++    mkdirSync(join(tempDir, "public"));
++    writeFileSync(join(tempDir, "public", "favicon.svg"), "public favicon");
++
++    const result = await findProjectIcon(tempDir);
++    expect(result).toBe(join(tempDir, "docs", "logo.png"));
++  });
++
++  it.each(["res", ".github"])("finds icon in %s directory", async (dir) => {
++    mkdirSync(join(tempDir, dir));
++    writeFileSync(join(tempDir, dir, "logo.svg"), "<svg></svg>");
++
++    const result = await findProjectIcon(tempDir);
++    expect(result).toBe(join(tempDir, dir, "logo.svg"));
++  });
++
++  it("prioritizes logo over icon in the same directory", async () => {
++    writeFileSync(join(tempDir, "icon.svg"), "icon");
++    writeFileSync(join(tempDir, "logo.png"), "logo");
++
++    const result = await findProjectIcon(tempDir);
++    expect(result).toBe(join(tempDir, "logo.png"));
++  });
++
++  it("finds WebP and JPEG icons, after SVG and PNG", async () => {
++    writeFileSync(join(tempDir, "favicon.jpg"), "jpg");
++    writeFileSync(join(tempDir, "favicon.webp"), "webp");
++
++    expect(await findProjectIcon(tempDir)).toBe(join(tempDir, "favicon.webp"));
++
++    writeFileSync(join(tempDir, "favicon.png"), "png");
++    expect(await findProjectIcon(tempDir)).toBe(join(tempDir, "favicon.png"));
++  });
++
+   describe("monorepo package directories", () => {
+     it("finds icon in packages/*/public directory", async () => {
+       mkdirSync(join(tempDir, "packages", "app", "public"), { recursive: true });
+@@ -490,6 +527,63 @@ describe("getProjectIcon", () => {
+     expect(result).toBeNull();
+   });
+ 
++  it("skips an oversized candidate and uses the next one", async () => {
++    writeFileSync(join(tempDir, "favicon.svg"), Buffer.alloc(33 * 1024, 0x20));
++    writeFileSync(join(tempDir, "favicon.png"), squarePng);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.mimeType).toBe("image/png");
++    expect(result?.data).toBe(squarePng.toString("base64"));
++  });
++
++  it("skips a non-square candidate and uses the next one", async () => {
++    writeFileSync(join(tempDir, "favicon.png"), nonSquarePng);
++    writeFileSync(join(tempDir, "logo.png"), squarePng);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.data).toBe(squarePng.toString("base64"));
++  });
++
++  it("falls through to a lower-priority directory when every candidate is rejected", async () => {
++    mkdirSync(join(tempDir, "public"));
++    writeFileSync(join(tempDir, "public", "favicon.png"), nonSquarePng);
++    mkdirSync(join(tempDir, "assets"));
++    writeFileSync(join(tempDir, "assets", "favicon.png"), squarePng);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.data).toBe(squarePng.toString("base64"));
++  });
++
++  it.skipIf(process.platform === "win32")(
++    "skips a named pipe that matches an icon name",
++    async () => {
++      // Reading a FIFO with no writer blocks forever; it must never be opened.
++      execFileSync("mkfifo", [join(tempDir, "favicon.svg")]);
++      writeFileSync(join(tempDir, "favicon.png"), squarePng);
++
++      const result = await getProjectIcon(tempDir);
++      expect(result?.data).toBe(squarePng.toString("base64"));
++    },
++    2000,
++  );
++
++  it("returns a square extended-format (VP8X) WebP icon", async () => {
++    // RIFF header + VP8X chunk: flags, reserved, then 24-bit canvas width-1 and height-1.
++    const webp = Buffer.alloc(30);
++    webp.write("RIFF", 0, "ascii");
++    webp.writeUInt32LE(22, 4);
++    webp.write("WEBP", 8, "ascii");
++    webp.write("VP8X", 12, "ascii");
++    webp.writeUInt32LE(10, 16);
++    webp.writeUIntLE(63, 24, 3);
++    webp.writeUIntLE(63, 27, 3);
++    writeFileSync(join(tempDir, "favicon.webp"), webp);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.mimeType).toBe("image/webp");
++    expect(result?.data).toBe(webp.toString("base64"));
++  });
++
+   it("returns null when no icon is found", async () => {
+     const result = await getProjectIcon(tempDir);
+     expect(result).toBeNull();
+diff --git a/packages/server/src/utils/project-icon.ts b/packages/server/src/utils/project-icon.ts
+index ed122b4536d947277f8b7870b0cd46704fa9d42c..ebbda052d1b796082fc0fd3f339867b267a50c8b 100644
+--- a/packages/server/src/utils/project-icon.ts
++++ b/packages/server/src/utils/project-icon.ts
+@@ -12,12 +12,23 @@ import { extname, join } from "path";
+ export const ICON_PATTERNS = [
+   "favicon.svg",
+   "favicon.png",
++  "favicon.webp",
++  "favicon.jpg",
++  "favicon.jpeg",
+   "favicon-*.svg",
+   "favicon-*.png",
+   "favico.svg",
+   "favico.png",
++  "logo.svg",
++  "logo.png",
++  "logo.webp",
++  "logo.jpg",
++  "logo.jpeg",
+   "icon.svg",
+   "icon.png",
++  "icon.webp",
++  "icon.jpg",
++  "icon.jpeg",
+   "app-icon.svg",
+   "app-icon.png",
+   "apple-touch-icon.png",
+@@ -26,8 +37,6 @@ export const ICON_PATTERNS = [
+   "android-chrome-*.png",
+   "safari-pinned-tab.svg",
+   "mstile-*.png",
+-  "logo.svg",
+-  "logo.png",
+   "favicon.ico",
+   "favico.ico",
+ ];
+@@ -35,7 +44,17 @@ export const ICON_PATTERNS = [
+ /**
+  * Directories or directory paths to search first (in priority order).
+  */
+-export const PRIORITY_DIRS = ["public", "static", "priv/static", "assets", "images", "img"];
++export const PRIORITY_DIRS = [
++  "docs",
++  "public",
++  "static",
++  "priv/static",
++  "res",
++  ".github",
++  "assets",
++  "images",
++  "img",
++];
+ 
+ /**
+  * Monorepo package directory patterns to scan (e.g., packages/app, apps/web).
+@@ -142,6 +161,11 @@ function getWebpDimensions(buffer: Buffer): ImageDimensions | null {
+     const width = (bits & 0x3fff) + 1;
+     const height = ((bits >> 14) & 0x3fff) + 1;
+     return { width, height };
++  } else if (chunkType === "VP8X") {
++    // Extended format (alpha, metadata) - 24-bit canvas width-1 and height-1
++    const width = buffer.readUIntLE(24, 3) + 1;
++    const height = buffer.readUIntLE(27, 3) + 1;
++    return { width, height };
+   }
+   return null;
+ }
+@@ -291,7 +315,23 @@ async function isExistingDirectory(fullPath: string): Promise<boolean> {
+   }
+ }
+ 
+-async function findIconInDir(dir: string, patterns: string[]): Promise<string | null> {
++/**
++ * Decides whether a candidate path is usable. Returning null rejects it and
++ * the search moves on to the next candidate in priority order.
++ */
++type CandidateCheck<T> = (fullPath: string) => Promise<T | null>;
++
++interface FindIconInDirInput<T> {
++  dir: string;
++  patterns: string[];
++  check: CandidateCheck<T>;
++}
++
++async function findIconInDir<T>({
++  dir,
++  patterns,
++  check,
++}: FindIconInDirInput<T>): Promise<T | null> {
+   let entries: string[];
+   try {
+     entries = await readdir(dir);
+@@ -309,16 +349,16 @@ async function findIconInDir(dir: string, patterns: string[]): Promise<string |
+     }
+   }
+ 
+-  const existsResults = await Promise.all(candidatePaths.map((p) => isExistingFile(p)));
+-  const foundIndex = existsResults.findIndex((exists) => exists);
+-  return foundIndex === -1 ? null : (candidatePaths[foundIndex] ?? null);
++  const results = await Promise.all(candidatePaths.map((p) => check(p)));
++  return results.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+-async function searchPriorityDirs(
++async function searchPriorityDirs<T>(
+   basePath: string,
+   ignoredDirsSet: Set<string>,
+   remainingDepth: number,
+-): Promise<string | null> {
++  check: CandidateCheck<T>,
++): Promise<T | null> {
+   const priorityPaths = PRIORITY_DIRS.map((priorityDir) => join(basePath, priorityDir));
+   const existenceResults = await Promise.all(
+     priorityPaths.map((priorityPath) => isExistingDirectory(priorityPath)),
+@@ -326,26 +366,27 @@ async function searchPriorityDirs(
+   const searchResults = await Promise.all(
+     priorityPaths.map((priorityPath, index) =>
+       existenceResults[index]
+-        ? searchDirRecursively(priorityPath, ICON_PATTERNS, ignoredDirsSet, remainingDepth)
++        ? searchDirRecursively(priorityPath, ICON_PATTERNS, ignoredDirsSet, remainingDepth, check)
+         : Promise.resolve(null),
+     ),
+   );
+-  return searchResults.find((result): result is string => result !== null) ?? null;
++  return searchResults.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+-async function searchDirRecursively(
++async function searchDirRecursively<T>(
+   dir: string,
+   patterns: string[],
+   ignoredDirs: Set<string>,
+   maxDepth: number,
++  check: CandidateCheck<T>,
+   currentDepth: number = 0,
+-): Promise<string | null> {
++): Promise<T | null> {
+   if (currentDepth > maxDepth) {
+     return null;
+   }
+ 
+   // First check this directory for icons
+-  const found = await findIconInDir(dir, patterns);
++  const found = await findIconInDir({ dir, patterns, check });
+   if (found) {
+     return found;
+   }
+@@ -367,11 +408,11 @@ async function searchDirRecursively(
+   const recursionResults = await Promise.all(
+     candidatePaths.map((fullPath, index) =>
+       isDirResults[index]
+-        ? searchDirRecursively(fullPath, patterns, ignoredDirs, maxDepth, currentDepth + 1)
++        ? searchDirRecursively(fullPath, patterns, ignoredDirs, maxDepth, check, currentDepth + 1)
+         : Promise.resolve(null),
+     ),
+   );
+-  return recursionResults.find((result): result is string => result !== null) ?? null;
++  return recursionResults.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+ /**
+@@ -386,10 +427,28 @@ export async function findProjectIcon(
+   projectDir: string,
+   maxDepth: number = 3,
+ ): Promise<string | null> {
++  return searchProjectIcon({
++    projectDir,
++    maxDepth,
++    check: async (fullPath) => ((await isExistingFile(fullPath)) ? fullPath : null),
++  });
++}
++
++interface SearchProjectIconInput<T> {
++  projectDir: string;
++  maxDepth: number;
++  check: CandidateCheck<T>;
++}
++
++async function searchProjectIcon<T>({
++  projectDir,
++  maxDepth,
++  check,
++}: SearchProjectIconInput<T>): Promise<T | null> {
+   const ignoredDirsSet = new Set(IGNORED_DIRS);
+ 
+   // First search priority directories
+-  const priorityResult = await searchPriorityDirs(projectDir, ignoredDirsSet, maxDepth - 1);
++  const priorityResult = await searchPriorityDirs(projectDir, ignoredDirsSet, maxDepth - 1, check);
+   if (priorityResult) {
+     return priorityResult;
+   }
+@@ -406,7 +465,7 @@ export async function findProjectIcon(
+     }),
+   );
+   const monoResults = await Promise.all(
+-    monoPaths.map(async (monoPath, monoIdx): Promise<string | null> => {
++    monoPaths.map(async (monoPath, monoIdx): Promise<T | null> => {
+       const packageEntries = monoEntries[monoIdx];
+       if (!packageEntries) return null;
+       const packagePaths = packageEntries.map((packageName) => join(monoPath, packageName));
+@@ -414,27 +473,28 @@ export async function findProjectIcon(
+         packagePaths.map((packagePath) => isExistingDirectory(packagePath)),
+       );
+       const packageResults = await Promise.all(
+-        packagePaths.map(async (packagePath, idx): Promise<string | null> => {
++        packagePaths.map(async (packagePath, idx): Promise<T | null> => {
+           if (!isDirResults[idx]) return null;
+           const packagePriorityResult = await searchPriorityDirs(
+             packagePath,
+             ignoredDirsSet,
+             maxDepth - 1,
++            check,
+           );
+           if (packagePriorityResult) return packagePriorityResult;
+-          return await findIconInDir(packagePath, ICON_PATTERNS);
++          return await findIconInDir({ dir: packagePath, patterns: ICON_PATTERNS, check });
+         }),
+       );
+-      return packageResults.find((result): result is string => result !== null) ?? null;
++      return packageResults.find((result): result is Awaited<T> => result !== null) ?? null;
+     }),
+   );
+-  const monoMatch = monoResults.find((result): result is string => result !== null);
++  const monoMatch = monoResults.find((result): result is Awaited<T> => result !== null);
+   if (monoMatch) {
+     return monoMatch;
+   }
+ 
+   // Then search root and any other non-priority directories
+-  const found = await findDirRecursively(projectDir);
++  const found = await findDirRecursively(projectDir, check);
+   if (found) {
+     return found;
+   }
+@@ -442,11 +502,12 @@ export async function findProjectIcon(
+   return null;
+ }
+ 
+-async function findDirRecursively(
++async function findDirRecursively<T>(
+   dir: string,
++  check: CandidateCheck<T>,
+   maxDepth: number = 2,
+   currentDepth: number = 0,
+-): Promise<string | null> {
++): Promise<T | null> {
+   const ignoredDirsSet = new Set(IGNORED_DIRS);
+   const priorityDirsSet = new Set(PRIORITY_DIRS);
+ 
+@@ -455,7 +516,7 @@ async function findDirRecursively(
+   }
+ 
+   // Check root for icons
+-  const found = await findIconInDir(dir, ICON_PATTERNS);
++  const found = await findIconInDir({ dir, patterns: ICON_PATTERNS, check });
+   if (found) {
+     return found;
+   }
+@@ -481,29 +542,30 @@ async function findDirRecursively(
+   const recursionResults = await Promise.all(
+     candidatePaths.map((fullPath, index) =>
+       isDirResults[index]
+-        ? findDirRecursively(fullPath, maxDepth, currentDepth + 1)
++        ? findDirRecursively(fullPath, check, maxDepth, currentDepth + 1)
+         : Promise.resolve(null),
+     ),
+   );
+-  return recursionResults.find((result): result is string => result !== null) ?? null;
++  return recursionResults.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+ /**
+  * Find and read a project icon/favicon, returning it as base64.
+- * Only returns square icons smaller than MAX_ICON_SIZE (32KB).
++ * Only returns square icons smaller than MAX_ICON_SIZE (32KB). A candidate that
++ * fails these checks is skipped and the search moves on to the next one.
+  *
+  * @param projectDir - The root directory of the project to search
+  * @returns The icon data with mime type, or null if not found
+  */
+ export async function getProjectIcon(projectDir: string): Promise<ProjectIcon | null> {
+-  const iconPath = await findProjectIcon(projectDir);
+-  if (!iconPath) {
+-    return null;
+-  }
++  return searchProjectIcon({ projectDir, maxDepth: 3, check: loadIcon });
++}
+ 
++async function loadIcon(iconPath: string): Promise<ProjectIcon | null> {
+   try {
+     const stats = await stat(iconPath);
+-    if (stats.size > MAX_ICON_SIZE) {
++    // Regular files only: reading a named pipe with no writer blocks forever.
++    if (!stats.isFile() || stats.size > MAX_ICON_SIZE) {
+       return null;
+     }
+ 
