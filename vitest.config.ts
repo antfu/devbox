@@ -9,6 +9,8 @@ export default defineConfig({
       'workspace/**',
       'library/**',
       '.dev-container/**',
+      // The paseo build and work trees are whole upstream checkouts.
+      '.cache/**',
     ],
   },
 })

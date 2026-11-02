@@ -42,7 +42,12 @@ export default defineConfig({
     tailscale: { hostname: 'monitor', domain: process.env.TAILNET_DOMAIN },
   },
   selfUpgrade: {
-    command: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm run build:hub', 'pnpm run build:dev-base'],
+    command: [
+      'pnpm install --frozen-lockfile --ignore-scripts',
+      'pnpm run build:hub',
+      'pnpm run build:paseo',
+      'pnpm run build:dev-base',
+    ],
   },
   services: {
     // Placeholder until the standalone hub UI exists; same port as the real one.

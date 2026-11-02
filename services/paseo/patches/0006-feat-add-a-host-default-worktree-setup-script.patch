@@ -1,0 +1,823 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:51:53 +0000
+Subject: [PATCH] feat: add a host default worktree setup script
+
+Projects without a worktree.setup in paseo.json get no setup in new
+worktrees, so a host owner had to add the same paseo.json to every
+project. The host config now stores optional default setup commands
+(worktrees.defaultSetup in config.json), exposed as worktreeDefaultSetup in
+the mutable daemon config; null clears them.
+
+Worktree setup resolution falls back to these commands only when the
+project's paseo.json leaves worktree.setup out entirely. The normalized
+config turns an absent and an empty setup into the same [], so the raw
+config decides; a project that declares any setup, even an empty one,
+keeps its own. The fallback sits in getWorktreeSetupCommands, so worktree
+creation and bootstrap both get it.
+
+The app gates on the new server_info.features.worktreeDefaultSetup flag:
+Host settings > Workspaces gets a one-command-per-line editor, and a
+project's setup field says when the host default applies.
+
+Fork-Change: F-4
+---
+ packages/app/src/i18n/resources/ar.ts         |   1 +
+ packages/app/src/i18n/resources/en.ts         |  10 ++
+ packages/app/src/i18n/resources/es.ts         |   1 +
+ packages/app/src/i18n/resources/fr.ts         |   1 +
+ packages/app/src/i18n/resources/ja.ts         |   1 +
+ packages/app/src/i18n/resources/ko.ts         |   1 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   1 +
+ packages/app/src/i18n/resources/ru.ts         |   1 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   1 +
+ .../src/screens/project-settings-screen.tsx   |   5 +
+ .../app/src/screens/settings/host-page.tsx    |   2 +
+ .../settings/worktree-default-setup.tsx       | 162 ++++++++++++++++++
+ packages/protocol/src/messages.ts             |   6 +
+ packages/server/src/server/bootstrap.ts       |   6 +
+ packages/server/src/server/config.ts          |   8 +
+ .../src/server/daemon-config-store.test.ts    |  36 ++++
+ .../server/src/server/daemon-config-store.ts  |  10 ++
+ .../server/src/server/persisted-config.ts     |   1 +
+ .../server/src/server/websocket-server.ts     |   2 +
+ .../src/utils/worktree-default-setup.test.ts  |  95 ++++++++++
+ .../src/utils/worktree-default-setup.ts       |  46 +++++
+ packages/server/src/utils/worktree.ts         |   4 +-
+ .../public/schemas/paseo.config.v1.json       |   6 +
+ 23 files changed, 406 insertions(+), 1 deletion(-)
+ create mode 100644 packages/app/src/screens/settings/worktree-default-setup.tsx
+ create mode 100644 packages/server/src/utils/worktree-default-setup.test.ts
+ create mode 100644 packages/server/src/utils/worktree-default-setup.ts
+
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index c2ffa0179dd2e5df8d016f2686cf3a1f903369cf..2720f2b22830f628f478c008ce49ae5822142040 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -2787,6 +2787,7 @@ export const ar: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "Connect to this host to manage workspaces",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "Connect to this host to manage terminal profiles",
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index b34c88482471e3d2e8c3ab0afa47fc4fbb08bb19..be298be2474a5f78bfdc5668c7872887a0bb19c8 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -2884,6 +2884,16 @@ export const en = {
+       },
+       workspaces: {
+         unavailable: "Connect to this host to manage workspaces",
++        defaultSetup: {
++          title: "Default setup script",
++          hint: "Runs in new worktrees of projects that have no setup script of their own.",
++          edit: "Edit",
++          accessibilityLabel: "Default setup commands",
++          inputHint: "One command per line. Leave empty to turn it off.",
++          save: "Save",
++          saving: "Saving...",
++          projectHint: "While this is empty, new worktrees run this host's default setup script.",
++        },
+       },
+       terminalProfiles: {
+         unavailable: "Connect to this host to manage terminal profiles",
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index 1399ddc96a4e84874badcde0d30e7cd0f20ed5c1..bfb574d8d6c1cf6a15bc5155a61be7bf75d4198f 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -2809,6 +2809,7 @@ export const es: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "Connect to this host to manage workspaces",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "Connect to this host to manage terminal profiles",
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index f7b075c0de5658cbe76722b0c3762474f5251041..730bc1ccd7a142229123ff4d84129857ab927874 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -2812,6 +2812,7 @@ export const fr: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "Connectez-vous à cet hôte pour gérer les espaces de travail",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "Connectez-vous à cet hôte pour gérer les profils de terminal",
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index 83c08bab59238bd4765240548d0c9a9d76ab2d67..1a22bea4bbfcc8f191e98cc8e473cb1647b9bd2d 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -2776,6 +2776,7 @@ export const ja: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "ワークスペースを管理するにはこのホストに接続してください",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "ターミナルプロファイルを管理するにはこのホストに接続してください",
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index a37460910d44acce6f89fee44aee57afe463b89b..0c4da74d22dab6b181f01e1d2e884af6e7b15e85 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -2764,6 +2764,7 @@ export const ko: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "터미널 프로필을 관리하려면 이 호스트에 연결하세요",
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index 28850e0d4a53e901e2d90db61650d15675ae73ab..df25fc0ac149f172e56cec300051778ec3abd377 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -2791,6 +2791,7 @@ export const ptBR: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "Conecte-se a este host para gerenciar workspaces",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "Conecte-se a este host para gerenciar perfis de terminal",
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index 7e5dc1f6f3f8e18f9578b6abc146171e8a9451a9..40360bc33ee07749b2e5a9b5dd4b7612157aa5a2 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -2801,6 +2801,7 @@ export const ru: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "Подключитесь к этому хосту, чтобы управлять профилями терминала",
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index ea6aaf0d7fc2b337b508fd81bf3accf5e94b73b4..88f466755040a0d62a4a6692d4f607ef4cce5fbf 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -2722,6 +2722,7 @@ export const zhCN: TranslationResources = {
+       },
+       workspaces: {
+         unavailable: "连接到这个 Host 以管理 Workspace",
++        defaultSetup: en.settings.host.workspaces.defaultSetup,
+       },
+       terminalProfiles: {
+         unavailable: "Connect to this host to manage terminal profiles",
+diff --git a/packages/app/src/screens/project-settings-screen.tsx b/packages/app/src/screens/project-settings-screen.tsx
+index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b99584291eeec07c 100644
+--- a/packages/app/src/screens/project-settings-screen.tsx
++++ b/packages/app/src/screens/project-settings-screen.tsx
+@@ -30,6 +30,7 @@ import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+ import { SettingsTextAreaCard } from "@/components/settings-textarea";
+ import { SettingsGroup } from "@/components/settings/headings/settings-group";
+ import { SettingsSection } from "@/components/settings/headings/settings-section";
++import { WorktreeDefaultSetupHint } from "@/screens/settings/worktree-default-setup";
+ import { settingsStyles } from "@/styles/settings";
+ import { useProjects } from "@/hooks/use-projects";
+ import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
+@@ -392,6 +393,7 @@ function renderContent({
+       revision={loadedRevision}
+       hasUncommittedWorktreeSetupChanges={hasUncommittedWorktreeSetupChanges}
+       repoRoot={selectedHost.repoRoot}
++      serverId={selectedHost.serverId}
+       queryKey={queryKey}
+       client={client}
+       onReload={onReload}
+@@ -473,6 +475,7 @@ interface ProjectConfigFormProps {
+   revision: PaseoConfigRevision | null;
+   hasUncommittedWorktreeSetupChanges: boolean;
+   repoRoot: string;
++  serverId: string;
+   queryKey: readonly [string, string, string];
+   client: DaemonClient;
+   onReload: () => void;
+@@ -483,6 +486,7 @@ function ProjectConfigForm({
+   revision,
+   hasUncommittedWorktreeSetupChanges,
+   repoRoot,
++  serverId,
+   queryKey,
+   client,
+   onReload,
+@@ -715,6 +719,7 @@ function ProjectConfigForm({
+             onChangeText={handleSetupChange}
+             placeholder="npm install"
+           />
++          <WorktreeDefaultSetupHint serverId={serverId} projectSetupText={draft.setupText} />
+         </SettingsSection>
+ 
+         <SettingsSection
+diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
+index 4761e3948cd420672abb10c72a80d19e1cebeedd..430adcfdc56306eac7772489638730f694b666b4 100644
+--- a/packages/app/src/screens/settings/host-page.tsx
++++ b/packages/app/src/screens/settings/host-page.tsx
+@@ -67,6 +67,7 @@ import { useProviderIcon } from "@/components/provider-icons";
+ import { BrowserToolsOptInCard } from "./browser-tools-card";
+ import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
+ import { ProviderDefaultModeCard } from "./provider-default-mode-card";
++import { WorktreeDefaultSetupCard } from "./worktree-default-setup";
+ import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
+ 
+ const ThemedRestart = withUnistyles(RotateCw);
+@@ -321,6 +322,7 @@ export function HostWorkspacesPage({ serverId }: { serverId: string }) {
+       {isConnected ? (
+         <SettingsSection title={t("settings.hostSections.workspaces")}>
+           <AutoArchiveMergedWorkspacesCard serverId={serverId} />
++          <WorktreeDefaultSetupCard serverId={serverId} />
+         </SettingsSection>
+       ) : (
+         <View style={[settingsStyles.card, styles.emptyCard]}>
+diff --git a/packages/app/src/screens/settings/worktree-default-setup.tsx b/packages/app/src/screens/settings/worktree-default-setup.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..af3a2d3827e7fa97734de086e63a8b3d8f9f27b7
+--- /dev/null
++++ b/packages/app/src/screens/settings/worktree-default-setup.tsx
+@@ -0,0 +1,162 @@
++import { useCallback, useMemo, useState } from "react";
++import { Text, View } from "react-native";
++import { useMutation } from "@tanstack/react-query";
++import { useTranslation } from "react-i18next";
++import { StyleSheet } from "react-native-unistyles";
++import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
++import { SettingsTextAreaCard } from "@/components/settings-textarea";
++import { Button } from "@/components/ui/button";
++import { useDaemonConfig } from "@/hooks/use-daemon-config";
++import { useHostFeature } from "@/runtime/host-features";
++import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
++import { settingsStyles } from "@/styles/settings";
++
++function parseSetupCommands(text: string): string[] {
++  return text
++    .split("\n")
++    .map((line) => line.trim())
++    .filter((line) => line.length > 0);
++}
++
++function useHostDefaultSetup(serverId: string) {
++  const isSupported = useHostFeature(serverId, "worktreeDefaultSetup");
++  const { config, patchConfig } = useDaemonConfig(serverId);
++  const commands = config?.worktreeDefaultSetup ?? [];
++  return { isSupported, config, commands, patchConfig };
++}
++
++// Host-wide setup commands for new worktrees of projects whose paseo.json
++// leaves worktree.setup out.
++export function WorktreeDefaultSetupCard({ serverId }: { serverId: string }) {
++  const { t } = useTranslation();
++  const isConnected = useHostRuntimeIsConnected(serverId);
++  const { isSupported, config, commands, patchConfig } = useHostDefaultSetup(serverId);
++  const persistedText = commands.join("\n");
++  const [draft, setDraft] = useState(persistedText);
++  const [isEditing, setIsEditing] = useState(false);
++  const header = useMemo<SheetHeader>(
++    () => ({ title: t("settings.host.workspaces.defaultSetup.title") }),
++    [t],
++  );
++  const mutation = useMutation({
++    mutationFn: async (text: string) => {
++      const next = parseSetupCommands(text);
++      const result = await patchConfig({ worktreeDefaultSetup: next.length > 0 ? next : null });
++      if (!result) {
++        throw new Error(t("workspace.terminal.hostDisconnected"));
++      }
++      return result;
++    },
++    onSuccess: () => setIsEditing(false),
++  });
++
++  const handleOpen = useCallback(() => {
++    mutation.reset();
++    setDraft(persistedText);
++    setIsEditing(true);
++  }, [mutation, persistedText]);
++  const handleClose = useCallback(() => {
++    if (mutation.isPending) return;
++    setIsEditing(false);
++  }, [mutation.isPending]);
++  const handleSave = useCallback(() => mutation.mutate(draft), [draft, mutation]);
++
++  if (!isConnected || !isSupported || !config) return null;
++
++  return (
++    <>
++      <View style={settingsStyles.card} testID="host-page-worktree-default-setup-card">
++        <View style={settingsStyles.row}>
++          <View style={settingsStyles.rowContent}>
++            <Text style={settingsStyles.rowTitle}>
++              {t("settings.host.workspaces.defaultSetup.title")}
++            </Text>
++            <Text style={settingsStyles.rowHint}>
++              {t("settings.host.workspaces.defaultSetup.hint")}
++            </Text>
++          </View>
++          <Button
++            variant="outline"
++            size="sm"
++            onPress={handleOpen}
++            testID="host-page-worktree-default-setup-edit"
++          >
++            {t("settings.host.workspaces.defaultSetup.edit")}
++          </Button>
++        </View>
++      </View>
++
++      {isEditing ? (
++        <AdaptiveModalSheet
++          header={header}
++          visible
++          onClose={handleClose}
++          testID="host-page-worktree-default-setup-sheet"
++          desktopMaxWidth={560}
++        >
++          <SettingsTextAreaCard
++            testID="host-page-worktree-default-setup-input"
++            accessibilityLabel={t("settings.host.workspaces.defaultSetup.accessibilityLabel")}
++            value={draft}
++            onChangeText={setDraft}
++            placeholder="npm install"
++          />
++          <Text style={settingsStyles.rowHint}>
++            {t("settings.host.workspaces.defaultSetup.inputHint")}
++          </Text>
++          {mutation.error ? (
++            <Text style={settingsStyles.rowError} testID="host-page-worktree-default-setup-error">
++              {mutation.error.message}
++            </Text>
++          ) : null}
++          <View style={styles.actions}>
++            <Button
++              variant="default"
++              size="sm"
++              onPress={handleSave}
++              disabled={draft === persistedText || mutation.isPending}
++              testID="host-page-worktree-default-setup-save"
++            >
++              {mutation.isPending
++                ? t("settings.host.workspaces.defaultSetup.saving")
++                : t("settings.host.workspaces.defaultSetup.save")}
++            </Button>
++          </View>
++        </AdaptiveModalSheet>
++      ) : null}
++    </>
++  );
++}
++
++// Shown under a project's empty setup field: once saved empty, the project
++// leaves worktree.setup out and the host default runs instead.
++export function WorktreeDefaultSetupHint({
++  serverId,
++  projectSetupText,
++}: {
++  serverId: string;
++  projectSetupText: string;
++}) {
++  const { t } = useTranslation();
++  const { isSupported, commands } = useHostDefaultSetup(serverId);
++  if (!isSupported || commands.length === 0 || projectSetupText.trim().length > 0) return null;
++  return (
++    <Text style={styles.projectHint} testID="worktree-setup-host-default-hint">
++      {t("settings.host.workspaces.defaultSetup.projectHint")}
++    </Text>
++  );
++}
++
++const styles = StyleSheet.create((theme) => ({
++  actions: {
++    flexDirection: "row",
++    justifyContent: "flex-end",
++    gap: theme.spacing[2],
++    marginTop: theme.spacing[3],
++  },
++  projectHint: {
++    color: theme.colors.foregroundMuted,
++    fontSize: theme.fontSize.sm,
++    marginTop: theme.spacing[2],
++  },
++}));
+diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
+index 492ff90108af6eab3044380eff1e43a801b66f29..fa0c187191803b6453e6e0276898419b6d3d5cef 100644
+--- a/packages/protocol/src/messages.ts
++++ b/packages/protocol/src/messages.ts
+@@ -248,6 +248,9 @@ export const MutableDaemonConfigSchema = z
+     // COMPAT(speechSettings): added in v0.12.0, optional because older daemons omit it.
+     features: SpeechSettingsSchema.optional(),
+     envOverrides: z.record(z.string(), z.string()).optional(),
++    // Setup commands for new worktrees of projects whose paseo.json has no worktree.setup.
++    // null clears them. Gated on features.worktreeDefaultSetup.
++    worktreeDefaultSetup: z.array(z.string()).nullable().optional(),
+   })
+   .passthrough();
+ 
+@@ -270,6 +273,7 @@ export const MutableDaemonConfigPatchSchema = z
+     pluginsEnabled: z.boolean().optional(),
+     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
+     features: SpeechSettingsPatchSchema.optional(),
++    worktreeDefaultSetup: z.array(z.string()).nullable().optional(),
+   })
+   .partial()
+   .passthrough();
+@@ -3847,6 +3851,8 @@ export const ServerInfoStatusPayloadSchema = z
+         agentConfigApply: z.boolean().optional(),
+         // COMPAT(providerDefaultMode): added in v0.14.0, remove gate after 2027-05-02.
+         providerDefaultMode: z.boolean().optional(),
++        // COMPAT(worktreeDefaultSetup): added in v0.14.0, remove gate after 2027-05-02.
++        worktreeDefaultSetup: z.boolean().optional(),
+       })
+       .optional(),
+   })
+diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
+index 83ef2acb8356b66eada2e4b494eecb05a0b35c62..1a3a289f65500dd0ec4e0ec08ce9a8885d5bf213 100644
+--- a/packages/server/src/server/bootstrap.ts
++++ b/packages/server/src/server/bootstrap.ts
+@@ -228,6 +228,7 @@ import { WorkspaceAutoName } from "./workspace-auto-name.js";
+ import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
+ import { workspaceIdsOnCheckout } from "./workspace-directory.js";
+ import { configureGitProcessPolicy } from "../utils/run-git-command.js";
++import { attachWorktreeDefaultSetup } from "../utils/worktree-default-setup.js";
+ import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
+ import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
+ import {
+@@ -471,6 +472,7 @@ export interface PaseoDaemonConfig {
+     }>;
+   };
+   providerOverrides?: Record<string, ProviderOverride>;
++  worktreeDefaultSetup?: string[];
+   log?: PersistedConfig["log"];
+   onLifecycleIntent?: (intent: DaemonLifecycleIntent) => void;
+   pushNotificationSender?: PushNotificationSender;
+@@ -595,6 +597,9 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
+     pluginsEnabled: config.pluginsEnabled ?? false,
+     plugins: config.plugins ?? {},
+     skills: { selection: config.skillSelection },
++    ...(config.worktreeDefaultSetup !== undefined
++      ? { worktreeDefaultSetup: config.worktreeDefaultSetup }
++      : {}),
+   };
+ 
+   if (config.terminalProfiles !== undefined) {
+@@ -654,6 +659,7 @@ export async function createPaseoDaemon(
+       },
+     },
+   });
++  attachWorktreeDefaultSetup(daemonConfigStore);
+   const orchestrationSkills = createOrchestrationSkills(daemonConfigStore);
+   void orchestrationSkills.autoUpdate().catch((error) => {
+     logger.error({ err: error }, "Failed to maintain orchestration skills at startup");
+diff --git a/packages/server/src/server/config.ts b/packages/server/src/server/config.ts
+index add78aa7f58ef8e974d5c49421b8f8e6cae78ffd..d18b575468a8a3f9d3ce66d0c61d6f042a151593 100644
+--- a/packages/server/src/server/config.ts
++++ b/packages/server/src/server/config.ts
+@@ -527,6 +527,12 @@ function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedCo
+   return persisted.daemon?.browserTools?.enabled ?? false;
+ }
+ 
++function resolveWorktreeDefaultSetup(
++  persisted: ReturnType<typeof loadPersistedConfig>,
++): string[] | undefined {
++  return persisted.worktrees?.defaultSetup;
++}
++
+ /**
+  * Both profile lists stay `undefined` when absent rather than defaulting to an
+  * empty array: for terminal profiles that is what selects the built-in
+@@ -593,6 +599,7 @@ export type ResolvedDaemonSettings = Pick<
+   | "providerCatalogRefreshTimeoutMs"
+   | "metadataGeneration"
+   | "providerOverrides"
++  | "worktreeDefaultSetup"
+ >;
+ 
+ export function resolveConfigFromPersisted(
+@@ -682,6 +689,7 @@ export function resolveReloadableConfig(
+     providerOverrides: extractProviderOverrides(
+       persisted.agents?.providers as Record<string, unknown> | undefined,
+     ),
++    worktreeDefaultSetup: resolveWorktreeDefaultSetup(persisted),
+     overrideControlledPaths: resolveOverrideControlledPaths(env, cli, persisted),
+   };
+ }
+diff --git a/packages/server/src/server/daemon-config-store.test.ts b/packages/server/src/server/daemon-config-store.test.ts
+index 4fc28d78d554fd5a1ecbf4340195e2fb9e709861..e3e4f586cd6fb8bc70a40aa5d47c3146847b727b 100644
+--- a/packages/server/src/server/daemon-config-store.test.ts
++++ b/packages/server/src/server/daemon-config-store.test.ts
+@@ -811,6 +811,42 @@ describe("DaemonConfigStore", () => {
+     expect(loadConfig(paseoHome, { env: {} }).providerOverrides?.claude?.defaultModeId).toBeNull();
+   });
+ 
++  test("patch persists and clears the host default worktree setup", async () => {
++    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
++    tempDirs.push(paseoHome);
++    writeFileSync(
++      path.join(paseoHome, "config.json"),
++      `${JSON.stringify({ version: 1, worktrees: { root: "~/worktrees" } })}\n`,
++    );
++    const store = new DaemonConfigStore(
++      paseoHome,
++      {
++        mcp: { injectIntoAgents: false },
++        browserTools: { enabled: false },
++        providers: {},
++        metadataGeneration: { providers: [] },
++        autoArchiveAfterMerge: false,
++        enableTerminalAgentHooks: false,
++        appendSystemPrompt: "",
++      },
++      undefined,
++    );
++
++    const patched = await store.patch({ worktreeDefaultSetup: ["npm ci", "npm run build"] });
++    expect(patched.worktreeDefaultSetup).toEqual(["npm ci", "npm run build"]);
++    expect(loadPersistedConfig(paseoHome).worktrees).toEqual({
++      root: "~/worktrees",
++      defaultSetup: ["npm ci", "npm run build"],
++    });
++    expect(loadConfig(paseoHome, { env: {} }).worktreeDefaultSetup).toEqual([
++      "npm ci",
++      "npm run build",
++    ]);
++
++    expect((await store.patch({ worktreeDefaultSetup: null })).worktreeDefaultSetup).toBeNull();
++    expect(loadPersistedConfig(paseoHome).worktrees).toEqual({ root: "~/worktrees" });
++  });
++
+   test("patch persists daemon append system prompt into config.json", async () => {
+     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+     tempDirs.push(paseoHome);
+diff --git a/packages/server/src/server/daemon-config-store.ts b/packages/server/src/server/daemon-config-store.ts
+index 57b9a6b9161f21ac69d649bb70b77deffe860401..1fdfffdf0f59362f735f4f9886be4820a2877505 100644
+--- a/packages/server/src/server/daemon-config-store.ts
++++ b/packages/server/src/server/daemon-config-store.ts
+@@ -12,6 +12,7 @@ import {
+ import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+ import type { SpeechSettingsPatch } from "@getpaseo/protocol/speech/rpc-schemas";
+ import { mergeSpeechSettingsPatch, type SpeechSettingsOwner } from "./speech/speech-settings.js";
++import { mergeWorktreeDefaultSetup } from "../utils/worktree-default-setup.js";
+ 
+ export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
+ 
+@@ -36,6 +37,7 @@ interface SupportedMutableConfigPatch {
+   pluginsEnabled?: boolean;
+   plugins?: MutableDaemonConfig["plugins"];
+   features?: SpeechSettingsPatch;
++  worktreeDefaultSetup?: string[] | null;
+ }
+ 
+ const SPEECH_PERSISTED_PATHS = ["features.dictation", "features.voiceMode"];
+@@ -198,6 +200,7 @@ const RELOADABLE_PATHS = [
+   "agents.metadataGeneration",
+   "agents.skills.selection",
+   "pluginsEnabled",
++  "worktrees.defaultSetup",
+ ] as const;
+ 
+ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
+@@ -223,6 +226,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
+   ["agents.metadataGeneration", "metadataGeneration"],
+   ["agents.skills.selection", "skills.selection"],
+   ["pluginsEnabled", "pluginsEnabled"],
++  ["worktrees.defaultSetup", "worktreeDefaultSetup"],
+ ]);
+ 
+ function pathBelongsTo(path: string, owner: string): boolean {
+@@ -303,6 +307,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
+     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
+     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
+     ...(patch.features !== undefined ? { features: patch.features } : {}),
++    ...(patch.worktreeDefaultSetup !== undefined
++      ? { worktreeDefaultSetup: patch.worktreeDefaultSetup }
++      : {}),
+   };
+ }
+ 
+@@ -688,6 +695,9 @@ function mergeMutablePatchIntoPersistedConfig(params: {
+     ...withSpeech,
+     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
+     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
++    ...(patch.worktreeDefaultSetup !== undefined
++      ? { worktrees: mergeWorktreeDefaultSetup(persisted.worktrees, patch.worktreeDefaultSetup) }
++      : {}),
+     ...(daemon ? { daemon } : { daemon: undefined }),
+     ...(agents ? { agents } : { agents: undefined }),
+   } as PersistedConfig;
+diff --git a/packages/server/src/server/persisted-config.ts b/packages/server/src/server/persisted-config.ts
+index 51bfb3d3a4e06a738e86fd2a4c04c5f8e29ee58e..94346dca662b0008e24817779d1a6c6cb0c8e960 100644
+--- a/packages/server/src/server/persisted-config.ts
++++ b/packages/server/src/server/persisted-config.ts
+@@ -71,6 +71,7 @@ const WorktreesConfigSchema = z
+   .object({
+     root: z.string().min(1).optional(),
+     servicePorts: PaseoServicePortAllocationSchema.optional(),
++    defaultSetup: z.array(z.string()).optional(),
+   })
+   .strict();
+ 
+diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
+index e628b872eb60a9ba71f3e4aaa62583c7b6fb71b1..a6f492502ce1a09dffc902681e5c12f7b944eceb 100644
+--- a/packages/server/src/server/websocket-server.ts
++++ b/packages/server/src/server/websocket-server.ts
+@@ -2119,6 +2119,8 @@ export class VoiceAssistantWebSocketServer {
+         agentConfigApply: true,
+         // COMPAT(providerDefaultMode): added in v0.14.0, remove gate after 2027-05-02.
+         providerDefaultMode: true,
++        // COMPAT(worktreeDefaultSetup): added in v0.14.0, remove gate after 2027-05-02.
++        worktreeDefaultSetup: true,
+       },
+     };
+   }
+diff --git a/packages/server/src/utils/worktree-default-setup.test.ts b/packages/server/src/utils/worktree-default-setup.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..48fbfa05179fe9a014749c29bbf70d67d9171cd4
+--- /dev/null
++++ b/packages/server/src/utils/worktree-default-setup.test.ts
+@@ -0,0 +1,95 @@
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { afterEach, describe, expect, test } from "vitest";
++
++import { getWorktreeSetupCommands } from "./worktree.js";
++import { attachWorktreeDefaultSetup, mergeWorktreeDefaultSetup } from "./worktree-default-setup.js";
++
++const tempDirs: string[] = [];
++let detach: (() => void) | null = null;
++
++function useHostDefaultSetup(worktreeDefaultSetup: string[] | null | undefined): void {
++  detach?.();
++  detach = attachWorktreeDefaultSetup({
++    get: () => ({ worktreeDefaultSetup }),
++    onFieldChange: () => () => {},
++  });
++}
++
++function createProject(paseoConfig?: unknown): string {
++  const repoRoot = mkdtempSync(path.join(tmpdir(), "paseo-worktree-default-setup-"));
++  tempDirs.push(repoRoot);
++  if (paseoConfig !== undefined) {
++    writeFileSync(path.join(repoRoot, "paseo.json"), JSON.stringify(paseoConfig));
++  }
++  return repoRoot;
++}
++
++afterEach(() => {
++  useHostDefaultSetup(undefined);
++  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
++});
++
++describe("host default worktree setup", () => {
++  test("runs for a project without paseo.json", async () => {
++    useHostDefaultSetup(["npm ci", "  "]);
++    expect(await getWorktreeSetupCommands(createProject())).toEqual(["npm ci"]);
++  });
++
++  test("runs for a paseo.json that leaves worktree.setup out", async () => {
++    useHostDefaultSetup(["npm ci"]);
++    const repoRoot = createProject({ worktree: { teardown: "make clean" }, scripts: {} });
++    expect(await getWorktreeSetupCommands(repoRoot)).toEqual(["npm ci"]);
++  });
++
++  test("does not replace a project's empty setup", async () => {
++    useHostDefaultSetup(["npm ci"]);
++    expect(await getWorktreeSetupCommands(createProject({ worktree: { setup: [] } }))).toEqual([]);
++  });
++
++  test("does not replace a project's own setup", async () => {
++    useHostDefaultSetup(["npm ci"]);
++    const repoRoot = createProject({ worktree: { setup: "pnpm install" } });
++    expect(await getWorktreeSetupCommands(repoRoot)).toEqual(["pnpm install"]);
++  });
++
++  test("leaves projects without setup alone when the host has no default", async () => {
++    useHostDefaultSetup(null);
++    expect(await getWorktreeSetupCommands(createProject({}))).toEqual([]);
++  });
++
++  test("follows live config changes", async () => {
++    let worktreeDefaultSetup: string[] | null = ["npm ci"];
++    let notify = () => {};
++    detach = attachWorktreeDefaultSetup({
++      get: () => ({ worktreeDefaultSetup }),
++      onFieldChange: (_path, handler) => {
++        notify = handler;
++        return () => {};
++      },
++    });
++    const repoRoot = createProject();
++    expect(await getWorktreeSetupCommands(repoRoot)).toEqual(["npm ci"]);
++
++    worktreeDefaultSetup = null;
++    notify();
++    expect(await getWorktreeSetupCommands(repoRoot)).toEqual([]);
++  });
++});
++
++describe("mergeWorktreeDefaultSetup", () => {
++  test("keeps the other worktree settings", () => {
++    expect(mergeWorktreeDefaultSetup({ root: "~/wt" }, ["npm ci"])).toEqual({
++      root: "~/wt",
++      defaultSetup: ["npm ci"],
++    });
++    expect(mergeWorktreeDefaultSetup({ root: "~/wt", defaultSetup: ["npm ci"] }, null)).toEqual({
++      root: "~/wt",
++    });
++  });
++
++  test("drops the worktrees object once nothing is left", () => {
++    expect(mergeWorktreeDefaultSetup({ defaultSetup: ["npm ci"] }, null)).toBeUndefined();
++  });
++});
+diff --git a/packages/server/src/utils/worktree-default-setup.ts b/packages/server/src/utils/worktree-default-setup.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb239e39bcfcf737c3094f1b14c8a2a5be918e66
+--- /dev/null
++++ b/packages/server/src/utils/worktree-default-setup.ts
+@@ -0,0 +1,46 @@
++import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
++import { normalizeLifecycleCommands } from "@getpaseo/protocol/paseo-config-schema";
++import type { PersistedConfig } from "../server/persisted-config.js";
++import { readPaseoConfigForEdit } from "./paseo-config-file.js";
++
++type PersistedWorktreesConfig = PersistedConfig["worktrees"];
++
++interface WorktreeDefaultSetupSource {
++  get(): Pick<MutableDaemonConfig, "worktreeDefaultSetup">;
++  onFieldChange(path: string, handler: () => void): () => void;
++}
++
++// Host-wide like the git process policy: setup commands are resolved deep inside
++// worktree creation, far from the daemon config store.
++let hostDefaultSetup: string[] = [];
++
++export function attachWorktreeDefaultSetup(source: WorktreeDefaultSetupSource): () => void {
++  const apply = () => {
++    hostDefaultSetup = normalizeLifecycleCommands(source.get().worktreeDefaultSetup ?? []);
++  };
++  apply();
++  return source.onFieldChange("worktreeDefaultSetup", apply);
++}
++
++// The host default runs only for projects that leave `worktree.setup` out of
++// paseo.json. The normalized config turns an absent and an empty setup into the
++// same [], so the raw config decides; a project that declares any setup, even
++// an empty or unreadable one, keeps its own.
++export async function resolveWorktreeSetupCommands(
++  repoRoot: string,
++  projectSetup: string[],
++): Promise<string[]> {
++  if (projectSetup.length > 0 || hostDefaultSetup.length === 0) return projectSetup;
++  const raw = await readPaseoConfigForEdit(repoRoot);
++  const declaresSetup = !raw.ok || raw.config?.worktree?.setup !== undefined;
++  return declaresSetup ? projectSetup : [...hostDefaultSetup];
++}
++
++export function mergeWorktreeDefaultSetup(
++  worktrees: PersistedWorktreesConfig,
++  defaultSetup: string[] | null,
++): PersistedWorktreesConfig {
++  const { defaultSetup: _previous, ...rest } = worktrees ?? {};
++  const next = defaultSetup === null ? rest : { ...rest, defaultSetup };
++  return Object.keys(next).length > 0 ? next : undefined;
++}
+diff --git a/packages/server/src/utils/worktree.ts b/packages/server/src/utils/worktree.ts
+index 3ddc71b4726fd0f428a13bdda8f0f3d439561067..7e8a91fda3b87b684d2c9dbae1e2220fb38ee0d6 100644
+--- a/packages/server/src/utils/worktree.ts
++++ b/packages/server/src/utils/worktree.ts
+@@ -12,6 +12,7 @@ import {
+   createStringCommandShellEnv,
+ } from "./string-command-shell.js";
+ import { readPaseoConfig } from "./paseo-config-file.js";
++import { resolveWorktreeSetupCommands } from "./worktree-default-setup.js";
+ export {
+   PaseoConfigRawSchema,
+   PaseoLifecycleCommandRawSchema,
+@@ -270,7 +271,8 @@ async function readPaseoConfigOrThrow(repoRoot: string): Promise<PaseoConfig | n
+ }
+ 
+ export async function getWorktreeSetupCommands(repoRoot: string): Promise<string[]> {
+-  return (await readPaseoConfigOrThrow(repoRoot))?.worktree?.setup ?? [];
++  const projectSetup = (await readPaseoConfigOrThrow(repoRoot))?.worktree?.setup ?? [];
++  return resolveWorktreeSetupCommands(repoRoot, projectSetup);
+ }
+ 
+ export async function getWorktreeTeardownCommands(repoRoot: string): Promise<string[]> {
+diff --git a/packages/website/public/schemas/paseo.config.v1.json b/packages/website/public/schemas/paseo.config.v1.json
+index aac1bce4085baf9421e9a4c82c73e47949c09f0f..17fb1ed952b8fe9b066393a7c5489273222b013d 100644
+--- a/packages/website/public/schemas/paseo.config.v1.json
++++ b/packages/website/public/schemas/paseo.config.v1.json
+@@ -338,6 +338,12 @@
+             }
+           },
+           "additionalProperties": false
++        },
++        "defaultSetup": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
+         }
+       },
+       "additionalProperties": false

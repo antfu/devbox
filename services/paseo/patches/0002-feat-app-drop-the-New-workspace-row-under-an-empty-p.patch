@@ -1,0 +1,260 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:38:10 +0000
+Subject: [PATCH] feat(app): drop the New workspace row under an empty project
+
+An expanded project with no workspaces showed a "New workspace" row in its
+list. The project header's + button opens the same screen, and the global
+New workspace row stays, so the extra row only added noise. The e2e specs
+now reach creation through the header button.
+
+Fork-Change: F-2
+---
+ .../browser/empty-project-persists.spec.ts    |  29 ++--
+ .../src/components/sidebar-workspace-list.tsx | 124 +-----------------
+ 2 files changed, 17 insertions(+), 136 deletions(-)
+
+diff --git a/packages/app/e2e/browser/empty-project-persists.spec.ts b/packages/app/e2e/browser/empty-project-persists.spec.ts
+index fb2f98841e0ccefee8befa33fe6dbad39040fa78..ef8b174554c9ba937913749b9e3434748528c759 100644
+--- a/packages/app/e2e/browser/empty-project-persists.spec.ts
++++ b/packages/app/e2e/browser/empty-project-persists.spec.ts
+@@ -117,7 +117,9 @@ test.describe("Project picker search", () => {
+ // Projects are parents in the sidebar. Archiving the last workspace leaves the
+ // project row in place with a ghost "+ New workspace" child row.
+ test.describe("Project with no workspaces persists", () => {
+-  test("adding a project starts with only a new-workspace child row", async ({ page }) => {
++  test("adding a project starts with no child rows and creation on the header", async ({
++    page,
++  }) => {
+     const repo = await createTempGitRepo("empty-project-add-");
+     const client = await connectSeedClient();
+     let projectId: string | null = null;
+@@ -132,9 +134,10 @@ test.describe("Project with no workspaces persists", () => {
+       await expect(projectRow).toContainText(path.basename(repo.path));
+       await expect(page.getByTestId(`sidebar-workspace-list-${projectId}`)).toHaveCount(0);
+ 
+-      const newWorkspaceRow = page.getByTestId(`sidebar-project-new-workspace-row-${projectId}`);
+-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
+-      await expect(newWorkspaceRow).toContainText("New workspace");
++      await projectRow.hover();
++      await expect(page.getByTestId(`sidebar-project-new-worktree-${projectId}`)).toBeVisible({
++        timeout: 30_000,
++      });
+ 
+       const workspaces = await client.fetchWorkspaces({ filter: { projectId } });
+       expect(workspaces.entries).toEqual([]);
+@@ -155,9 +158,7 @@ test.describe("Project with no workspaces persists", () => {
+     try {
+       const projectViewKey = projectEquivalenceViewKey(workspace.projectKey);
+       const projectRow = page.getByTestId(`sidebar-project-row-${projectViewKey}`);
+-      const newWorkspaceRow = page.getByTestId(
+-        `sidebar-project-new-workspace-row-${projectViewKey}`,
+-      );
++      const newWorkspaceButton = page.getByTestId(`sidebar-project-new-worktree-${projectViewKey}`);
+       const globalNewWorkspace = page.getByTestId("sidebar-global-new-workspace");
+ 
+       await gotoAppShell(page);
+@@ -172,22 +173,23 @@ test.describe("Project with no workspaces persists", () => {
+ 
+       await archiveWorkspaceFromSidebar(page, workspace.workspaceId);
+ 
+-      // The workspace row goes away, but its project parent stays and exposes a
+-      // child row for creating the next workspace.
++      // The workspace row goes away, but its project parent stays and its
++      // header still offers creating the next workspace.
+       await expect(page.getByTestId(workspaceRowTestId(workspace.workspaceId))).toHaveCount(0, {
+         timeout: 30_000,
+       });
+       expect(existsSync(workspace.repoPath)).toBe(true);
+       await expect(projectRow).toBeVisible({ timeout: 30_000 });
+-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
+-      await expect(newWorkspaceRow).toContainText("New workspace");
++      await projectRow.hover();
++      await expect(newWorkspaceButton).toBeVisible({ timeout: 30_000 });
+       await expect(globalNewWorkspace).toBeVisible({ timeout: 30_000 });
+ 
+       // The project survives a reload after its last workspace is archived.
+       await page.reload();
+       await waitForSidebarHydration(page);
+       await expect(projectRow).toBeVisible({ timeout: 30_000 });
+-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
++      await projectRow.hover();
++      await expect(newWorkspaceButton).toBeVisible({ timeout: 30_000 });
+     } finally {
+       await workspace.cleanup();
+     }
+@@ -235,9 +237,10 @@ test.describe("Project remove", () => {
+       await expect(projectRow).toBeVisible({ timeout: 30_000 });
+       await expect(projectRow).toContainText(workspace.projectDisplayName);
+       await expect(projectRow).not.toContainText(workspace.repoPath);
++      await projectRow.hover();
+       await expect(
+         page.getByTestId(
+-          `sidebar-project-new-workspace-row-${projectEquivalenceViewKey(readdedProjectKey)}`,
++          `sidebar-project-new-worktree-${projectEquivalenceViewKey(readdedProjectKey)}`,
+         ),
+       ).toBeVisible({ timeout: 30_000 });
+     } finally {
+diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
+index 333eb6822103c3b3b9e6c2a9b6f47d32a9f9b9c2..00506f15aefe5348bf389217a8f77435733dd646 100644
+--- a/packages/app/src/components/sidebar-workspace-list.tsx
++++ b/packages/app/src/components/sidebar-workspace-list.tsx
+@@ -30,7 +30,7 @@ import {
+   type ActiveWorkspaceSelection,
+ } from "@/stores/navigation-active-workspace-store";
+ import { StyleSheet, withUnistyles } from "react-native-unistyles";
+-import { density, densityIconBox, densityIconProps } from "@/styles/density";
++import { density, densityIconProps } from "@/styles/density";
+ import type { Theme } from "@/styles/theme";
+ import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
+ import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
+@@ -120,7 +120,6 @@ import {
+   SidebarWorkspaceTrailingContent,
+   useSidebarWorkspaceTrailing,
+ } from "@/components/sidebar/workspace-trailing";
+-import { DensityIcon } from "@/components/ui/density-icon";
+ import { PressHighlight } from "@/components/ui/press-highlight";
+ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+ import { Shortcut } from "@/components/ui/shortcut";
+@@ -782,73 +781,6 @@ function NewWorktreeButton({
+   );
+ }
+ 
+-function NewWorkspaceGhostRow({
+-  project,
+-  displayName,
+-  worktreeTarget,
+-  onWorkspacePress,
+-}: {
+-  project: SidebarProjectEntry;
+-  displayName: string;
+-  worktreeTarget: SidebarProjectHostTarget;
+-  onWorkspacePress?: () => void;
+-}) {
+-  const { t } = useTranslation();
+-  const handlePress = useCallback(() => {
+-    onWorkspacePress?.();
+-    router.navigate(
+-      buildNewWorkspaceRoute({
+-        serverId: worktreeTarget.serverId,
+-        sourceDirectory: worktreeTarget.iconWorkingDir,
+-        displayName,
+-        projectId: worktreeTarget.projectId,
+-      }) as Href,
+-    );
+-  }, [displayName, onWorkspacePress, worktreeTarget]);
+-  const rowStyle = useCallback(
+-    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+-      styles.newWorkspaceGhostRow,
+-      hovered && !pressed && styles.newWorkspaceGhostRowHovered,
+-      pressed && styles.newWorkspaceGhostRowPressed,
+-    ],
+-    [],
+-  );
+-
+-  return (
+-    <Pressable
+-      accessibilityRole={platformIsWeb ? undefined : "button"}
+-      accessibilityLabel={t("sidebar.workspace.actions.createWorkspaceFor", {
+-        projectName: displayName,
+-      })}
+-      onPress={handlePress}
+-      style={rowStyle}
+-      testID={`sidebar-project-new-workspace-row-${project.viewKey}`}
+-    >
+-      {({ hovered, pressed }) => (
+-        <>
+-          <View style={styles.newWorkspaceGhostIconSlot}>
+-            <DensityIcon
+-              icon={Plus}
+-              size="sm"
+-              color={hovered || pressed ? "foreground" : "foregroundMuted"}
+-            />
+-          </View>
+-          <Text
+-            style={
+-              hovered || pressed
+-                ? styles.newWorkspaceGhostTextHovered
+-                : styles.newWorkspaceGhostText
+-            }
+-            numberOfLines={1}
+-          >
+-            {t("sidebar.workspace.actions.newWorkspace")}
+-          </Text>
+-        </>
+-      )}
+-    </Pressable>
+-  );
+-}
+-
+ function ProjectHeaderRow({
+   project,
+   displayName,
+@@ -1795,15 +1727,6 @@ function ProjectBlock({
+           ) : null}
+         </>
+       );
+-    } else if (rowModel.trailingAction.kind === "new_workspace") {
+-      projectChildren = (
+-        <NewWorkspaceGhostRow
+-          project={project}
+-          displayName={displayName}
+-          worktreeTarget={rowModel.trailingAction.target}
+-          onWorkspacePress={onWorkspacePress}
+-        />
+-      );
+     }
+   }
+ 
+@@ -2572,51 +2495,6 @@ const styles = StyleSheet.create((theme) => ({
+     paddingBottom: theme.spacing[3],
+   },
+   workspaceListContainer: {},
+-  // Kept in step with `workspaceRow` above. It stands in a project's list where a workspace row
+-  // would be, so it takes that row's geometry and both of its fills.
+-  //
+-  // The one departure is the extra left padding: it only ever renders under its project header, so
+-  // the step in reads as belonging to that project. Padding rather than margin, so the hover and
+-  // pressed fills stay the same box as every other row in the sidebar.
+-  newWorkspaceGhostRow: {
+-    minHeight: density.rowHeight,
+-    marginBottom: theme.spacing[0.5],
+-    paddingVertical: theme.spacing[2],
+-    paddingLeft: theme.spacing[4],
+-    paddingRight: theme.spacing[3],
+-    borderRadius: theme.borderRadius.lg,
+-    flexDirection: "row",
+-    alignItems: "center",
+-    gap: theme.spacing[2],
+-    userSelect: "none",
+-  },
+-  newWorkspaceGhostRowHovered: {
+-    backgroundColor: theme.colors.surfaceSidebarHover,
+-  },
+-  newWorkspaceGhostRowPressed: {
+-    backgroundColor: theme.colors.surface2,
+-  },
+-  // The width of a workspace row's status slot, so the label lands on the same rail as the
+-  // titles above it.
+-  newWorkspaceGhostIconSlot: {
+-    width: densityIconBox("md"),
+-    height: densityIconBox("md"),
+-    alignItems: "center",
+-    justifyContent: "center",
+-    flexShrink: 0,
+-  },
+-  newWorkspaceGhostText: {
+-    color: theme.colors.foregroundMuted,
+-    fontSize: theme.fontSize.base,
+-    minWidth: 0,
+-    flexShrink: 1,
+-  },
+-  newWorkspaceGhostTextHovered: {
+-    fontSize: theme.fontSize.base,
+-    minWidth: 0,
+-    flexShrink: 1,
+-    color: theme.colors.foreground,
+-  },
+   projectRow: {
+     position: "relative",
+     minHeight: density.rowHeight,

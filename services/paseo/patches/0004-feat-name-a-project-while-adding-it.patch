@@ -1,0 +1,1265 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:42:24 +0000
+Subject: [PATCH] feat: name a project while adding it
+
+Cloning vitejs/devtools and nuxt/devtools into the same parent folder
+collides, because the clone folder is always the repository name. The Add
+Project flow now has a name step: for a GitHub clone the name becomes the
+clone folder (and so the project name), and for an existing folder it sets
+the project's display name through the existing project rename RPC.
+
+The clone request gains an optional directoryName, validated as a single
+path segment, and the daemon advertises it as
+server_info.features.projectGithubCloneDirectoryName. Clients that omit
+the field clone into the repository name as before, and the app only shows
+the clone name step on hosts that advertise the flag.
+
+Fork-Change: F-6
+---
+ .../app/e2e/browser/add-project-flow.spec.ts  |  34 ++++
+ .../browser/add-project-github.real.spec.ts   |   6 +
+ .../browser/empty-project-persists.spec.ts    |   3 +
+ .../app/e2e/browser/projects-settings.spec.ts |   2 +
+ .../e2e/support/helpers/add-project-flow.ts   |   9 +-
+ .../app/src/add-project-flow/model.test.ts    |   1 +
+ packages/app/src/add-project-flow/model.ts    |  32 +++-
+ .../src/add-project-flow/project-name.test.ts | 166 ++++++++++++++++++
+ .../app/src/add-project-flow/project-name.ts  |  60 +++++++
+ .../app/src/components/add-project-flow.tsx   | 154 ++++++++++++----
+ packages/app/src/hooks/open-project.ts        |   2 +
+ .../app/src/hooks/use-open-project.test.ts    |  27 +++
+ packages/app/src/hooks/use-open-project.ts    |  19 +-
+ packages/client/src/daemon-client.test.ts     |  52 ++++++
+ packages/client/src/daemon-client.ts          |   8 +-
+ .../messages.project-command-center.test.ts   |   1 +
+ packages/protocol/src/messages.ts             |   4 +
+ .../protocol/src/messages.workspaces.test.ts  |  34 ++++
+ .../server/project-clone-directory.test.ts    |  31 ++++
+ .../src/server/project-clone-directory.ts     |  18 ++
+ packages/server/src/server/session.ts         |   9 +-
+ .../server/src/server/websocket-server.ts     |   2 +
+ 22 files changed, 630 insertions(+), 44 deletions(-)
+ create mode 100644 packages/app/src/add-project-flow/project-name.test.ts
+ create mode 100644 packages/app/src/add-project-flow/project-name.ts
+ create mode 100644 packages/server/src/server/project-clone-directory.test.ts
+ create mode 100644 packages/server/src/server/project-clone-directory.ts
+
+diff --git a/packages/app/e2e/browser/add-project-flow.spec.ts b/packages/app/e2e/browser/add-project-flow.spec.ts
+index 5770c3be9d55a4cac022d10592b2e95faaa8e751..d82e038d6b1171bee046e71a147c380f55255940 100644
+--- a/packages/app/e2e/browser/add-project-flow.spec.ts
++++ b/packages/app/e2e/browser/add-project-flow.spec.ts
+@@ -10,6 +10,7 @@ import {
+   addProjectFlowInput,
+   addProjectFlowMethod,
+   chooseAddProjectMethod,
++  confirmAddProjectName,
+   expectAddProjectPage,
+   expectNewWorkspaceForAddedProject,
+   expectAddProjectResultVisible,
+@@ -286,6 +287,7 @@ test.describe("Add Project command-center flow", () => {
+       timeout: 30_000,
+     });
+     await page.keyboard.press("Enter");
++    await confirmAddProjectName(page);
+ 
+     const projectId = await expectOpenedProject(page, projectPickerFixture.projectName);
+     projectPickerFixture.rememberProjectId(projectId);
+@@ -298,6 +300,36 @@ test.describe("Add Project command-center flow", () => {
+     await expectProjectHasNoWorkspaces(projectId);
+   });
+ 
++  test("names an existing folder while adding it", async ({ page, projectPickerFixture }) => {
++    const projectName = `named-${randomUUID().slice(0, 8)}`;
++    await gotoAppShell(page);
++    await openAddProjectFlow(page);
++    await chooseAddProjectMethod(page, "directory-search");
++    await addProjectFlowInput(page).fill(projectPickerFixture.fuzzyQuery);
++    await expect(addProjectFlow(page)).toContainText(projectPickerFixture.projectName, {
++      timeout: 30_000,
++    });
++    await page.keyboard.press("Enter");
++
++    await expectAddProjectPage(page, "project-name");
++    await expect(addProjectFlowInput(page)).toHaveValue(projectPickerFixture.projectName);
++    await addProjectFlowBack(page).click();
++    await expectAddProjectPage(page, "directory-search");
++    await page.keyboard.press("Enter");
++    await expectAddProjectPage(page, "project-name");
++    await addProjectFlowInput(page).fill(projectName);
++    await page.keyboard.press("Enter");
++
++    const projectId = await expectOpenedProject(page, projectName);
++    projectPickerFixture.rememberProjectId(projectId);
++    await expectNewWorkspaceForAddedProject(page, {
++      serverId: getServerId(),
++      projectId,
++      projectName,
++      projectPath: projectPickerFixture.projectPath,
++    });
++  });
++
+   test("keyboard navigation keeps the selected row inside the visible results", async ({
+     page,
+   }) => {
+@@ -338,6 +370,7 @@ test.describe("Add Project command-center flow", () => {
+       await navigateAddProjectResults(page, "ArrowDown", 12);
+       await expectAddProjectResultVisible(page, rowPath(11));
+       await page.keyboard.press("Enter");
++      await confirmAddProjectName(page);
+       projectId = await expectOpenedProject(page, "scroll-probe-11");
+       await expectNewWorkspaceForAddedProject(page, {
+         serverId: getServerId(),
+@@ -446,6 +479,7 @@ test.describe("Compact Add project context", () => {
+     await addProjectFlowInput(page).fill(projectPickerFixture.fuzzyQuery);
+     await expect(addProjectFlow(page)).toContainText(projectPickerFixture.projectName);
+     await page.keyboard.press("Enter");
++    await confirmAddProjectName(page);
+     const projectId = await expectOpenedProject(page, projectPickerFixture.projectName);
+     projectPickerFixture.rememberProjectId(projectId);
+     await expectNewWorkspaceForAddedProject(page, {
+diff --git a/packages/app/e2e/browser/add-project-github.real.spec.ts b/packages/app/e2e/browser/add-project-github.real.spec.ts
+index 4285f05e7c91a10a1c00c1df9e5de8d20bd0ee42..5548f78ba26f59217f4c86fc378bf3d94a616c73 100644
+--- a/packages/app/e2e/browser/add-project-github.real.spec.ts
++++ b/packages/app/e2e/browser/add-project-github.real.spec.ts
+@@ -64,6 +64,12 @@ test.describe("Add Project GitHub flow", () => {
+ 
+       await mkdir(checkoutPath);
+       await page.keyboard.press("Enter");
++      await expectAddProjectPage(page, "project-name");
++      await expect(addProjectFlowInput(page)).toHaveValue(repository.name);
++      await expect(page.getByTestId("add-project-flow-path-preview")).toContainText(
++        repository.name,
++      );
++      await page.keyboard.press("Enter");
+       await expect(page.getByTestId("add-project-flow-error")).toHaveText(
+         `Checkout path already exists: ${checkoutPath}`,
+       );
+diff --git a/packages/app/e2e/browser/empty-project-persists.spec.ts b/packages/app/e2e/browser/empty-project-persists.spec.ts
+index ef8b174554c9ba937913749b9e3434748528c759..a21371839fe7623221ddc1b20db7a95078f24f6a 100644
+--- a/packages/app/e2e/browser/empty-project-persists.spec.ts
++++ b/packages/app/e2e/browser/empty-project-persists.spec.ts
+@@ -5,6 +5,7 @@ import { gotoAppShell } from "../support/helpers/app";
+ import {
+   addProjectFlowInput,
+   chooseAddProjectMethod,
++  confirmAddProjectName,
+   openAddProjectFlow,
+ } from "../support/helpers/add-project-flow";
+ import { expectOpenedProject } from "../support/helpers/project-picker-ui";
+@@ -58,6 +59,7 @@ async function addProjectFromPicker(page: Page, projectPath: string): Promise<st
+   const input = addProjectFlowInput(page);
+   await input.fill(projectPath);
+   await page.keyboard.press("Enter");
++  await confirmAddProjectName(page);
+ 
+   const projectRow = page
+     .locator('[data-testid^="sidebar-project-row-"]')
+@@ -93,6 +95,7 @@ test.describe("Project picker search", () => {
+     const suggestion = page.getByText(projectPickerFixture.projectName, { exact: false }).first();
+     await expect(suggestion).toBeVisible({ timeout: 30_000 });
+     await suggestion.click();
++    await confirmAddProjectName(page);
+ 
+     const projectId = await expectOpenedProject(page, projectPickerFixture.projectName);
+     projectPickerFixture.rememberProjectId(projectId);
+diff --git a/packages/app/e2e/browser/projects-settings.spec.ts b/packages/app/e2e/browser/projects-settings.spec.ts
+index 0612d5ce07c360a17e4e80be76d17a6f9b74907b..c1ef49e1dfa78dd3e9ceb97b754942f4c02709cc 100644
+--- a/packages/app/e2e/browser/projects-settings.spec.ts
++++ b/packages/app/e2e/browser/projects-settings.spec.ts
+@@ -49,6 +49,7 @@ import { openCompactSettings } from "../support/helpers/settings";
+ import {
+   addProjectFlowInput,
+   chooseAddProjectMethod,
++  confirmAddProjectName,
+   openAddProjectFlow,
+ } from "../support/helpers/add-project-flow";
+ import { createTempGitRepo } from "../support/helpers/workspace";
+@@ -172,6 +173,7 @@ async function addProjectFromSidebar(page: Page, projectPath: string): Promise<s
+   const input = addProjectFlowInput(page);
+   await input.fill(projectPath);
+   await page.keyboard.press("Enter");
++  await confirmAddProjectName(page);
+ 
+   const projectRow = page
+     .locator('[data-testid^="sidebar-project-row-"]')
+diff --git a/packages/app/e2e/support/helpers/add-project-flow.ts b/packages/app/e2e/support/helpers/add-project-flow.ts
+index 666469540e804b337677590bd959c9ff3ea920ab..ac0bf40fe27abbe12068f4f6dc952de73fc96277 100644
+--- a/packages/app/e2e/support/helpers/add-project-flow.ts
++++ b/packages/app/e2e/support/helpers/add-project-flow.ts
+@@ -7,7 +7,8 @@ export type AddProjectFlowPage =
+   | "github-search"
+   | "github-location"
+   | "new-directory-parent"
+-  | "new-directory-name";
++  | "new-directory-name"
++  | "project-name";
+ 
+ export type AddProjectMethod = "directory-search" | "browse" | "github" | "new-directory";
+ 
+@@ -70,6 +71,12 @@ export async function chooseAddProjectMethod(page: Page, method: AddProjectMetho
+   }
+ }
+ 
++export async function confirmAddProjectName(page: Page): Promise<void> {
++  await expectAddProjectPage(page, "project-name");
++  await expect(addProjectFlowInput(page)).toBeFocused();
++  await page.keyboard.press("Enter");
++}
++
+ export async function expectNewWorkspaceForAddedProject(
+   page: Page,
+   input: {
+diff --git a/packages/app/src/add-project-flow/model.test.ts b/packages/app/src/add-project-flow/model.test.ts
+index 63014a3663d027ae78660edd000bca2777c04ffa..f710e38813fba0bbad46df0da5e4b561448a2156 100644
+--- a/packages/app/src/add-project-flow/model.test.ts
++++ b/packages/app/src/add-project-flow/model.test.ts
+@@ -28,6 +28,7 @@ const HOST: AddProjectHost = {
+   canAddProject: true,
+   canBrowse: true,
+   canCloneGithubRepositories: true,
++  canNameClonedRepositories: true,
+   canSearchGithubRepositories: true,
+   canCreateDirectory: true,
+ };
+diff --git a/packages/app/src/add-project-flow/model.ts b/packages/app/src/add-project-flow/model.ts
+index 0de21d1520e04ecaafd993f2597f72cd13defd16..ca4b2650e1252a7890c604196ac665c84419e6b3 100644
+--- a/packages/app/src/add-project-flow/model.ts
++++ b/packages/app/src/add-project-flow/model.ts
+@@ -4,6 +4,7 @@ export interface AddProjectHost {
+   canAddProject: boolean;
+   canBrowse: boolean;
+   canCloneGithubRepositories: boolean;
++  canNameClonedRepositories: boolean;
+   canSearchGithubRepositories: boolean;
+   canCreateDirectory: boolean;
+ }
+@@ -17,6 +18,11 @@ export interface GithubRepositoryChoice {
+   updatedAt: string | null;
+ }
+ 
++/** What the name step names: a clone's folder, or the display name of an existing folder. */
++export type ProjectNameTarget =
++  | { kind: "clone"; repository: GithubRepositoryChoice; parentPath: string }
++  | { kind: "directory"; path: string };
++
+ interface PageState {
+   activeIndex: number;
+   error: string | null;
+@@ -46,7 +52,15 @@ export type AddProjectPage =
+       activeIndex: number;
+       error: string | null;
+       isSubmitting: boolean;
+-    };
++    }
++  | ({
++      kind: "project-name";
++      hostId: string;
++      target: ProjectNameTarget;
++      name: string;
++      defaultName: string;
++      isSubmitting: boolean;
++    } & PageState);
+ 
+ export interface AddProjectFlowState {
+   hosts: AddProjectHost[];
+@@ -205,13 +219,27 @@ export function openNewDirectoryNamePage(
+   });
+ }
+ 
++export function openProjectNamePage(
++  state: AddProjectFlowState,
++  input: { hostId: string; target: ProjectNameTarget; defaultName: string },
++): AddProjectFlowState {
++  return pushAddProjectPage(state, {
++    kind: "project-name",
++    ...input,
++    name: input.defaultName,
++    activeIndex: 0,
++    error: null,
++    isSubmitting: false,
++  });
++}
++
+ export function setAddProjectPageInput(
+   state: AddProjectFlowState,
+   value: string,
+ ): AddProjectFlowState {
+   const page = currentAddProjectPage(state);
+   const updated = updateCurrentAddProjectPage(state, (current) => {
+-    if (current.kind === "new-directory-name") {
++    if (current.kind === "new-directory-name" || current.kind === "project-name") {
+       return { ...current, name: value, activeIndex: 0, error: null };
+     }
+     if (current.kind === "method") return current;
+diff --git a/packages/app/src/add-project-flow/project-name.test.ts b/packages/app/src/add-project-flow/project-name.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eca059918903ebd3b56342b99b842678f18364f6
+--- /dev/null
++++ b/packages/app/src/add-project-flow/project-name.test.ts
+@@ -0,0 +1,166 @@
++import { describe, expect, it } from "vitest";
++import type { WorkspaceProjectDescriptorPayload } from "@getpaseo/protocol/messages";
++import {
++  backAddProjectPage,
++  currentAddProjectPage,
++  openAddProjectFlow,
++  openGithubLocationPage,
++  openProjectNamePage,
++  setAddProjectPageInput,
++  type AddProjectHost,
++  type GithubRepositoryChoice,
++  type ProjectNameTarget,
++} from "./model";
++import { applyProjectDisplayName, chooseProjectName, projectNamePreview } from "./project-name";
++
++const REPOSITORY: GithubRepositoryChoice = {
++  id: "manual:https:vitejs/devtools",
++  nameWithOwner: "vitejs/devtools",
++  cloneUrl: "vitejs/devtools",
++  cloneProtocol: "https",
++  description: null,
++  updatedAt: null,
++};
++const CLONE: ProjectNameTarget = { kind: "clone", repository: REPOSITORY, parentPath: "~/dev" };
++const DIRECTORY: ProjectNameTarget = { kind: "directory", path: "~/dev/devtools" };
++
++const PROJECT: WorkspaceProjectDescriptorPayload = {
++  projectId: "project-1",
++  projectDisplayName: "devtools",
++  projectCustomName: null,
++  projectRootPath: "/home/me/dev/devtools",
++  projectKind: "git",
++};
++
++const HOST: AddProjectHost = {
++  serverId: "host-1",
++  label: "Local",
++  canAddProject: true,
++  canBrowse: true,
++  canCloneGithubRepositories: true,
++  canNameClonedRepositories: true,
++  canSearchGithubRepositories: true,
++  canCreateDirectory: true,
++};
++
++function createRenameClient() {
++  const renames: Array<[string, string | null]> = [];
++  return {
++    renames,
++    renameProject: async (projectId: string, customName: string | null) => {
++      renames.push([projectId, customName]);
++      return { customName };
++    },
++  };
++}
++
++describe("project name page", () => {
++  it("opens prefilled with the default name, edits it, and goes back to the destination", () => {
++    let state = openAddProjectFlow({ hosts: [HOST] });
++    state = openGithubLocationPage(state, HOST.serverId, REPOSITORY);
++    state = openProjectNamePage(state, {
++      hostId: HOST.serverId,
++      target: CLONE,
++      defaultName: "devtools",
++    });
++
++    expect(currentAddProjectPage(state)).toEqual({
++      kind: "project-name",
++      hostId: "host-1",
++      target: CLONE,
++      name: "devtools",
++      defaultName: "devtools",
++      activeIndex: 0,
++      error: null,
++      isSubmitting: false,
++    });
++
++    state = setAddProjectPageInput(state, "vite-devtools");
++    expect(currentAddProjectPage(state)).toMatchObject({ name: "vite-devtools" });
++
++    state = backAddProjectPage(state) ?? state;
++    expect(currentAddProjectPage(state).kind).toBe("github-location");
++  });
++});
++
++describe("chooseProjectName", () => {
++  it("keeps the default when the name is empty or unchanged", () => {
++    expect(chooseProjectName({ target: CLONE, name: "  ", defaultName: "devtools" })).toEqual({
++      kind: "default",
++    });
++    expect(
++      chooseProjectName({ target: CLONE, name: " devtools ", defaultName: "devtools" }),
++    ).toEqual({ kind: "default" });
++  });
++
++  it("uses a trimmed custom name", () => {
++    expect(
++      chooseProjectName({ target: CLONE, name: " vite-devtools ", defaultName: "devtools" }),
++    ).toEqual({ kind: "custom", name: "vite-devtools" });
++  });
++
++  it.each(["vite/devtools", "vite\\devtools", ".", ".."])(
++    "rejects %j as a clone folder name",
++    (name) => {
++      expect(chooseProjectName({ target: CLONE, name, defaultName: "devtools" })).toEqual({
++        kind: "invalid",
++        error: "Enter a single folder name",
++      });
++    },
++  );
++
++  it("accepts any text as a display name for an existing folder", () => {
++    expect(
++      chooseProjectName({ target: DIRECTORY, name: "Vite / DevTools", defaultName: "devtools" }),
++    ).toEqual({ kind: "custom", name: "Vite / DevTools" });
++  });
++});
++
++describe("projectNamePreview", () => {
++  it("shows the clone destination with the chosen folder name", () => {
++    expect(
++      projectNamePreview({ target: CLONE, name: "vite-devtools", defaultName: "devtools" }),
++    ).toBe("~/dev/vite-devtools");
++    expect(projectNamePreview({ target: CLONE, name: "", defaultName: "devtools" })).toBe(
++      "~/dev/devtools",
++    );
++  });
++
++  it("shows the folder being added", () => {
++    expect(projectNamePreview({ target: DIRECTORY, name: "Vite", defaultName: "devtools" })).toBe(
++      "~/dev/devtools",
++    );
++  });
++});
++
++describe("applyProjectDisplayName", () => {
++  it("renames the project to the chosen name", async () => {
++    const client = createRenameClient();
++
++    const project = await applyProjectDisplayName({
++      client,
++      project: PROJECT,
++      name: "Vite DevTools",
++    });
++
++    expect(client.renames).toEqual([["project-1", "Vite DevTools"]]);
++    expect(project).toEqual({
++      ...PROJECT,
++      projectDisplayName: "Vite DevTools",
++      projectCustomName: "Vite DevTools",
++    });
++  });
++
++  it("does not rename when no name was chosen or the project already has it", async () => {
++    const client = createRenameClient();
++    const named = { ...PROJECT, projectDisplayName: "Vite DevTools" };
++
++    await expect(applyProjectDisplayName({ client, project: PROJECT, name: null })).resolves.toBe(
++      PROJECT,
++    );
++    await expect(
++      applyProjectDisplayName({ client, project: named, name: "Vite DevTools" }),
++    ).resolves.toBe(named);
++    expect(client.renames).toEqual([]);
++  });
++});
+diff --git a/packages/app/src/add-project-flow/project-name.ts b/packages/app/src/add-project-flow/project-name.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..3d1ab008b2cb344682dcdac04873ebedafa939f1
+--- /dev/null
++++ b/packages/app/src/add-project-flow/project-name.ts
+@@ -0,0 +1,60 @@
++import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
++import type { WorkspaceProjectDescriptorPayload } from "@getpaseo/protocol/messages";
++import type { ProjectNameTarget } from "./model";
++import { joinDirectoryPath } from "./options";
++
++export interface ProjectNameInput {
++  target: ProjectNameTarget;
++  name: string;
++  defaultName: string;
++}
++
++export interface ApplyProjectDisplayNameInput {
++  client: Pick<DaemonClient, "renameProject">;
++  project: WorkspaceProjectDescriptorPayload;
++  name: string | null;
++}
++
++export type ProjectNameChoice =
++  | { kind: "default" }
++  | { kind: "custom"; name: string }
++  | { kind: "invalid"; error: string };
++
++/**
++ * An empty name or the prefilled one keeps the default, so the request stays
++ * what it was before the step existed. Clone names become a folder and must be
++ * one path segment; display names are free text.
++ */
++export function chooseProjectName(input: ProjectNameInput): ProjectNameChoice {
++  const name = input.name.trim();
++  if (!name || name === input.defaultName) return { kind: "default" };
++  if (input.target.kind === "clone" && !isSinglePathSegment(name)) {
++    return { kind: "invalid", error: "Enter a single folder name" };
++  }
++  return { kind: "custom", name };
++}
++
++export function projectNamePreview(input: ProjectNameInput): string {
++  if (input.target.kind === "directory") return input.target.path;
++  const name = input.name.trim() || input.defaultName;
++  return joinDirectoryPath(input.target.parentPath, name);
++}
++
++function isSinglePathSegment(name: string): boolean {
++  return name !== "." && name !== ".." && !/[\\/]/u.test(name) && !name.includes("\0");
++}
++
++/** Gives an added folder its chosen display name, unless it already has it. */
++export async function applyProjectDisplayName(
++  input: ApplyProjectDisplayNameInput,
++): Promise<WorkspaceProjectDescriptorPayload> {
++  if (input.name === null || input.name === input.project.projectDisplayName) {
++    return input.project;
++  }
++  const { customName } = await input.client.renameProject(input.project.projectId, input.name);
++  return {
++    ...input.project,
++    projectDisplayName: customName ?? input.project.projectDisplayName,
++    projectCustomName: customName,
++  };
++}
+diff --git a/packages/app/src/components/add-project-flow.tsx b/packages/app/src/components/add-project-flow.tsx
+index a1cb5cf779f436ff27746f900444557c9b6e7704..437ec7a138b3a6e4176414e5159842e4a72391b1 100644
+--- a/packages/app/src/components/add-project-flow.tsx
++++ b/packages/app/src/components/add-project-flow.tsx
+@@ -48,6 +48,7 @@ import {
+   openGithubSearchPage,
+   openNewDirectoryNamePage,
+   openNewDirectoryParentPage,
++  openProjectNamePage,
+   setAddProjectActiveIndex,
+   setAddProjectPageInput,
+   setNewDirectoryName,
+@@ -57,6 +58,11 @@ import {
+   type AddProjectPage,
+   type GithubRepositoryChoice,
+ } from "@/add-project-flow/model";
++import {
++  applyProjectDisplayName,
++  chooseProjectName,
++  projectNamePreview,
++} from "@/add-project-flow/project-name";
+ import {
+   buildAddProjectMethods,
+   addProjectMethodEmptyText,
+@@ -117,6 +123,14 @@ interface FlowRowOption {
+ 
+ type GithubLocationPage = Extract<AddProjectPage, { kind: "github-location" }>;
+ 
++interface CloneRepositoryInput {
++  hostId: string;
++  repository: GithubRepositoryChoice;
++  parentPath: string;
++  directoryName: string | null;
++  statusPage: "github-location" | "project-name";
++}
++
+ interface FlowIconProps {
+   icon: ComponentType<{ size?: number; color?: string }>;
+   size?: number;
+@@ -179,6 +193,7 @@ function directoryOptionSubtitle(option: ProjectPickerOption, shortPath: string)
+ 
+ function progressText(page: AddProjectPage): string {
+   if (page.kind === "github-location") return "Cloning project...";
++  if (page.kind === "project-name" && page.target.kind === "clone") return "Cloning project...";
+   if (page.kind === "new-directory-name") return "Creating directory...";
+   return "Adding project...";
+ }
+@@ -226,6 +241,8 @@ function pageTitle(page: AddProjectPage): string {
+       return "Choose parent directory";
+     case "new-directory-name":
+       return "Name directory";
++    case "project-name":
++      return "Name project";
+   }
+ }
+ 
+@@ -244,11 +261,13 @@ function pagePlaceholder(page: AddProjectInputPage): string {
+       return "Search parent directories or enter a path...";
+     case "new-directory-name":
+       return "Directory name";
++    case "project-name":
++      return "Project name";
+   }
+ }
+ 
+ function pageInput(page: AddProjectInputPage): string {
+-  return page.kind === "new-directory-name" ? page.name : page.query;
++  return "name" in page ? page.name : page.query;
+ }
+ 
+ function pathTestId(path: string): string {
+@@ -339,6 +358,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+   const stableProjectIdentityByHost = useHostFeatureMap(hostIds, "stableProjectIdentity");
+   // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
+   const githubCloneByHost = useHostFeatureMap(hostIds, "projectGithubClone");
++  // COMPAT(projectGithubCloneDirectoryName): added in v0.14.0, remove gate after 2027-11-02.
++  const cloneDirectoryNameByHost = useHostFeatureMap(hostIds, "projectGithubCloneDirectoryName");
+   // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
+   const githubSearchByHost = useHostFeatureMap(hostIds, "workspaceGithubRepositorySearch");
+   // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
+@@ -358,12 +379,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+             canAddProject,
+             canBrowse: canAddProject && getIsElectronRuntime() && localServerId === host.serverId,
+             canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
++            canNameClonedRepositories: cloneDirectoryNameByHost.get(host.serverId) === true,
+             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
+             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
+           },
+         ];
+       }),
+     [
++      cloneDirectoryNameByHost,
+       connectionStatuses,
+       createDirectoryByHost,
+       githubCloneByHost,
+@@ -402,7 +425,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+   const resultsRef = useRef<ScrollView>(null);
+   const submissionInFlightRef = useRef(false);
+   const browseInFlightRef = useRef(false);
+-  const query = page.kind === "new-directory-name" || page.kind === "method" ? "" : page.query;
++  const query = "query" in page ? page.query : "";
+   const pageInputValueRef = useRef(page.kind === "method" ? "" : pageInput(page));
+   pageInputValueRef.current = page.kind === "method" ? "" : pageInput(page);
+   const [debouncedQuery, setDebouncedQuery] = useState(query);
+@@ -489,27 +512,32 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+   );
+ 
+   const openAddedProject = useCallback(
+-    async (path: string, sourceKind: "directory-search" | "method") => {
+-      if (!hostId || submissionInFlightRef.current) return;
++    async (path: string, projectName: string | null) => {
++      if (!hostId || !client || submissionInFlightRef.current) return;
+       submissionInFlightRef.current = true;
+       setState((current) =>
+-        setPageStatus(current, sourceKind, { isSubmitting: true, error: null }),
++        setPageStatus(current, "project-name", { isSubmitting: true, error: null }),
+       );
+       try {
+         const result = await openProject(path);
+         if (result.ok) {
+-          openNewWorkspaceForProject(hostId, result.project);
++          const project = await applyProjectDisplayName({
++            client,
++            project: result.project,
++            name: projectName,
++          });
++          openNewWorkspaceForProject(hostId, project);
+           return;
+         }
+         const reason = getOpenProjectFailureReason(result);
+         const message =
+           reason === "directory_not_found" ? "Directory not found" : "Unable to add project";
+         setState((current) =>
+-          setPageStatus(current, sourceKind, { isSubmitting: false, error: message }),
++          setPageStatus(current, "project-name", { isSubmitting: false, error: message }),
+         );
+       } catch {
+         setState((current) =>
+-          setPageStatus(current, sourceKind, {
++          setPageStatus(current, "project-name", {
+             isSubmitting: false,
+             error: "Unable to add project",
+           }),
+@@ -518,7 +546,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+         submissionInFlightRef.current = false;
+       }
+     },
+-    [hostId, openNewWorkspaceForProject, openProject],
++    [client, hostId, openNewWorkspaceForProject, openProject],
+   );
+ 
+   const browse = useCallback(async () => {
+@@ -526,7 +554,15 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     browseInFlightRef.current = true;
+     try {
+       const path = await pickDirectory();
+-      if (path) await openAddedProject(path, "method");
++      if (path) {
++        setState((current) =>
++          openProjectNamePage(current, {
++            hostId,
++            target: { kind: "directory", path },
++            defaultName: pathBaseName(path),
++          }),
++        );
++      }
+     } catch {
+       setState((current) =>
+         setPageStatus(current, "method", { error: "Unable to browse for a directory" }),
+@@ -534,7 +570,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     } finally {
+       browseInFlightRef.current = false;
+     }
+-  }, [hostId, isLocalDaemon, openAddedProject]);
++  }, [hostId, isLocalDaemon]);
+ 
+   const selectMethod = useCallback(
+     (method: AddProjectMethodId) => {
+@@ -566,32 +602,34 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     [directoryPaths, query, recommendedPaths],
+   );
+   const cloneRepository = useCallback(
+-    async (locationPage: GithubLocationPage, parentPath: string) => {
++    async (input: CloneRepositoryInput) => {
+       if (submissionInFlightRef.current) return;
+       submissionInFlightRef.current = true;
+       setState((current) =>
+-        setPageStatus(current, "github-location", { isSubmitting: true, error: null }),
++        setPageStatus(current, input.statusPage, { isSubmitting: true, error: null }),
+       );
+       try {
+-        const result = await cloneGithubProject(
+-          locationPage.repository.cloneUrl,
+-          parentPath,
+-          locationPage.repository.cloneProtocol,
+-        );
++        const { cloneProtocol } = input.repository;
++        const result = await cloneGithubProject({
++          repo: input.repository.cloneUrl,
++          targetDirectory: input.parentPath,
++          ...(cloneProtocol ? { cloneProtocol } : {}),
++          ...(input.directoryName ? { directoryName: input.directoryName } : {}),
++        });
+         if (result.ok) {
+-          lastCloneParentByHost.set(locationPage.hostId, parentPath);
+-          openNewWorkspaceForProject(locationPage.hostId, result.project);
++          lastCloneParentByHost.set(input.hostId, input.parentPath);
++          openNewWorkspaceForProject(input.hostId, result.project);
+           return;
+         }
+         setState((current) =>
+-          setPageStatus(current, "github-location", {
++          setPageStatus(current, input.statusPage, {
+             isSubmitting: false,
+             error: result.error ?? "Unable to clone repository",
+           }),
+         );
+       } catch (error) {
+         setState((current) =>
+-          setPageStatus(current, "github-location", {
++          setPageStatus(current, input.statusPage, {
+             isSubmitting: false,
+             error: error instanceof Error ? error.message : "Unable to clone repository",
+           }),
+@@ -602,6 +640,49 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     },
+     [cloneGithubProject, openNewWorkspaceForProject],
+   );
++  const selectCloneParent = useCallback(
++    (locationPage: GithubLocationPage, parentPath: string) => {
++      const { hostId: targetHostId, repository } = locationPage;
++      if (host?.canNameClonedRepositories === true) {
++        setState((current) =>
++          openProjectNamePage(current, {
++            hostId: targetHostId,
++            target: { kind: "clone", repository, parentPath },
++            defaultName: pathBaseName(repository.nameWithOwner),
++          }),
++        );
++        return;
++      }
++      void cloneRepository({
++        hostId: targetHostId,
++        repository,
++        parentPath,
++        directoryName: null,
++        statusPage: "github-location",
++      });
++    },
++    [cloneRepository, host?.canNameClonedRepositories],
++  );
++  const submitProjectName = useCallback(async () => {
++    if (page.kind !== "project-name") return;
++    const choice = chooseProjectName(page);
++    if (choice.kind === "invalid") {
++      setState((current) => setPageStatus(current, "project-name", { error: choice.error }));
++      return;
++    }
++    const name = choice.kind === "custom" ? choice.name : null;
++    if (page.target.kind === "directory") {
++      await openAddedProject(page.target.path, name);
++      return;
++    }
++    await cloneRepository({
++      hostId: page.hostId,
++      repository: page.target.repository,
++      parentPath: page.target.parentPath,
++      directoryName: name,
++      statusPage: "project-name",
++    });
++  }, [cloneRepository, openAddedProject, page]);
+   const rows = useMemo<FlowRowOption[]>(() => {
+     if (page.kind === "host") {
+       const choices = filterAddProjectHosts(state.hosts, page.query).map<FlowRowOption>(
+@@ -651,7 +732,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+           subtitle: directoryOptionSubtitle(option, shortPath),
+           icon: Folder,
+           testID: pathTestId(option.path),
+-          select: () => void openAddedProject(option.path, "directory-search"),
++          select: () =>
++            setState((current) =>
++              openProjectNamePage(current, {
++                hostId: page.hostId,
++                target: { kind: "directory", path: option.path },
++                defaultName: pathBaseName(option.path),
++              }),
++            ),
+         };
+       });
+     }
+@@ -701,9 +789,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+         title: shortenPath(option.displayPath),
+         subtitle: option.secondaryText,
+         icon: HardDrive,
+-        disabled: option.disabled,
++        // An existing folder only blocks the clone when it cannot be renamed.
++        disabled: option.disabled && host?.canNameClonedRepositories !== true,
+         testID: pathTestId(option.displayPath),
+-        select: () => void cloneRepository(page, option.path),
++        select: () => selectCloneParent(page, option.path),
+       }));
+     }
+     if (page.kind === "new-directory-parent") {
+@@ -719,15 +808,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     }
+     return [];
+   }, [
+-    cloneRepository,
+     directoryPaths,
+     githubQuery.data,
+     host,
+     onClose,
+-    openAddedProject,
+     page,
+     pathOptions,
+     recommendedPaths,
++    selectCloneParent,
+     selectMethod,
+     state.hosts,
+   ]);
+@@ -792,9 +880,13 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+       void createDirectory();
+       return;
+     }
++    if (page.kind === "project-name") {
++      void submitProjectName();
++      return;
++    }
+     const option = rows[activeIndex];
+     if (option && !option.disabled) option.select();
+-  }, [activeIndex, createDirectory, page.kind, rows]);
++  }, [activeIndex, createDirectory, page.kind, rows, submitProjectName]);
+ 
+   const handleKey = useCallback(
+     (key: string): boolean => {
+@@ -866,10 +958,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     githubAvailable: currentGithubSearch?.available ?? null,
+     githubError: currentGithubSearch?.error ?? null,
+   });
+-  const preview =
++  const newDirectoryPreview =
+     page.kind === "new-directory-name" && page.name.trim()
+       ? joinDirectoryPath(page.parentPath, page.name.trim())
+       : null;
++  const preview = page.kind === "project-name" ? projectNamePreview(page) : newDirectoryPreview;
+ 
+   const modal = (
+     <Modal visible transparent animationType="fade" onRequestClose={isWeb ? undefined : handleBack}>
+@@ -982,7 +1075,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+               !loading &&
+               !queryError &&
+               rows.length === 0 &&
+-              page.kind !== "new-directory-name" ? (
++              page.kind !== "new-directory-name" &&
++              page.kind !== "project-name" ? (
+                 <Text style={styles.stateText} testID="add-project-flow-empty">
+                   {emptyText(page, host ?? null)}
+                 </Text>
+diff --git a/packages/app/src/hooks/open-project.ts b/packages/app/src/hooks/open-project.ts
+index aae61c8b1dd95a25d5a478f30e3a2a79ebbfa765..ef68291344677090646901bc3ea2021ca5f749f5 100644
+--- a/packages/app/src/hooks/open-project.ts
++++ b/packages/app/src/hooks/open-project.ts
+@@ -74,6 +74,7 @@ export interface CloneGithubProjectDirectlyInput extends ProjectRegistrationCall
+   repo: string;
+   targetDirectory: string;
+   cloneProtocol?: ProjectGithubCloneProtocol;
++  directoryName?: string;
+   client: Pick<DaemonClient, "cloneGithubProject"> | null;
+ }
+ 
+@@ -134,6 +135,7 @@ export async function cloneGithubProjectDirectly(
+     repo: trimmedRepo,
+     targetDirectory: trimmedTargetDirectory,
+     ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
++    ...(input.directoryName ? { directoryName: input.directoryName } : {}),
+   });
+   if (payload.error || !payload.project) {
+     return { ok: false, errorCode: null, error: payload.error };
+diff --git a/packages/app/src/hooks/use-open-project.test.ts b/packages/app/src/hooks/use-open-project.test.ts
+index d01602354d8c038bda808bc218dcd1d85ea1c91a..c05dca5f25970c394111342529969c49f36c1bb2 100644
+--- a/packages/app/src/hooks/use-open-project.test.ts
++++ b/packages/app/src/hooks/use-open-project.test.ts
+@@ -32,6 +32,7 @@ interface RecordedClone {
+   repo: string;
+   targetDirectory: string;
+   cloneProtocol?: "https" | "ssh";
++  directoryName?: string;
+ }
+ 
+ function createFakeSession() {
+@@ -201,6 +202,32 @@ describe("cloneGithubProjectDirectly", () => {
+     expect(session.hydrated).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
+   });
+ 
++  it("clones into the named directory when one is given", async () => {
++    const session = createFakeSession();
++    const github = createFakeGithubCloneClient(buildProjectPayload());
++
++    await cloneGithubProjectDirectly({
++      serverId: SERVER_ID,
++      repo: "vitejs/devtools",
++      targetDirectory: "~/dev",
++      cloneProtocol: "https",
++      directoryName: "vite-devtools",
++      isConnected: true,
++      client: github,
++      upsertProject: session.upsertProject,
++      setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
++    });
++
++    expect(github.clones).toEqual([
++      {
++        repo: "vitejs/devtools",
++        targetDirectory: "~/dev",
++        cloneProtocol: "https",
++        directoryName: "vite-devtools",
++      },
++    ]);
++  });
++
+   it("does not register a project when cloning fails", async () => {
+     const session = createFakeSession();
+     const github = createFakeGithubCloneClient(null);
+diff --git a/packages/app/src/hooks/use-open-project.ts b/packages/app/src/hooks/use-open-project.ts
+index 18dc5064f3fbe64452edc37772f26de9b01d03c3..30d88a283364ffe5d049969f98a0348c5d109a71 100644
+--- a/packages/app/src/hooks/use-open-project.ts
++++ b/packages/app/src/hooks/use-open-project.ts
+@@ -56,13 +56,16 @@ export function useOpenProject(
+   );
+ }
+ 
++export interface CloneGithubProjectRequest {
++  repo: string;
++  targetDirectory: string;
++  cloneProtocol?: ProjectGithubCloneProtocol;
++  directoryName?: string;
++}
++
+ export function useCloneGithubProject(
+   serverId: string | null,
+-): (
+-  repo: string,
+-  targetDirectory: string,
+-  cloneProtocol?: ProjectGithubCloneProtocol,
+-) => Promise<OpenProjectResult> {
++): (request: CloneGithubProjectRequest) => Promise<OpenProjectResult> {
+   const normalizedServerId = serverId?.trim() ?? "";
+   const client = useHostRuntimeClient(normalizedServerId);
+   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
+@@ -78,12 +81,10 @@ export function useCloneGithubProject(
+   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
+ 
+   return useCallback(
+-    async (repo: string, targetDirectory: string, cloneProtocol?: ProjectGithubCloneProtocol) => {
++    async (request: CloneGithubProjectRequest) => {
+       return cloneGithubProjectDirectly({
+         serverId: normalizedServerId,
+-        repo,
+-        targetDirectory,
+-        ...(cloneProtocol ? { cloneProtocol } : {}),
++        ...request,
+         isConnected,
+         client,
+         upsertProject,
+diff --git a/packages/client/src/daemon-client.test.ts b/packages/client/src/daemon-client.test.ts
+index 2a3b409cee67922c342ee06d0a9ffb9b3e6d618b..51b71220e931eda3b5c1f0b7b839090bc7056fa3 100644
+--- a/packages/client/src/daemon-client.test.ts
++++ b/packages/client/src/daemon-client.test.ts
+@@ -3981,6 +3981,58 @@ test("creates and registers a project directory through the dotted RPC", async (
+   });
+ });
+ 
++test("sends a GitHub clone directory name only when one is given", async () => {
++  const logger = createMockLogger();
++  const mock = createMockTransport();
++  const client = new DaemonClient({
++    url: "ws://test",
++    clientId: "clsk_unit_test",
++    logger,
++    reconnect: { enabled: false },
++    transportFactory: () => mock.transport,
++  });
++  clients.push(client);
++
++  const connectPromise = client.connect();
++  mock.triggerOpen();
++  await connectPromise;
++
++  // The requests stay pending; the client rejects them when the test closes it.
++  const named = client.cloneGithubProject(
++    {
++      repo: "vitejs/devtools",
++      targetDirectory: "~/dev",
++      cloneProtocol: "https",
++      directoryName: "vite-devtools",
++    },
++    "req-clone-named",
++  );
++  const unnamed = client.cloneGithubProject(
++    { repo: "vitejs/devtools", targetDirectory: "~/dev", cloneProtocol: "https" },
++    "req-clone-default",
++  );
++  named.catch(() => undefined);
++  unnamed.catch(() => undefined);
++
++  expect(mock.sent.map(parseSentFrame)).toEqual([
++    {
++      type: "project.github.clone.request",
++      repo: "vitejs/devtools",
++      targetDirectory: "~/dev",
++      cloneProtocol: "https",
++      directoryName: "vite-devtools",
++      requestId: "req-clone-named",
++    },
++    {
++      type: "project.github.clone.request",
++      repo: "vitejs/devtools",
++      targetDirectory: "~/dev",
++      cloneProtocol: "https",
++      requestId: "req-clone-default",
++    },
++  ]);
++});
++
+ test("sends first-agent prompt context with workspace.create.request", async () => {
+   const logger = createMockLogger();
+   const mock = createMockTransport();
+diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
+index 524c3e264a97c2c89b32cdf449e988c74ec0134e..d947c99f84a0771dfa421341a1ef5c8d9b4c992a 100644
+--- a/packages/client/src/daemon-client.ts
++++ b/packages/client/src/daemon-client.ts
+@@ -2935,7 +2935,12 @@ export class DaemonClient {
+   }
+ 
+   async cloneGithubProject(
+-    input: { repo: string; targetDirectory: string; cloneProtocol?: ProjectGithubCloneProtocol },
++    input: {
++      repo: string;
++      targetDirectory: string;
++      cloneProtocol?: ProjectGithubCloneProtocol;
++      directoryName?: string;
++    },
+     requestId?: string,
+   ): Promise<ProjectGithubClonePayload> {
+     const message = {
+@@ -2943,6 +2948,7 @@ export class DaemonClient {
+       repo: input.repo,
+       targetDirectory: input.targetDirectory,
+       ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
++      ...(input.directoryName !== undefined ? { directoryName: input.directoryName } : {}),
+     } as const;
+     return this.sendNamespacedCorrelatedSessionRequest<"project.github.clone.response">({
+       requestId,
+diff --git a/packages/protocol/src/messages.project-command-center.test.ts b/packages/protocol/src/messages.project-command-center.test.ts
+index e316b0421d93de2258de0dccb806c0907143f31e..43a92520a0f6277db7fdd7f54251b7b3eae67054 100644
+--- a/packages/protocol/src/messages.project-command-center.test.ts
++++ b/packages/protocol/src/messages.project-command-center.test.ts
+@@ -166,6 +166,7 @@ describe("project command-center protocol", () => {
+ 
+     expect(parsed.features?.workspaceGithubRepositorySearch).toBeUndefined();
+     expect(parsed.features?.projectGithubClone).toBeUndefined();
++    expect(parsed.features?.projectGithubCloneDirectoryName).toBeUndefined();
+     expect(parsed.features?.projectCreateDirectory).toBeUndefined();
+   });
+ 
+diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
+index 704c7ad2775c41b1f77d507c5f8eb3b54d547f51..9ca1b899ce10f3f3b4e4abb3dda3c96c6266c4a3 100644
+--- a/packages/protocol/src/messages.ts
++++ b/packages/protocol/src/messages.ts
+@@ -2674,6 +2674,8 @@ export const ProjectGithubCloneRequestSchema = z.object({
+   repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
+   cloneProtocol: ProjectGithubCloneProtocolSchema.optional(),
+   targetDirectory: z.string().trim().min(1),
++  // Folder created inside targetDirectory. Defaults to the repository name.
++  directoryName: z.string().optional(),
+   requestId: z.string(),
+ });
+ 
+@@ -3781,6 +3783,8 @@ export const ServerInfoStatusPayloadSchema = z
+         relayProtectedSecurity: z.boolean().optional(),
+         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
+         projectGithubClone: z.boolean().optional(),
++        // COMPAT(projectGithubCloneDirectoryName): added in v0.14.0, remove gate after 2027-11-02.
++        projectGithubCloneDirectoryName: z.boolean().optional(),
+         // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
+         workspaceGithubRepositorySearch: z.boolean().optional(),
+         // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
+diff --git a/packages/protocol/src/messages.workspaces.test.ts b/packages/protocol/src/messages.workspaces.test.ts
+index 3cb9b0d5bdf396925459151e183fd817bbbc4866..08d4d28231a11528f2e2e0dc36370718f192e01e 100644
+--- a/packages/protocol/src/messages.workspaces.test.ts
++++ b/packages/protocol/src/messages.workspaces.test.ts
+@@ -482,6 +482,40 @@ describe("workspace message schemas", () => {
+     expect(response.payload.project?.projectId).toBe("project-b");
+   });
+ 
++  test("parses an optional GitHub clone directory name", () => {
++    const named = SessionInboundMessageSchema.parse({
++      type: "project.github.clone.request",
++      repo: "vitejs/devtools",
++      cloneProtocol: "https",
++      targetDirectory: "~/dev",
++      directoryName: "vite-devtools",
++      requestId: "req-clone",
++    });
++    const unnamed = SessionInboundMessageSchema.parse({
++      type: "project.github.clone.request",
++      repo: "vitejs/devtools",
++      cloneProtocol: "https",
++      targetDirectory: "~/dev",
++      requestId: "req-clone",
++    });
++
++    expect(named).toEqual({
++      type: "project.github.clone.request",
++      repo: "vitejs/devtools",
++      cloneProtocol: "https",
++      targetDirectory: "~/dev",
++      directoryName: "vite-devtools",
++      requestId: "req-clone",
++    });
++    expect(unnamed).toEqual({
++      type: "project.github.clone.request",
++      repo: "vitejs/devtools",
++      cloneProtocol: "https",
++      targetDirectory: "~/dev",
++      requestId: "req-clone",
++    });
++  });
++
+   test("rejects invalid project GitHub clone protocols", () => {
+     const request = SessionInboundMessageSchema.safeParse({
+       type: "project.github.clone.request",
+diff --git a/packages/server/src/server/project-clone-directory.test.ts b/packages/server/src/server/project-clone-directory.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ff0692ce6f8f3c2d406eac56281a261f28db13bf
+--- /dev/null
++++ b/packages/server/src/server/project-clone-directory.test.ts
+@@ -0,0 +1,31 @@
++import { describe, expect, it } from "vitest";
++import { resolveCloneDirectoryName } from "./project-clone-directory.js";
++
++describe("resolveCloneDirectoryName", () => {
++  it("uses the repository name when no directory name is given", () => {
++    expect(
++      resolveCloneDirectoryName({ repositoryName: "devtools", directoryName: undefined }),
++    ).toBe("devtools");
++  });
++
++  it("uses the trimmed directory name when one is given", () => {
++    expect(
++      resolveCloneDirectoryName({ repositoryName: "devtools", directoryName: " vite-devtools " }),
++    ).toBe("vite-devtools");
++  });
++
++  it.each([
++    ["", "Directory name cannot be empty"],
++    ["   ", "Directory name cannot be empty"],
++    [".", "Directory name cannot be . or .."],
++    ["..", "Directory name cannot be . or .."],
++    ["vite/devtools", "Directory name must be a single name without path separators"],
++    ["vite\\devtools", "Directory name must be a single name without path separators"],
++    ["vite\0devtools", "Directory name must be a single name without path separators"],
++    ["C:devtools", "Directory name cannot be an absolute path"],
++  ])("rejects %j", (directoryName, message) => {
++    expect(() => resolveCloneDirectoryName({ repositoryName: "devtools", directoryName })).toThrow(
++      message,
++    );
++  });
++});
+diff --git a/packages/server/src/server/project-clone-directory.ts b/packages/server/src/server/project-clone-directory.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..adbcaca362b1d6f1eaeffc04f546a93ff5634358
+--- /dev/null
++++ b/packages/server/src/server/project-clone-directory.ts
+@@ -0,0 +1,18 @@
++import { validateDirectoryName } from "./project-directory-service.js";
++
++export interface CloneDirectoryNameInput {
++  repositoryName: string;
++  directoryName: string | undefined;
++}
++
++/**
++ * The folder a clone lands in inside the target directory. Clients that let the
++ * user rename it send `directoryName`, so two repositories with the same name
++ * (vitejs/devtools, nuxt/devtools) can share one parent.
++ */
++export function resolveCloneDirectoryName(input: CloneDirectoryNameInput): string {
++  if (input.directoryName === undefined) return input.repositoryName;
++  const name = input.directoryName.trim();
++  validateDirectoryName(name);
++  return name;
++}
+diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
+index 3e7898279388b42c2ba6c0bd23ce2be5c3caf7ff..3aa01e8e77903264afd730bf41d216fa868426f0 100644
+--- a/packages/server/src/server/session.ts
++++ b/packages/server/src/server/session.ts
+@@ -274,6 +274,7 @@ import {
+   createProjectDirectory,
+   ProjectDirectoryRequestError,
+ } from "./project-directory-service.js";
++import { resolveCloneDirectoryName } from "./project-clone-directory.js";
+ import { runGitCommand } from "../utils/run-git-command.js";
+ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
+ import { resolveWorktreeSourceCwd } from "./workspace-source.js";
+@@ -7191,7 +7192,13 @@ export class Session {
+       });
+       normalizedRepo = repo.displayName;
+       const targetParent = resolve(expandTilde(request.targetDirectory.trim()));
+-      checkoutPath = resolve(targetParent, repo.name);
++      checkoutPath = resolve(
++        targetParent,
++        resolveCloneDirectoryName({
++          repositoryName: repo.name,
++          directoryName: request.directoryName,
++        }),
++      );
+       if (!this.isPathWithinRoot(targetParent, checkoutPath)) {
+         throw new Error("Resolved checkout path must stay inside the target directory");
+       }
+diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
+index dfa324315c45e7a9b56e314af3c9d39672935dda..1f625d4503f0cc9fc2dfa3f2a2a522d98f8fc9dc 100644
+--- a/packages/server/src/server/websocket-server.ts
++++ b/packages/server/src/server/websocket-server.ts
+@@ -2073,6 +2073,8 @@ export class VoiceAssistantWebSocketServer {
+         hubRelationship: true,
+         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
+         projectGithubClone: true,
++        // COMPAT(projectGithubCloneDirectoryName): added in v0.14.0, remove gate after 2027-11-02.
++        projectGithubCloneDirectoryName: true,
+         // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
+         workspaceGithubRepositorySearch: true,
+         // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.

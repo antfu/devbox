@@ -1,12 +1,11 @@
 # The toolchain shared by paseo, hub, lody and vi: system packages, jup, uv, Rust, Chromium and Chrome, agent-browser,
 # the agent CLIs and GPG.
 # Built as `dev-base` by `pnpm build:dev-base`, before the services that start FROM it.
-# It starts from paseo's image because that supplies the `paseo` user (uid 1000), tini, gosu, /workspace
-# and an entrypoint that runs any command it is given as that user; paseo's daemon only starts when no
-# command is given.
-# Pinned to a stable release: bump it here, then rebuild. The pnpm-install plugin needs 0.14 or newer.
-ARG PASEO_VERSION=0.14.0
-FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
+# It starts from paseo-base, built by `pnpm build:paseo`: the upstream release vendor/paseo pins, with the
+# patches in services/paseo/patches applied, built with upstream's own docker/base/Dockerfile. That image
+# supplies the `paseo` user (uid 1000), tini, gosu, /workspace and an entrypoint that runs any command it is
+# given as that user; paseo's daemon only starts when no command is given. See AGENTS.md.
+FROM paseo-base
 # Stay root: the base entrypoint drops the daemon and its agents to the `paseo` user.
 USER root
 
