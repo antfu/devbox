@@ -23,4 +23,8 @@ USER root
 VOLUME /app/example
 EXPOSE 5656
 ENV HOST=0.0.0.0 PORT=5656
+# dev-base checks paseo's port, which nothing listens on here. Any HTTP answer counts, as the API is
+# behind the PIN and answers 401.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -sS -o /dev/null http://127.0.0.1:5656/
 CMD ["node", ".output/server/index.mjs"]
