@@ -101,7 +101,13 @@ export default defineConfig({
       build: { context: 'vendor/vi', dockerfile: '../../services/vi/Dockerfile' },
       ports: [
         // HTTPS on 443 and plain HTTP on 80, so http://vi works from clients that cannot use TLS.
-        { port: 5656, tailnet: true, http: 80 },
+        // Also published on every host interface, so LAN devices reach it at http://<host>:5656.
+        {
+          port: 5656,
+          tailnet: true,
+          http: 80,
+          bind: '0.0.0.0',
+        },
       ],
       volumes: [`${resolve(process.env.VI_LIBRARY ?? './library')}:/app/example`],
       tailscale: { hostname: 'vi' },
