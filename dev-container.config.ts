@@ -100,7 +100,8 @@ export default defineConfig({
       // Built from the vi submodule; its Dockerfile lives here because vi has none.
       build: { context: 'vendor/vi', dockerfile: '../../services/vi/Dockerfile' },
       ports: [
-        { port: 5656, tailnet: true },
+        // HTTPS on 443 and plain HTTP on 80, so http://vi works from clients that cannot use TLS.
+        { port: 5656, tailnet: true, http: 80 },
       ],
       volumes: [`${resolve(process.env.VI_LIBRARY ?? './library')}:/app/example`],
       tailscale: { hostname: 'vi' },
