@@ -30,7 +30,7 @@ pnpm vendor:setup            # build the dev-container CLI
 cp .env.example .env         # passed into the containers: VI_LIBRARY, git identity, PASEO_PASSWORD, LODY_AUTH
 cp .env.secret.example .env.secret   # isolated by the broker: TS_AUTHKEY, GITHUB_TOKEN
 pnpm build           # bundle the hub stub, build dev-base and the service images
-pnpm run up          # build and start the containers
+pnpm run up          # install, sync submodules, apply patches, build and start
 pnpm down            # stop and remove the containers
 ```
 
