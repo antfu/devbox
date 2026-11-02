@@ -17,9 +17,9 @@ Each service is served at `https://<host>.<tailnet>.ts.net` on port 443, e.g. `h
 
 - `dev-container.config.ts`: the stack.
 - `services/*/Dockerfile`: image for each service. `services/hub/dist` is built output.
-- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub, lody and vi start FROM (system packages, jup, uv, Rust, Chromium, Chrome on amd64, Playwright, agent-browser, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG) and a generic entrypoint that imports the signing key. It knows nothing about skills; those belong to paseo. `pnpm build:dev-base` builds it as `dev-base`; `build`, `up` and the self-upgrade run it first.
+- `services/dev-base`: the `dev-base` image, the toolchain paseo, hub, lody and vi start FROM (system packages, jup, uv, Rust, Chromium, Chrome on amd64, Playwright, agent-browser, agent CLIs such as Claude Code, Codex, OpenCode and Pi, GPG) and a generic entrypoint that imports the signing key. It knows nothing about skills; those belong to paseo. It starts FROM `paseo-base`. `pnpm build:paseo` builds that image from upstream paseo with our patches applied, and `pnpm build:dev-base` builds `dev-base`; `build`, `up` and the self-upgrade run both first.
 - `src/hub`: the hub stub.
-- `vendor/dev-container`, `vendor/vi`: git submodules, pinned by commit.
+- `vendor/dev-container`, `vendor/vi`, `vendor/paseo`: git submodules, pinned by commit. `vendor/paseo` is upstream paseo at a release tag, and `services/paseo/patches` holds our changes to it as a patch series: see [Paseo patches](#paseo-patches).
 
 ## Set up the host
 
@@ -48,12 +48,25 @@ pnpm daemon:uninstall
 ## Upgrade the submodules
 
 ```sh
-pnpm vendor:upgrade              # both
+pnpm vendor:upgrade              # all of them
 pnpm vendor:upgrade dev-container
 pnpm vendor:upgrade vi
+pnpm vendor:upgrade paseo        # the newest stable release tag, not main
 ```
 
-This moves each to its remote's latest commit and rebuilds dev-container if it moved. It does not commit. Review with `git diff --submodule`, then commit the new pointers. The host picks them up on its next upgrade.
+This moves dev-container and vi to their remote's latest commit, and paseo to its newest release, and rebuilds dev-container if it moved. It does not commit. Review with `git diff --submodule`, then commit the new pointers. The host picks them up on its next upgrade.
+
+## Paseo patches
+
+Paseo is built from `vendor/paseo`, upstream at a release tag, with the patches in `services/paseo/patches` applied. [services/paseo/FORK.md](services/paseo/FORK.md) says what each one does and why; [AGENTS.md](AGENTS.md#the-paseo-patches) has the rules.
+
+```sh
+pnpm build:paseo     # apply the series in .cache/paseo-build and build the paseo-base image
+pnpm paseo:edit      # the series as commits on the `patches` branch in .cache/paseo-work
+pnpm paseo:export    # write those commits back to services/paseo/patches
+```
+
+To move to a new release: `pnpm vendor:upgrade paseo`, then `pnpm paseo:edit` replays the series onto it and stops on a conflict for you to resolve with `git am --continue`, then `pnpm paseo:export`.
 
 ## Commit signing
 

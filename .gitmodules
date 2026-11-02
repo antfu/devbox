@@ -4,3 +4,6 @@
 [submodule "vendor/vi"]
 	path = vendor/vi
 	url = https://github.com/antfu/vi.git
+[submodule "vendor/paseo"]
+	path = vendor/paseo
+	url = https://github.com/getpaseo/paseo.git
