@@ -110,6 +110,24 @@ patches refer to them in their `Fork-Change` trailer.
   existing-folder destination is no longer disabled on hosts with the flag, so you can rename into it.
 - Drop when: upstream adds naming to the add-project flow.
 
+### F-7: Fall back to the GitHub owner's avatar for project icons
+
+- Status: active, ours only
+- Requested: 2026-11-04, "the project icon resolve should eventually fallback to the github owner's avatar,
+  nuxt/devtools -> github.com/nuxt.png, if they are github projects"
+- Why: a project with no icon file in its repo showed only its initial. Icon resolution happens in the
+  daemon, which no plugin hook reaches.
+- Patches: `feat(server): fall back to the GitHub owner's avatar for project icons`
+- Touches: server new `utils/project-github-avatar.ts` and its test, a two-line hook in
+  `utils/project-custom-icon.ts` `readProjectIconSnapshot`. Kept apart from F-1, which mirrors an upstream PR.
+- Compatibility: daemon-only; no wire change. The avatar is served as an ordinary automatic icon with its own
+  revision, so every client, upstream apps included, shows it. Order: custom icon, then local icon files
+  (F-1), then the avatar. Only projects whose project key is a GitHub remote (`remote:github.com/...`) are
+  fetched, from `github.com/<owner>.png?size=64`, with a 3 s timeout, cached in memory per owner (a day when
+  the owner is found or missing, ten minutes after a failure). Offline, it falls back to the initial as before.
+  Checked: unit tests and a live fetch only; the rebuilt image and an upstream client are not checked yet.
+- Drop when: upstream ships a remote-avatar fallback.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
