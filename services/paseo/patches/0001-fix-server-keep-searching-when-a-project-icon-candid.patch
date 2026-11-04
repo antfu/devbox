@@ -13,12 +13,267 @@ accepts WebP and JPEG.
 Squashed from upstream PR https://github.com/getpaseo/paseo/pull/8529
 (ff44e1067, 526adb216).
 
+On top of the PR: when no icon file is found and the project's origin is on
+GitHub, the daemon uses the owner's avatar (github.com/<owner>.png, so
+nuxt/devtools gets github.com/nuxt.png). A custom icon and any local icon
+still win. Avatars are fetched with a 3 s timeout and cached per owner in
+memory: a day for a found or missing owner, ten minutes after a failure.
+Offline daemons keep the initial.
+
 Fork-Change: F-1
 ---
+ .../server/src/utils/project-custom-icon.ts   |   5 +-
+ .../src/utils/project-github-avatar.test.ts   | 119 ++++++++++++++++
+ .../server/src/utils/project-github-avatar.ts |  89 ++++++++++++
  .../server/src/utils/project-icon.test.ts     |  94 +++++++++++++
  packages/server/src/utils/project-icon.ts     | 130 +++++++++++++-----
- 2 files changed, 190 insertions(+), 34 deletions(-)
+ 5 files changed, 402 insertions(+), 35 deletions(-)
+ create mode 100644 packages/server/src/utils/project-github-avatar.test.ts
+ create mode 100644 packages/server/src/utils/project-github-avatar.ts
 
+diff --git a/packages/server/src/utils/project-custom-icon.ts b/packages/server/src/utils/project-custom-icon.ts
+index 7d5aba2fa1e1e8435335b1ba695d968282d473ff..e396069d2c087ddcd2c0d197cdfa61e2c27832c0 100644
+--- a/packages/server/src/utils/project-custom-icon.ts
++++ b/packages/server/src/utils/project-custom-icon.ts
+@@ -6,6 +6,7 @@ import type { ProjectIconSource } from "@getpaseo/protocol/messages";
+ 
+ import { writeFileAtomic } from "../server/atomic-file.js";
+ import type { PersistedProjectRecord, ProjectRegistry } from "../server/workspace-registry.js";
++import { githubOwnerAvatars } from "./project-github-avatar.js";
+ import { getImageDimensions, getProjectIcon, type ProjectIcon } from "./project-icon.js";
+ 
+ const MAX_ICON_BYTES = 512 * 1024;
+@@ -102,7 +103,9 @@ export async function readProjectIconSnapshot(input: {
+         : `custom:none:${input.project.customIconRevision}`,
+     };
+   }
+-  const icon = await getProjectIcon(input.project.rootPath);
++  const icon =
++    (await getProjectIcon(input.project.rootPath)) ??
++    (await githubOwnerAvatars.get(input.project.projectKey));
+   if (!icon) return { icon: null, revision: "automatic:none:v1" };
+   return { icon, revision: iconRevision("automatic", icon) };
+ }
+diff --git a/packages/server/src/utils/project-github-avatar.test.ts b/packages/server/src/utils/project-github-avatar.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ba104585947d770edef137dcac8d364efcd0c33
+--- /dev/null
++++ b/packages/server/src/utils/project-github-avatar.test.ts
+@@ -0,0 +1,119 @@
++import { describe, expect, it } from "vitest";
++
++import { GitHubOwnerAvatars, parseGitHubOwnerFromProjectKey } from "./project-github-avatar.js";
++
++// A PNG header: signature, IHDR length and type, then width and height.
++function png(width: number, height: number): Buffer {
++  const buffer = Buffer.alloc(33);
++  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0);
++  buffer.writeUInt32BE(13, 8);
++  buffer.write("IHDR", 12, "ascii");
++  buffer.writeUInt32BE(width, 16);
++  buffer.writeUInt32BE(height, 20);
++  return buffer;
++}
++
++function imageResponse(body: Buffer, contentType = "image/png"): Response {
++  return new Response(new Uint8Array(body), { headers: { "content-type": contentType } });
++}
++
++interface FakeFetch {
++  urls: string[];
++  fetch: (url: string) => Promise<Response>;
++}
++
++function fakeFetch(respond: () => Response | Promise<Response>): FakeFetch {
++  const urls: string[] = [];
++  return {
++    urls,
++    fetch: async (url) => {
++      urls.push(url);
++      return respond();
++    },
++  };
++}
++
++describe("parseGitHubOwnerFromProjectKey", () => {
++  it.each([
++    ["remote:github.com/nuxt/devtools", "nuxt"],
++    ["remote:github.com/vitejs/devtools#subdir:packages/core", "vitejs"],
++  ])("reads the owner from %s", (projectKey, owner) => {
++    expect(parseGitHubOwnerFromProjectKey(projectKey)).toBe(owner);
++  });
++
++  it.each([
++    null,
++    "remote:gitlab.com/nuxt/devtools",
++    "remote:github.com/nuxt",
++    "/home/me/projects/devtools",
++    "host:abc:/home/me/projects/devtools",
++  ])("returns null for %s", (projectKey) => {
++    expect(parseGitHubOwnerFromProjectKey(projectKey)).toBeNull();
++  });
++});
++
++describe("GitHubOwnerAvatars", () => {
++  it("fetches the owner's avatar for a GitHub project", async () => {
++    const avatar = png(64, 64);
++    const fake = fakeFetch(() => imageResponse(avatar));
++    const avatars = new GitHubOwnerAvatars(fake.fetch);
++
++    const icon = await avatars.get("remote:github.com/nuxt/devtools");
++
++    expect(fake.urls).toEqual(["https://github.com/nuxt.png?size=64"]);
++    expect(icon).toEqual({ data: avatar.toString("base64"), mimeType: "image/png" });
++  });
++
++  it("does not fetch for projects that are not on GitHub", async () => {
++    const fake = fakeFetch(() => imageResponse(png(64, 64)));
++    const avatars = new GitHubOwnerAvatars(fake.fetch);
++
++    expect(await avatars.get("remote:gitlab.com/nuxt/devtools")).toBeNull();
++    expect(await avatars.get(null)).toBeNull();
++    expect(fake.urls).toEqual([]);
++  });
++
++  it("fetches each owner once across projects and calls", async () => {
++    const fake = fakeFetch(() => imageResponse(png(64, 64)));
++    const avatars = new GitHubOwnerAvatars(fake.fetch);
++
++    await Promise.all([
++      avatars.get("remote:github.com/nuxt/devtools"),
++      avatars.get("remote:github.com/Nuxt/nuxt"),
++    ]);
++    await avatars.get("remote:github.com/nuxt/ui");
++
++    expect(fake.urls).toHaveLength(1);
++  });
++
++  it("refetches after a failure once the retry window passes", async () => {
++    let now = 0;
++    let fail = true;
++    const fake = fakeFetch(() => {
++      if (fail) throw new Error("offline");
++      return imageResponse(png(64, 64));
++    });
++    const avatars = new GitHubOwnerAvatars(fake.fetch, () => now);
++
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
++    fail = false;
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
++    now += 11 * 60 * 1000;
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).not.toBeNull();
++    expect(fake.urls).toHaveLength(2);
++  });
++
++  it.each([
++    ["a missing owner", () => new Response(null, { status: 404 })],
++    ["a non-square image", () => imageResponse(png(64, 32))],
++    [
++      "an oversized image",
++      () => imageResponse(Buffer.concat([png(64, 64), Buffer.alloc(33 * 1024)])),
++    ],
++    ["a non-image response", () => imageResponse(Buffer.from("<html></html>"), "text/html")],
++  ])("returns null for %s", async (_, respond) => {
++    const avatars = new GitHubOwnerAvatars(fakeFetch(respond).fetch);
++
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
++  });
++});
+diff --git a/packages/server/src/utils/project-github-avatar.ts b/packages/server/src/utils/project-github-avatar.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea3d970209212a6685183ae7cb87bb31b3c2fbc8
+--- /dev/null
++++ b/packages/server/src/utils/project-github-avatar.ts
+@@ -0,0 +1,89 @@
++import { isGitHubHost, parseGitHubRemoteIdentity } from "@getpaseo/protocol/git-remote";
++
++import { getImageDimensions, type ProjectIcon } from "./project-icon.js";
++
++const AVATAR_SIZE = 64;
++const MAX_AVATAR_BYTES = 32 * 1024;
++const FETCH_TIMEOUT_MS = 3000;
++const FOUND_TTL_MS = 24 * 60 * 60 * 1000;
++const MISSING_TTL_MS = 24 * 60 * 60 * 1000;
++const FAILED_TTL_MS = 10 * 60 * 1000;
++const ACCEPTED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
++
++type AvatarFetch = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
++
++interface CacheEntry {
++  icon: Promise<ProjectIcon | null>;
++  expiresAt: number;
++}
++
++/**
++ * The GitHub owner of a project, read from its project key
++ * (`remote:github.com/<owner>/<repo>[#subdir:...]`), or null when the project
++ * is not on GitHub.
++ */
++export function parseGitHubOwnerFromProjectKey(projectKey: string | null): string | null {
++  if (!projectKey?.startsWith("remote:")) return null;
++  const location = projectKey.slice("remote:".length).split("#")[0] ?? "";
++  const slash = location.indexOf("/");
++  if (slash <= 0) return null;
++  const host = location.slice(0, slash).replace(/:\d+$/u, "");
++  if (!isGitHubHost(host)) return null;
++  return parseGitHubRemoteIdentity(location.slice(slash + 1))?.owner ?? null;
++}
++
++/**
++ * Fetches GitHub owners' avatars (`github.com/<owner>.png`) as a last-resort
++ * project icon. Results are cached per owner, so resolving icons for many
++ * projects, or many times, costs one request per owner per day.
++ */
++export class GitHubOwnerAvatars {
++  private readonly cache = new Map<string, CacheEntry>();
++
++  constructor(
++    private readonly fetchAvatar: AvatarFetch = (url, init) => fetch(url, init),
++    private readonly now: () => number = Date.now,
++  ) {}
++
++  get(projectKey: string | null): Promise<ProjectIcon | null> {
++    const owner = parseGitHubOwnerFromProjectKey(projectKey)?.toLowerCase();
++    if (!owner) return Promise.resolve(null);
++    const cached = this.cache.get(owner);
++    if (cached && cached.expiresAt > this.now()) return cached.icon;
++
++    const entry: CacheEntry = { icon: Promise.resolve(null), expiresAt: Infinity };
++    entry.icon = this.load(owner).then(
++      ({ icon, ttl }) => {
++        entry.expiresAt = this.now() + ttl;
++        return icon;
++      },
++      () => {
++        entry.expiresAt = this.now() + FAILED_TTL_MS;
++        return null;
++      },
++    );
++    this.cache.set(owner, entry);
++    return entry.icon;
++  }
++
++  private async load(owner: string): Promise<{ icon: ProjectIcon | null; ttl: number }> {
++    const url = `https://github.com/${encodeURIComponent(owner)}.png?size=${AVATAR_SIZE}`;
++    const response = await this.fetchAvatar(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
++    if (response.status === 404) return { icon: null, ttl: MISSING_TTL_MS };
++    if (!response.ok) return { icon: null, ttl: FAILED_TTL_MS };
++    const buffer = Buffer.from(await response.arrayBuffer());
++    return { icon: toProjectIcon(buffer, response.headers.get("content-type")), ttl: FOUND_TTL_MS };
++  }
++}
++
++function toProjectIcon(buffer: Buffer, contentType: string | null): ProjectIcon | null {
++  const mimeType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
++  if (!ACCEPTED_MIME_TYPES.has(mimeType)) return null;
++  if (buffer.length === 0 || buffer.length > MAX_AVATAR_BYTES) return null;
++  const size = getImageDimensions(buffer, mimeType);
++  if (!size || size.width <= 0 || size.width !== size.height) return null;
++  return { data: buffer.toString("base64"), mimeType };
++}
++
++/** Shared by every session, so one daemon fetches each owner's avatar once. */
++export const githubOwnerAvatars = new GitHubOwnerAvatars();
 diff --git a/packages/server/src/utils/project-icon.test.ts b/packages/server/src/utils/project-icon.test.ts
 index e424fd1ded6afd2845e7b4b278ae88b5ca6fa7a3..2cd5536a596cfd3e7c00d305b761fec4d0fe5fe2 100644
 --- a/packages/server/src/utils/project-icon.test.ts
