@@ -12,17 +12,27 @@ it are in [AGENTS.md](../../AGENTS.md#the-paseo-patches).
 Add each new change at the end with the template at the bottom of this file. Leave `F-<n>` ids as they are:
 patches refer to them in their `Fork-Change` trailer.
 
-### F-1: Keep searching when a project icon candidate is rejected
+### F-1: Better project icon discovery, with a GitHub owner avatar fallback
 
-- Status: proposed upstream (https://github.com/getpaseo/paseo/pull/8529)
-- Requested: 2026-11-02, "https://github.com/getpaseo/paseo/pull/8529"
+- Status: active; the discovery part is proposed upstream (https://github.com/getpaseo/paseo/pull/8529), the
+  avatar fallback is ours only
+- Requested: 2026-11-02, "https://github.com/getpaseo/paseo/pull/8529"; extended 2026-11-04 with F-7's
+  request, "merge it into patch 1"
 - Why: a project with an oversized or non-square first icon match showed no icon, even when a valid one sat
-  next to it. Our own upstream PR, carried until it merges.
-- Patches: `fix(server): keep searching when a project icon candidate is rejected` (the PR's two commits,
-  squashed)
-- Touches: `packages/server/src/utils/project-icon.ts` and its test
-- Compatibility: daemon-only; no wire or client change.
-- Drop when: upstream merges #8529 and we rebase onto a release that has it.
+  next to it (our upstream PR, carried until it merges). A project with no icon file at all showed only its
+  initial; icon resolution happens in the daemon, which no plugin hook reaches.
+- Patches: `fix(server): keep searching when a project icon candidate is rejected` (the PR's two commits plus
+  the avatar fallback, squashed)
+- Touches: `packages/server/src/utils/project-icon.ts` and its test; new `utils/project-github-avatar.ts` and
+  its test; a two-line hook in `utils/project-custom-icon.ts` `readProjectIconSnapshot`
+- Compatibility: daemon-only; no wire or client change. The avatar is served as an ordinary automatic icon with
+  its own revision, so every client, upstream apps included, shows it. Order: custom icon, then local icon
+  files, then the avatar. Only projects whose project key is a GitHub remote (`remote:github.com/...`) are
+  fetched, from `github.com/<owner>.png?size=64`, with a 3 s timeout, cached in memory per owner (a day when
+  the owner is found or missing, ten minutes after a failure). Offline, it falls back to the initial as before.
+  Checked: unit tests and a live fetch only; the rebuilt image and an upstream client are not checked yet.
+- Drop when: upstream merges #8529 and ships a remote-avatar fallback. If only #8529 lands, drop the PR's part
+  on rebase and keep the avatar files and the hook in `project-custom-icon.ts`.
 
 ### F-2: Drop the New workspace row under an empty project
 
@@ -109,6 +119,15 @@ patches refer to them in their `Fork-Change` trailer.
   For an existing folder the step uses the existing `project.rename.request`, so it works on any host. The
   existing-folder destination is no longer disabled on hosts with the flag, so you can rename into it.
 - Drop when: upstream adds naming to the add-project flow.
+
+### F-7: Fall back to the GitHub owner's avatar for project icons
+
+- Status: merged into F-1 (its patch now carries the change)
+- Requested: 2026-11-04, "the project icon resolve should eventually fallback to the github owner's avatar,
+  nuxt/devtools -> github.com/nuxt.png, if they are github projects"
+- Why: see F-1.
+- Patches: none of its own; see F-1.
+- Drop when: see F-1.
 
 ## Sync log
 
