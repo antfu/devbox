@@ -9,8 +9,8 @@ export default antfu(
     ignores: ['vendor'],
   },
   {
-    // These are CLIs, a server and a Paseo plugin: stdout is their output (`paseo plugin logs` reads the plugin's).
-    files: ['src/**/*.ts', 'services/*/plugins/**/*.ts'],
+    // These are CLIs and a server: stdout is their output.
+    files: ['src/**/*.ts'],
     rules: { 'no-console': 'off' },
   },
 )

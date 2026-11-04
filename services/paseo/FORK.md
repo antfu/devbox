@@ -4,7 +4,7 @@ This file lists every change our paseo patch series carries on top of upstream, 
 it are in [AGENTS.md](../../AGENTS.md#the-paseo-patches).
 
 - Upstream: [getpaseo/paseo](https://github.com/getpaseo/paseo), checked out at `vendor/paseo`
-- Base: `v0.14.0` (the pnpm-install plugin needs 0.14 or newer)
+- Base: `v0.14.0`
 - Series: [patches/](patches), one `git format-patch` file per change, applied in file name order
 
 ## Changes
@@ -75,7 +75,7 @@ patches refer to them in their `Fork-Change` trailer.
 - Status: active, ours only
 - Requested: 2026-11-02, same request as F-3 ("default project setup script")
 - Why: Paseo reads `worktree.setup` only from each repo's committed `paseo.json`. A host default covers every
-  project without one (e.g. `pnpm install`), which the pnpm-install plugin does today.
+  project without one (e.g. `pnpm install`).
 - Patches: `feat: add a host default worktree setup script`
 - Touches: protocol `messages.ts`; server new `utils/worktree-default-setup.ts`, one-line hook in
   `utils/worktree.ts` `getWorktreeSetupCommands`, plus `bootstrap.ts`, `config.ts`, `daemon-config-store.ts`,
