@@ -43,10 +43,8 @@ export default defineConfig({
   },
   selfUpgrade: {
     command: [
-      'pnpm install --frozen-lockfile --ignore-scripts',
-      'pnpm run build:hub',
-      'pnpm run build:paseo',
-      'pnpm run build:dev-base',
+      'pnpm install --frozen-lockfile',
+      'pnpm run build',
     ],
   },
   services: {
