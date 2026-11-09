@@ -1,0 +1,23 @@
+.cache
+.DS_Store
+.githooks
+.idea
+*.log
+*.tgz
+coverage
+dist
+lib-cov
+logs
+node_modules
+temp
+.eslintcache
+.agents
+# Host-only state and secrets
+.env
+.env.secret
+.dev-container
+workspace
+volumes
+keys
+.turbo
+skills

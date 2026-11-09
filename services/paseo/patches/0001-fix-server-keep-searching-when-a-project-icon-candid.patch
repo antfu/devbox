@@ -1,0 +1,691 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:17:19 +0000
+Subject: [PATCH] fix(server): keep searching when a project icon candidate is
+ rejected
+
+Project icon discovery stopped at the first file whose name matched, even
+when it then failed the size or square check, so a valid icon next to it
+was never found. Each candidate is now validated during the search, and
+discovery also covers docs/, res/ and .github/, ranks logo above icon, and
+accepts WebP and JPEG.
+
+Squashed from upstream PR https://github.com/getpaseo/paseo/pull/8529
+(ff44e1067, 526adb216).
+
+On top of the PR: when no icon file is found and the project's origin is on
+GitHub, the daemon uses the owner's avatar (github.com/<owner>.png, so
+nuxt/devtools gets github.com/nuxt.png). A custom icon and any local icon
+still win. Avatars are fetched with a 3 s timeout and cached per owner in
+memory: a day for a found or missing owner, ten minutes after a failure.
+Offline daemons keep the initial.
+
+Fork-Change: F-1
+---
+ .../server/src/utils/project-custom-icon.ts   |   5 +-
+ .../src/utils/project-github-avatar.test.ts   | 119 ++++++++++++++++
+ .../server/src/utils/project-github-avatar.ts |  89 ++++++++++++
+ .../server/src/utils/project-icon.test.ts     |  94 +++++++++++++
+ packages/server/src/utils/project-icon.ts     | 130 +++++++++++++-----
+ 5 files changed, 402 insertions(+), 35 deletions(-)
+ create mode 100644 packages/server/src/utils/project-github-avatar.test.ts
+ create mode 100644 packages/server/src/utils/project-github-avatar.ts
+
+diff --git a/packages/server/src/utils/project-custom-icon.ts b/packages/server/src/utils/project-custom-icon.ts
+index 7d5aba2fa1e1e8435335b1ba695d968282d473ff..e396069d2c087ddcd2c0d197cdfa61e2c27832c0 100644
+--- a/packages/server/src/utils/project-custom-icon.ts
++++ b/packages/server/src/utils/project-custom-icon.ts
+@@ -6,6 +6,7 @@ import type { ProjectIconSource } from "@getpaseo/protocol/messages";
+ 
+ import { writeFileAtomic } from "../server/atomic-file.js";
+ import type { PersistedProjectRecord, ProjectRegistry } from "../server/workspace-registry.js";
++import { githubOwnerAvatars } from "./project-github-avatar.js";
+ import { getImageDimensions, getProjectIcon, type ProjectIcon } from "./project-icon.js";
+ 
+ const MAX_ICON_BYTES = 512 * 1024;
+@@ -102,7 +103,9 @@ export async function readProjectIconSnapshot(input: {
+         : `custom:none:${input.project.customIconRevision}`,
+     };
+   }
+-  const icon = await getProjectIcon(input.project.rootPath);
++  const icon =
++    (await getProjectIcon(input.project.rootPath)) ??
++    (await githubOwnerAvatars.get(input.project.projectKey));
+   if (!icon) return { icon: null, revision: "automatic:none:v1" };
+   return { icon, revision: iconRevision("automatic", icon) };
+ }
+diff --git a/packages/server/src/utils/project-github-avatar.test.ts b/packages/server/src/utils/project-github-avatar.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ba104585947d770edef137dcac8d364efcd0c33
+--- /dev/null
++++ b/packages/server/src/utils/project-github-avatar.test.ts
+@@ -0,0 +1,119 @@
++import { describe, expect, it } from "vitest";
++
++import { GitHubOwnerAvatars, parseGitHubOwnerFromProjectKey } from "./project-github-avatar.js";
++
++// A PNG header: signature, IHDR length and type, then width and height.
++function png(width: number, height: number): Buffer {
++  const buffer = Buffer.alloc(33);
++  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0);
++  buffer.writeUInt32BE(13, 8);
++  buffer.write("IHDR", 12, "ascii");
++  buffer.writeUInt32BE(width, 16);
++  buffer.writeUInt32BE(height, 20);
++  return buffer;
++}
++
++function imageResponse(body: Buffer, contentType = "image/png"): Response {
++  return new Response(new Uint8Array(body), { headers: { "content-type": contentType } });
++}
++
++interface FakeFetch {
++  urls: string[];
++  fetch: (url: string) => Promise<Response>;
++}
++
++function fakeFetch(respond: () => Response | Promise<Response>): FakeFetch {
++  const urls: string[] = [];
++  return {
++    urls,
++    fetch: async (url) => {
++      urls.push(url);
++      return respond();
++    },
++  };
++}
++
++describe("parseGitHubOwnerFromProjectKey", () => {
++  it.each([
++    ["remote:github.com/nuxt/devtools", "nuxt"],
++    ["remote:github.com/vitejs/devtools#subdir:packages/core", "vitejs"],
++  ])("reads the owner from %s", (projectKey, owner) => {
++    expect(parseGitHubOwnerFromProjectKey(projectKey)).toBe(owner);
++  });
++
++  it.each([
++    null,
++    "remote:gitlab.com/nuxt/devtools",
++    "remote:github.com/nuxt",
++    "/home/me/projects/devtools",
++    "host:abc:/home/me/projects/devtools",
++  ])("returns null for %s", (projectKey) => {
++    expect(parseGitHubOwnerFromProjectKey(projectKey)).toBeNull();
++  });
++});
++
++describe("GitHubOwnerAvatars", () => {
++  it("fetches the owner's avatar for a GitHub project", async () => {
++    const avatar = png(64, 64);
++    const fake = fakeFetch(() => imageResponse(avatar));
++    const avatars = new GitHubOwnerAvatars(fake.fetch);
++
++    const icon = await avatars.get("remote:github.com/nuxt/devtools");
++
++    expect(fake.urls).toEqual(["https://github.com/nuxt.png?size=64"]);
++    expect(icon).toEqual({ data: avatar.toString("base64"), mimeType: "image/png" });
++  });
++
++  it("does not fetch for projects that are not on GitHub", async () => {
++    const fake = fakeFetch(() => imageResponse(png(64, 64)));
++    const avatars = new GitHubOwnerAvatars(fake.fetch);
++
++    expect(await avatars.get("remote:gitlab.com/nuxt/devtools")).toBeNull();
++    expect(await avatars.get(null)).toBeNull();
++    expect(fake.urls).toEqual([]);
++  });
++
++  it("fetches each owner once across projects and calls", async () => {
++    const fake = fakeFetch(() => imageResponse(png(64, 64)));
++    const avatars = new GitHubOwnerAvatars(fake.fetch);
++
++    await Promise.all([
++      avatars.get("remote:github.com/nuxt/devtools"),
++      avatars.get("remote:github.com/Nuxt/nuxt"),
++    ]);
++    await avatars.get("remote:github.com/nuxt/ui");
++
++    expect(fake.urls).toHaveLength(1);
++  });
++
++  it("refetches after a failure once the retry window passes", async () => {
++    let now = 0;
++    let fail = true;
++    const fake = fakeFetch(() => {
++      if (fail) throw new Error("offline");
++      return imageResponse(png(64, 64));
++    });
++    const avatars = new GitHubOwnerAvatars(fake.fetch, () => now);
++
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
++    fail = false;
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
++    now += 11 * 60 * 1000;
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).not.toBeNull();
++    expect(fake.urls).toHaveLength(2);
++  });
++
++  it.each([
++    ["a missing owner", () => new Response(null, { status: 404 })],
++    ["a non-square image", () => imageResponse(png(64, 32))],
++    [
++      "an oversized image",
++      () => imageResponse(Buffer.concat([png(64, 64), Buffer.alloc(33 * 1024)])),
++    ],
++    ["a non-image response", () => imageResponse(Buffer.from("<html></html>"), "text/html")],
++  ])("returns null for %s", async (_, respond) => {
++    const avatars = new GitHubOwnerAvatars(fakeFetch(respond).fetch);
++
++    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
++  });
++});
+diff --git a/packages/server/src/utils/project-github-avatar.ts b/packages/server/src/utils/project-github-avatar.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea3d970209212a6685183ae7cb87bb31b3c2fbc8
+--- /dev/null
++++ b/packages/server/src/utils/project-github-avatar.ts
+@@ -0,0 +1,89 @@
++import { isGitHubHost, parseGitHubRemoteIdentity } from "@getpaseo/protocol/git-remote";
++
++import { getImageDimensions, type ProjectIcon } from "./project-icon.js";
++
++const AVATAR_SIZE = 64;
++const MAX_AVATAR_BYTES = 32 * 1024;
++const FETCH_TIMEOUT_MS = 3000;
++const FOUND_TTL_MS = 24 * 60 * 60 * 1000;
++const MISSING_TTL_MS = 24 * 60 * 60 * 1000;
++const FAILED_TTL_MS = 10 * 60 * 1000;
++const ACCEPTED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
++
++type AvatarFetch = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
++
++interface CacheEntry {
++  icon: Promise<ProjectIcon | null>;
++  expiresAt: number;
++}
++
++/**
++ * The GitHub owner of a project, read from its project key
++ * (`remote:github.com/<owner>/<repo>[#subdir:...]`), or null when the project
++ * is not on GitHub.
++ */
++export function parseGitHubOwnerFromProjectKey(projectKey: string | null): string | null {
++  if (!projectKey?.startsWith("remote:")) return null;
++  const location = projectKey.slice("remote:".length).split("#")[0] ?? "";
++  const slash = location.indexOf("/");
++  if (slash <= 0) return null;
++  const host = location.slice(0, slash).replace(/:\d+$/u, "");
++  if (!isGitHubHost(host)) return null;
++  return parseGitHubRemoteIdentity(location.slice(slash + 1))?.owner ?? null;
++}
++
++/**
++ * Fetches GitHub owners' avatars (`github.com/<owner>.png`) as a last-resort
++ * project icon. Results are cached per owner, so resolving icons for many
++ * projects, or many times, costs one request per owner per day.
++ */
++export class GitHubOwnerAvatars {
++  private readonly cache = new Map<string, CacheEntry>();
++
++  constructor(
++    private readonly fetchAvatar: AvatarFetch = (url, init) => fetch(url, init),
++    private readonly now: () => number = Date.now,
++  ) {}
++
++  get(projectKey: string | null): Promise<ProjectIcon | null> {
++    const owner = parseGitHubOwnerFromProjectKey(projectKey)?.toLowerCase();
++    if (!owner) return Promise.resolve(null);
++    const cached = this.cache.get(owner);
++    if (cached && cached.expiresAt > this.now()) return cached.icon;
++
++    const entry: CacheEntry = { icon: Promise.resolve(null), expiresAt: Infinity };
++    entry.icon = this.load(owner).then(
++      ({ icon, ttl }) => {
++        entry.expiresAt = this.now() + ttl;
++        return icon;
++      },
++      () => {
++        entry.expiresAt = this.now() + FAILED_TTL_MS;
++        return null;
++      },
++    );
++    this.cache.set(owner, entry);
++    return entry.icon;
++  }
++
++  private async load(owner: string): Promise<{ icon: ProjectIcon | null; ttl: number }> {
++    const url = `https://github.com/${encodeURIComponent(owner)}.png?size=${AVATAR_SIZE}`;
++    const response = await this.fetchAvatar(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
++    if (response.status === 404) return { icon: null, ttl: MISSING_TTL_MS };
++    if (!response.ok) return { icon: null, ttl: FAILED_TTL_MS };
++    const buffer = Buffer.from(await response.arrayBuffer());
++    return { icon: toProjectIcon(buffer, response.headers.get("content-type")), ttl: FOUND_TTL_MS };
++  }
++}
++
++function toProjectIcon(buffer: Buffer, contentType: string | null): ProjectIcon | null {
++  const mimeType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
++  if (!ACCEPTED_MIME_TYPES.has(mimeType)) return null;
++  if (buffer.length === 0 || buffer.length > MAX_AVATAR_BYTES) return null;
++  const size = getImageDimensions(buffer, mimeType);
++  if (!size || size.width <= 0 || size.width !== size.height) return null;
++  return { data: buffer.toString("base64"), mimeType };
++}
++
++/** Shared by every session, so one daemon fetches each owner's avatar once. */
++export const githubOwnerAvatars = new GitHubOwnerAvatars();
+diff --git a/packages/server/src/utils/project-icon.test.ts b/packages/server/src/utils/project-icon.test.ts
+index e424fd1ded6afd2845e7b4b278ae88b5ca6fa7a3..2cd5536a596cfd3e7c00d305b761fec4d0fe5fe2 100644
+--- a/packages/server/src/utils/project-icon.test.ts
++++ b/packages/server/src/utils/project-icon.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, beforeEach, afterEach } from "vitest";
++import { execFileSync } from "child_process";
+ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "fs";
+ import { join } from "path";
+ import { tmpdir } from "os";
+@@ -230,6 +231,42 @@ describe("findProjectIcon", () => {
+     expect(result).toBe(join(tempDir, "favicon.ico"));
+   });
+ 
++  it("prioritizes the directory over the file name", async () => {
++    mkdirSync(join(tempDir, "docs"));
++    writeFileSync(join(tempDir, "docs", "logo.png"), "docs logo");
++    mkdirSync(join(tempDir, "public"));
++    writeFileSync(join(tempDir, "public", "favicon.svg"), "public favicon");
++
++    const result = await findProjectIcon(tempDir);
++    expect(result).toBe(join(tempDir, "docs", "logo.png"));
++  });
++
++  it.each(["res", ".github"])("finds icon in %s directory", async (dir) => {
++    mkdirSync(join(tempDir, dir));
++    writeFileSync(join(tempDir, dir, "logo.svg"), "<svg></svg>");
++
++    const result = await findProjectIcon(tempDir);
++    expect(result).toBe(join(tempDir, dir, "logo.svg"));
++  });
++
++  it("prioritizes logo over icon in the same directory", async () => {
++    writeFileSync(join(tempDir, "icon.svg"), "icon");
++    writeFileSync(join(tempDir, "logo.png"), "logo");
++
++    const result = await findProjectIcon(tempDir);
++    expect(result).toBe(join(tempDir, "logo.png"));
++  });
++
++  it("finds WebP and JPEG icons, after SVG and PNG", async () => {
++    writeFileSync(join(tempDir, "favicon.jpg"), "jpg");
++    writeFileSync(join(tempDir, "favicon.webp"), "webp");
++
++    expect(await findProjectIcon(tempDir)).toBe(join(tempDir, "favicon.webp"));
++
++    writeFileSync(join(tempDir, "favicon.png"), "png");
++    expect(await findProjectIcon(tempDir)).toBe(join(tempDir, "favicon.png"));
++  });
++
+   describe("monorepo package directories", () => {
+     it("finds icon in packages/*/public directory", async () => {
+       mkdirSync(join(tempDir, "packages", "app", "public"), { recursive: true });
+@@ -490,6 +527,63 @@ describe("getProjectIcon", () => {
+     expect(result).toBeNull();
+   });
+ 
++  it("skips an oversized candidate and uses the next one", async () => {
++    writeFileSync(join(tempDir, "favicon.svg"), Buffer.alloc(33 * 1024, 0x20));
++    writeFileSync(join(tempDir, "favicon.png"), squarePng);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.mimeType).toBe("image/png");
++    expect(result?.data).toBe(squarePng.toString("base64"));
++  });
++
++  it("skips a non-square candidate and uses the next one", async () => {
++    writeFileSync(join(tempDir, "favicon.png"), nonSquarePng);
++    writeFileSync(join(tempDir, "logo.png"), squarePng);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.data).toBe(squarePng.toString("base64"));
++  });
++
++  it("falls through to a lower-priority directory when every candidate is rejected", async () => {
++    mkdirSync(join(tempDir, "public"));
++    writeFileSync(join(tempDir, "public", "favicon.png"), nonSquarePng);
++    mkdirSync(join(tempDir, "assets"));
++    writeFileSync(join(tempDir, "assets", "favicon.png"), squarePng);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.data).toBe(squarePng.toString("base64"));
++  });
++
++  it.skipIf(process.platform === "win32")(
++    "skips a named pipe that matches an icon name",
++    async () => {
++      // Reading a FIFO with no writer blocks forever; it must never be opened.
++      execFileSync("mkfifo", [join(tempDir, "favicon.svg")]);
++      writeFileSync(join(tempDir, "favicon.png"), squarePng);
++
++      const result = await getProjectIcon(tempDir);
++      expect(result?.data).toBe(squarePng.toString("base64"));
++    },
++    2000,
++  );
++
++  it("returns a square extended-format (VP8X) WebP icon", async () => {
++    // RIFF header + VP8X chunk: flags, reserved, then 24-bit canvas width-1 and height-1.
++    const webp = Buffer.alloc(30);
++    webp.write("RIFF", 0, "ascii");
++    webp.writeUInt32LE(22, 4);
++    webp.write("WEBP", 8, "ascii");
++    webp.write("VP8X", 12, "ascii");
++    webp.writeUInt32LE(10, 16);
++    webp.writeUIntLE(63, 24, 3);
++    webp.writeUIntLE(63, 27, 3);
++    writeFileSync(join(tempDir, "favicon.webp"), webp);
++
++    const result = await getProjectIcon(tempDir);
++    expect(result?.mimeType).toBe("image/webp");
++    expect(result?.data).toBe(webp.toString("base64"));
++  });
++
+   it("returns null when no icon is found", async () => {
+     const result = await getProjectIcon(tempDir);
+     expect(result).toBeNull();
+diff --git a/packages/server/src/utils/project-icon.ts b/packages/server/src/utils/project-icon.ts
+index ed122b4536d947277f8b7870b0cd46704fa9d42c..ebbda052d1b796082fc0fd3f339867b267a50c8b 100644
+--- a/packages/server/src/utils/project-icon.ts
++++ b/packages/server/src/utils/project-icon.ts
+@@ -12,12 +12,23 @@ import { extname, join } from "path";
+ export const ICON_PATTERNS = [
+   "favicon.svg",
+   "favicon.png",
++  "favicon.webp",
++  "favicon.jpg",
++  "favicon.jpeg",
+   "favicon-*.svg",
+   "favicon-*.png",
+   "favico.svg",
+   "favico.png",
++  "logo.svg",
++  "logo.png",
++  "logo.webp",
++  "logo.jpg",
++  "logo.jpeg",
+   "icon.svg",
+   "icon.png",
++  "icon.webp",
++  "icon.jpg",
++  "icon.jpeg",
+   "app-icon.svg",
+   "app-icon.png",
+   "apple-touch-icon.png",
+@@ -26,8 +37,6 @@ export const ICON_PATTERNS = [
+   "android-chrome-*.png",
+   "safari-pinned-tab.svg",
+   "mstile-*.png",
+-  "logo.svg",
+-  "logo.png",
+   "favicon.ico",
+   "favico.ico",
+ ];
+@@ -35,7 +44,17 @@ export const ICON_PATTERNS = [
+ /**
+  * Directories or directory paths to search first (in priority order).
+  */
+-export const PRIORITY_DIRS = ["public", "static", "priv/static", "assets", "images", "img"];
++export const PRIORITY_DIRS = [
++  "docs",
++  "public",
++  "static",
++  "priv/static",
++  "res",
++  ".github",
++  "assets",
++  "images",
++  "img",
++];
+ 
+ /**
+  * Monorepo package directory patterns to scan (e.g., packages/app, apps/web).
+@@ -142,6 +161,11 @@ function getWebpDimensions(buffer: Buffer): ImageDimensions | null {
+     const width = (bits & 0x3fff) + 1;
+     const height = ((bits >> 14) & 0x3fff) + 1;
+     return { width, height };
++  } else if (chunkType === "VP8X") {
++    // Extended format (alpha, metadata) - 24-bit canvas width-1 and height-1
++    const width = buffer.readUIntLE(24, 3) + 1;
++    const height = buffer.readUIntLE(27, 3) + 1;
++    return { width, height };
+   }
+   return null;
+ }
+@@ -291,7 +315,23 @@ async function isExistingDirectory(fullPath: string): Promise<boolean> {
+   }
+ }
+ 
+-async function findIconInDir(dir: string, patterns: string[]): Promise<string | null> {
++/**
++ * Decides whether a candidate path is usable. Returning null rejects it and
++ * the search moves on to the next candidate in priority order.
++ */
++type CandidateCheck<T> = (fullPath: string) => Promise<T | null>;
++
++interface FindIconInDirInput<T> {
++  dir: string;
++  patterns: string[];
++  check: CandidateCheck<T>;
++}
++
++async function findIconInDir<T>({
++  dir,
++  patterns,
++  check,
++}: FindIconInDirInput<T>): Promise<T | null> {
+   let entries: string[];
+   try {
+     entries = await readdir(dir);
+@@ -309,16 +349,16 @@ async function findIconInDir(dir: string, patterns: string[]): Promise<string |
+     }
+   }
+ 
+-  const existsResults = await Promise.all(candidatePaths.map((p) => isExistingFile(p)));
+-  const foundIndex = existsResults.findIndex((exists) => exists);
+-  return foundIndex === -1 ? null : (candidatePaths[foundIndex] ?? null);
++  const results = await Promise.all(candidatePaths.map((p) => check(p)));
++  return results.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+-async function searchPriorityDirs(
++async function searchPriorityDirs<T>(
+   basePath: string,
+   ignoredDirsSet: Set<string>,
+   remainingDepth: number,
+-): Promise<string | null> {
++  check: CandidateCheck<T>,
++): Promise<T | null> {
+   const priorityPaths = PRIORITY_DIRS.map((priorityDir) => join(basePath, priorityDir));
+   const existenceResults = await Promise.all(
+     priorityPaths.map((priorityPath) => isExistingDirectory(priorityPath)),
+@@ -326,26 +366,27 @@ async function searchPriorityDirs(
+   const searchResults = await Promise.all(
+     priorityPaths.map((priorityPath, index) =>
+       existenceResults[index]
+-        ? searchDirRecursively(priorityPath, ICON_PATTERNS, ignoredDirsSet, remainingDepth)
++        ? searchDirRecursively(priorityPath, ICON_PATTERNS, ignoredDirsSet, remainingDepth, check)
+         : Promise.resolve(null),
+     ),
+   );
+-  return searchResults.find((result): result is string => result !== null) ?? null;
++  return searchResults.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+-async function searchDirRecursively(
++async function searchDirRecursively<T>(
+   dir: string,
+   patterns: string[],
+   ignoredDirs: Set<string>,
+   maxDepth: number,
++  check: CandidateCheck<T>,
+   currentDepth: number = 0,
+-): Promise<string | null> {
++): Promise<T | null> {
+   if (currentDepth > maxDepth) {
+     return null;
+   }
+ 
+   // First check this directory for icons
+-  const found = await findIconInDir(dir, patterns);
++  const found = await findIconInDir({ dir, patterns, check });
+   if (found) {
+     return found;
+   }
+@@ -367,11 +408,11 @@ async function searchDirRecursively(
+   const recursionResults = await Promise.all(
+     candidatePaths.map((fullPath, index) =>
+       isDirResults[index]
+-        ? searchDirRecursively(fullPath, patterns, ignoredDirs, maxDepth, currentDepth + 1)
++        ? searchDirRecursively(fullPath, patterns, ignoredDirs, maxDepth, check, currentDepth + 1)
+         : Promise.resolve(null),
+     ),
+   );
+-  return recursionResults.find((result): result is string => result !== null) ?? null;
++  return recursionResults.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+ /**
+@@ -386,10 +427,28 @@ export async function findProjectIcon(
+   projectDir: string,
+   maxDepth: number = 3,
+ ): Promise<string | null> {
++  return searchProjectIcon({
++    projectDir,
++    maxDepth,
++    check: async (fullPath) => ((await isExistingFile(fullPath)) ? fullPath : null),
++  });
++}
++
++interface SearchProjectIconInput<T> {
++  projectDir: string;
++  maxDepth: number;
++  check: CandidateCheck<T>;
++}
++
++async function searchProjectIcon<T>({
++  projectDir,
++  maxDepth,
++  check,
++}: SearchProjectIconInput<T>): Promise<T | null> {
+   const ignoredDirsSet = new Set(IGNORED_DIRS);
+ 
+   // First search priority directories
+-  const priorityResult = await searchPriorityDirs(projectDir, ignoredDirsSet, maxDepth - 1);
++  const priorityResult = await searchPriorityDirs(projectDir, ignoredDirsSet, maxDepth - 1, check);
+   if (priorityResult) {
+     return priorityResult;
+   }
+@@ -406,7 +465,7 @@ export async function findProjectIcon(
+     }),
+   );
+   const monoResults = await Promise.all(
+-    monoPaths.map(async (monoPath, monoIdx): Promise<string | null> => {
++    monoPaths.map(async (monoPath, monoIdx): Promise<T | null> => {
+       const packageEntries = monoEntries[monoIdx];
+       if (!packageEntries) return null;
+       const packagePaths = packageEntries.map((packageName) => join(monoPath, packageName));
+@@ -414,27 +473,28 @@ export async function findProjectIcon(
+         packagePaths.map((packagePath) => isExistingDirectory(packagePath)),
+       );
+       const packageResults = await Promise.all(
+-        packagePaths.map(async (packagePath, idx): Promise<string | null> => {
++        packagePaths.map(async (packagePath, idx): Promise<T | null> => {
+           if (!isDirResults[idx]) return null;
+           const packagePriorityResult = await searchPriorityDirs(
+             packagePath,
+             ignoredDirsSet,
+             maxDepth - 1,
++            check,
+           );
+           if (packagePriorityResult) return packagePriorityResult;
+-          return await findIconInDir(packagePath, ICON_PATTERNS);
++          return await findIconInDir({ dir: packagePath, patterns: ICON_PATTERNS, check });
+         }),
+       );
+-      return packageResults.find((result): result is string => result !== null) ?? null;
++      return packageResults.find((result): result is Awaited<T> => result !== null) ?? null;
+     }),
+   );
+-  const monoMatch = monoResults.find((result): result is string => result !== null);
++  const monoMatch = monoResults.find((result): result is Awaited<T> => result !== null);
+   if (monoMatch) {
+     return monoMatch;
+   }
+ 
+   // Then search root and any other non-priority directories
+-  const found = await findDirRecursively(projectDir);
++  const found = await findDirRecursively(projectDir, check);
+   if (found) {
+     return found;
+   }
+@@ -442,11 +502,12 @@ export async function findProjectIcon(
+   return null;
+ }
+ 
+-async function findDirRecursively(
++async function findDirRecursively<T>(
+   dir: string,
++  check: CandidateCheck<T>,
+   maxDepth: number = 2,
+   currentDepth: number = 0,
+-): Promise<string | null> {
++): Promise<T | null> {
+   const ignoredDirsSet = new Set(IGNORED_DIRS);
+   const priorityDirsSet = new Set(PRIORITY_DIRS);
+ 
+@@ -455,7 +516,7 @@ async function findDirRecursively(
+   }
+ 
+   // Check root for icons
+-  const found = await findIconInDir(dir, ICON_PATTERNS);
++  const found = await findIconInDir({ dir, patterns: ICON_PATTERNS, check });
+   if (found) {
+     return found;
+   }
+@@ -481,29 +542,30 @@ async function findDirRecursively(
+   const recursionResults = await Promise.all(
+     candidatePaths.map((fullPath, index) =>
+       isDirResults[index]
+-        ? findDirRecursively(fullPath, maxDepth, currentDepth + 1)
++        ? findDirRecursively(fullPath, check, maxDepth, currentDepth + 1)
+         : Promise.resolve(null),
+     ),
+   );
+-  return recursionResults.find((result): result is string => result !== null) ?? null;
++  return recursionResults.find((result): result is Awaited<T> => result !== null) ?? null;
+ }
+ 
+ /**
+  * Find and read a project icon/favicon, returning it as base64.
+- * Only returns square icons smaller than MAX_ICON_SIZE (32KB).
++ * Only returns square icons smaller than MAX_ICON_SIZE (32KB). A candidate that
++ * fails these checks is skipped and the search moves on to the next one.
+  *
+  * @param projectDir - The root directory of the project to search
+  * @returns The icon data with mime type, or null if not found
+  */
+ export async function getProjectIcon(projectDir: string): Promise<ProjectIcon | null> {
+-  const iconPath = await findProjectIcon(projectDir);
+-  if (!iconPath) {
+-    return null;
+-  }
++  return searchProjectIcon({ projectDir, maxDepth: 3, check: loadIcon });
++}
+ 
++async function loadIcon(iconPath: string): Promise<ProjectIcon | null> {
+   try {
+     const stats = await stat(iconPath);
+-    if (stats.size > MAX_ICON_SIZE) {
++    // Regular files only: reading a named pipe with no writer blocks forever.
++    if (!stats.isFile() || stats.size > MAX_ICON_SIZE) {
+       return null;
+     }
+ 

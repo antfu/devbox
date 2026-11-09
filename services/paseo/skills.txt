@@ -1,0 +1,26 @@
+# Global skills for the agents in the paseo container. One source per line:
+#   <source> [skill ...]
+# A source is a GitHub repo (`owner/repo` or `owner/repo/path`), a URL or a local path. With no skill
+# names, every skill in the source is installed. Blank lines and `#` comments are skipped.
+#
+# Browse https://skills.sh; every skill page shows its exact path next to the `skills add` command.
+#
+# The paseo image copies this list, and on every start its entrypoint (install-skills.sh) runs
+# `skills add --global` for each line, as the agents' user, so Claude Code (~/.claude/skills) and the other
+# agents (~/.agents/skills) get them. Local paths do not work there; use a GitHub source. After editing it:
+#   pnpm build && pnpm up
+
+# Vercel agent-browser: bundled skills for the browser-automation CLI
+vercel-labs/agent-browser
+
+# Anthropic frontend-design: opinionated UI and UX design guidance
+anthropics/skills/skills/frontend-design
+
+antfu/skills
+antfu/design
+shadcn/improve
+mattpocock/skills
+cursor/plugins/pstack/skills/unslop
+kucherenko/jscpd/skills/dry-refactoring
+AminBlg/SimpleEnglish
+ayghri/i-have-adhd

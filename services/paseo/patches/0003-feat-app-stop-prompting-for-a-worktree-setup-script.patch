@@ -1,0 +1,271 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 2 Nov 2026 09:39:31 +0000
+Subject: [PATCH] feat(app): stop prompting for a worktree setup script
+
+The sidebar showed a "no setup script" callout with an "Open project
+settings" action for every git project whose paseo.json has no
+worktree.setup. Projects without one are normal here, and a host default
+setup script covers them, so the prompt kept popping up for nothing. The
+callout source and its policy are removed; the sidebar.worktreeSetup
+strings stay in the locale files, which upstream owns.
+
+Fork-Change: F-5
+---
+ packages/app/src/app/_layout.tsx              |  2 -
+ .../worktree-setup-callout-policy.test.ts     | 58 --------------
+ .../worktree-setup-callout-policy.ts          | 80 -------------------
+ .../worktree-setup-callout-source.tsx         | 72 -----------------
+ 4 files changed, 212 deletions(-)
+ delete mode 100644 packages/app/src/components/worktree-setup-callout-policy.test.ts
+ delete mode 100644 packages/app/src/components/worktree-setup-callout-policy.ts
+ delete mode 100644 packages/app/src/components/worktree-setup-callout-source.tsx
+
+diff --git a/packages/app/src/app/_layout.tsx b/packages/app/src/app/_layout.tsx
+index 083c6b21449930165ca0a1d488298a07db6cd3f1..a16233210a8613702d74736ef298180ba7213bed 100644
+--- a/packages/app/src/app/_layout.tsx
++++ b/packages/app/src/app/_layout.tsx
+@@ -30,7 +30,6 @@ import { CommandCenterProvider } from "@/command-center/provider";
+ import { CommandCenterWorkspaceActions } from "@/command-center/workspace-registration";
+ import { PluginCommandCenterActions } from "@/plugins/command-center/registration";
+ import { AddProjectFlowHost } from "@/components/add-project-flow-host";
+-import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
+ import { DownloadToast } from "@/components/download-toast";
+ import { QuittingOverlay } from "@/components/quitting-overlay";
+ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
+@@ -487,7 +486,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
+         <RosettaCalloutSource />
+         <UpdateCalloutSource />
+         <LegacyAgentSkillsMigration />
+-        <WorktreeSetupCalloutSource />
+         <CommandCenterRootActions />
+         <CommandCenterWorkspaceActions />
+         <PluginCommandCenterActions />
+diff --git a/packages/app/src/components/worktree-setup-callout-policy.test.ts b/packages/app/src/components/worktree-setup-callout-policy.test.ts
+deleted file mode 100644
+index edfbc21efd8ac1c612a3956889e4f40805d68987..0000000000000000000000000000000000000000
+--- a/packages/app/src/components/worktree-setup-callout-policy.test.ts
++++ /dev/null
+@@ -1,58 +0,0 @@
+-import { describe, expect, it } from "vitest";
+-import {
+-  buildWorktreeSetupCalloutPolicy,
+-  selectActiveGitWorkspaceProject,
+-  shouldShowWorktreeSetupCallout,
+-} from "./worktree-setup-callout-policy";
+-
+-describe("selectActiveGitWorkspaceProject", () => {
+-  it("selects the host-local project id for a git workspace", () => {
+-    expect(
+-      selectActiveGitWorkspaceProject("server-1", {
+-        projectId: "prj_local",
+-        projectKind: "git",
+-        projectRootPath: "/repo/project",
+-      }),
+-    ).toEqual({
+-      serverId: "server-1",
+-      projectId: "prj_local",
+-      repoRoot: "/repo/project",
+-    });
+-  });
+-
+-  it("ignores non-git workspaces and blank coordinates", () => {
+-    expect(
+-      selectActiveGitWorkspaceProject("server-1", {
+-        projectId: "project",
+-        projectKind: "directory",
+-        projectRootPath: "/repo",
+-      }),
+-    ).toBeNull();
+-  });
+-});
+-
+-describe("shouldShowWorktreeSetupCallout", () => {
+-  it("shows only after a successful config read with no setup command", () => {
+-    expect(shouldShowWorktreeSetupCallout({ ok: true, config: {} })).toBe(true);
+-    expect(
+-      shouldShowWorktreeSetupCallout({ ok: true, config: { worktree: { setup: "npm i" } } }),
+-    ).toBe(false);
+-    expect(shouldShowWorktreeSetupCallout({ ok: false })).toBe(false);
+-  });
+-});
+-
+-describe("buildWorktreeSetupCalloutPolicy", () => {
+-  it("routes by server id and project id", () => {
+-    expect(
+-      buildWorktreeSetupCalloutPolicy({
+-        serverId: "server-1",
+-        projectId: "prj_local",
+-        repoRoot: "/repo/project",
+-      }),
+-    ).toMatchObject({
+-      id: "worktree-setup-missing:server-1:prj_local",
+-      projectSettingsRoute: "/settings/hosts/server-1/projects/prj_local",
+-      testID: "worktree-setup-callout-prj_local",
+-    });
+-  });
+-});
+diff --git a/packages/app/src/components/worktree-setup-callout-policy.ts b/packages/app/src/components/worktree-setup-callout-policy.ts
+deleted file mode 100644
+index dd5814eef8ee252a3c5c8aa56b916fffc22e8bf4..0000000000000000000000000000000000000000
+--- a/packages/app/src/components/worktree-setup-callout-policy.ts
++++ /dev/null
+@@ -1,80 +0,0 @@
+-import type { PaseoConfigRaw } from "@getpaseo/protocol/messages";
+-import { i18n } from "@/i18n/i18next";
+-import { buildProjectSettingsRoute } from "@/utils/host-routes";
+-
+-export interface WorktreeSetupWorkspaceInput {
+-  projectId: string;
+-  projectKind: string;
+-  projectRootPath: string;
+-}
+-
+-export interface ActiveGitWorkspaceProject {
+-  serverId: string;
+-  projectId: string;
+-  repoRoot: string;
+-}
+-
+-interface ReadProjectConfigResult {
+-  ok: boolean;
+-  config?: PaseoConfigRaw | null;
+-}
+-
+-export interface WorktreeSetupCalloutPolicy {
+-  id: string;
+-  dismissalKey: string;
+-  priority: number;
+-  title: string;
+-  description: string;
+-  actionLabel: string;
+-  projectSettingsRoute: ReturnType<typeof buildProjectSettingsRoute>;
+-  testID: string;
+-}
+-
+-export function selectActiveGitWorkspaceProject(
+-  serverId: string,
+-  workspace: WorktreeSetupWorkspaceInput,
+-): ActiveGitWorkspaceProject | null {
+-  if (workspace.projectKind !== "git") {
+-    return null;
+-  }
+-
+-  const projectId = workspace.projectId;
+-  const repoRoot = workspace.projectRootPath.trim();
+-  if (!projectId.trim() || !repoRoot) {
+-    return null;
+-  }
+-
+-  return { serverId, projectId, repoRoot };
+-}
+-
+-export function shouldShowWorktreeSetupCallout(readResult: ReadProjectConfigResult | undefined) {
+-  return readResult?.ok === true && !hasSetupCommands(readResult.config ?? {});
+-}
+-
+-export function buildWorktreeSetupCalloutPolicy(
+-  project: ActiveGitWorkspaceProject,
+-): WorktreeSetupCalloutPolicy {
+-  const calloutKey = `worktree-setup-missing:${project.serverId}:${project.projectId}`;
+-
+-  return {
+-    id: calloutKey,
+-    dismissalKey: calloutKey,
+-    priority: 100,
+-    title: i18n.t("sidebar.worktreeSetup.title"),
+-    description: i18n.t("sidebar.worktreeSetup.description"),
+-    actionLabel: i18n.t("sidebar.worktreeSetup.openProjectSettings"),
+-    projectSettingsRoute: buildProjectSettingsRoute(project.serverId, project.projectId),
+-    testID: `worktree-setup-callout-${project.projectId}`,
+-  };
+-}
+-
+-function hasSetupCommands(config: PaseoConfigRaw): boolean {
+-  const setup = config.worktree?.setup;
+-  if (typeof setup === "string") {
+-    return setup.trim().length > 0;
+-  }
+-  if (Array.isArray(setup)) {
+-    return setup.some((command) => typeof command === "string" && command.trim().length > 0);
+-  }
+-  return false;
+-}
+diff --git a/packages/app/src/components/worktree-setup-callout-source.tsx b/packages/app/src/components/worktree-setup-callout-source.tsx
+deleted file mode 100644
+index b7ec157e204197d8ed946db39bce5b2ecc4fc265..0000000000000000000000000000000000000000
+--- a/packages/app/src/components/worktree-setup-callout-source.tsx
++++ /dev/null
+@@ -1,72 +0,0 @@
+-import { useQuery } from "@tanstack/react-query";
+-import { useRouter } from "expo-router";
+-import { useEffect, useMemo } from "react";
+-import { useSidebarCallouts } from "@/contexts/sidebar-callout-context";
+-import { useStableEvent } from "@/hooks/use-stable-event";
+-import { useHostRuntimeClient } from "@/runtime/host-runtime";
+-import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+-import { useWorkspaceFields } from "@/stores/session-store-hooks";
+-import {
+-  buildWorktreeSetupCalloutPolicy,
+-  selectActiveGitWorkspaceProject,
+-  shouldShowWorktreeSetupCallout,
+-} from "./worktree-setup-callout-policy";
+-
+-export function WorktreeSetupCalloutSource() {
+-  const selection = useActiveWorkspaceSelection();
+-  const selectedWorkspaceProject = useWorkspaceFields(
+-    selection?.serverId ?? null,
+-    selection?.workspaceId ?? null,
+-    (workspace) => selectActiveGitWorkspaceProject(selection?.serverId ?? "", workspace),
+-  );
+-  const activeProject = selectedWorkspaceProject;
+-  const client = useHostRuntimeClient(activeProject?.serverId ?? "");
+-  const callouts = useSidebarCallouts();
+-  const router = useRouter();
+-  const openProjectSettings = useStableEvent(() => {
+-    if (!activeProject) {
+-      return;
+-    }
+-    router.navigate(buildWorktreeSetupCalloutPolicy(activeProject).projectSettingsRoute);
+-  });
+-
+-  const readQuery = useQuery({
+-    queryKey: ["project-config", activeProject?.serverId ?? "", activeProject?.repoRoot ?? ""],
+-    queryFn: () => {
+-      if (!client || !activeProject) {
+-        throw new Error("Project config query requires an active git workspace");
+-      }
+-      return client.readProjectConfig(activeProject.repoRoot);
+-    },
+-    enabled: Boolean(client && activeProject),
+-    retry: false,
+-  });
+-
+-  const calloutPolicy = useMemo(
+-    () =>
+-      activeProject && shouldShowWorktreeSetupCallout(readQuery.data)
+-        ? buildWorktreeSetupCalloutPolicy(activeProject)
+-        : null,
+-    [activeProject, readQuery.data],
+-  );
+-
+-  useEffect(() => {
+-    if (!calloutPolicy) {
+-      return;
+-    }
+-
+-    return callouts.show({
+-      id: calloutPolicy.id,
+-      dismissalKey: calloutPolicy.dismissalKey,
+-      priority: calloutPolicy.priority,
+-      title: calloutPolicy.title,
+-      description: calloutPolicy.description,
+-      actions: [
+-        { label: calloutPolicy.actionLabel, onPress: openProjectSettings, variant: "primary" },
+-      ],
+-      testID: calloutPolicy.testID,
+-    });
+-  }, [calloutPolicy, callouts, openProjectSettings]);
+-
+-  return null;
+-}
