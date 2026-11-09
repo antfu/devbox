@@ -1,14 +1,28 @@
 # @antfu/devbox
 
-Run [Paseo](https://github.com/getpaseo/paseo) coding agents in network-caged containers on an always-on machine. It is one [dev-container](https://github.com/antfu/dev-container) stack, and every service is reachable only over Tailscale. Fork it and edit `dev-container.config.ts` for your own accounts.
+Run [Paseo](https://github.com/getpaseo/paseo) coding agents in network-caged containers on an always-on machine, with one GitHub account per agent server. It is one [dev-container](https://github.com/antfu/dev-container) stack, and every service is reachable only over Tailscale. Fork it and edit `dev-container.config.ts` for your own accounts.
 
-| Service | Port | What it is |
-| --- | --- | --- |
-| `paseo` | 6767 | The client. It serves the web UI and runs no agents. |
-| `paseo-bot` | 6769 | Server that runs agents as a bot GitHub account (`GITHUB_TOKEN`). |
-| `paseo-main` | 6768 | Server that runs agents as your main account (`GITHUB_TOKEN_MAIN`). |
+## How it fits together
 
-Each one is at `https://<prefix><name>.<your-tailnet>.ts.net`. In the web UI, add `paseo-bot` and `paseo-main` as hosts, using `CLIENT_ACCESS_PASSWORD` as the password. Tailnet HTTPS certificates must be enabled.
+```text
+ browser / Paseo app ──── Tailscale (HTTPS, tailnet only) ────┐
+                                                              │
+   ┌──────────────── caged network, no direct internet ───────┼───────────────┐
+   │  paseo        web UI only: lists the two servers below   │               │
+   │  paseo-bot    runs agents as the bot GitHub account      │ tailscale     │
+   │  paseo-main   runs agents as your main GitHub account    │ sidecar       │
+   │        │                                                 │ per service   │
+   └────────┼─────────────────────────────────────────────────┴───────────────┘
+            ▼
+         broker ── swaps placeholder tokens for real ones, only towards allowed hosts ──► internet
+```
+
+- **`paseo`** is the client. It serves the Paseo web UI, and runs no agents. You open it and add the two servers as hosts, then switch between them in the UI.
+- **`paseo-bot` and `paseo-main`** are the servers, the same image with separate homes, logins and projects. Each has its own GitHub token and commit identity, so the bot's agents never see your main account's private repos. `paseo-main` gets its token from `GITHUB_TOKEN_MAIN` through dev-container's per-service secrets.
+- **The cage:** the services sit on a network with no route out. Their traffic goes through the **broker**, which holds the real tokens. The containers only see placeholders, and the broker swaps in the real value on the wire, only for the hosts a token is bound to. A **relay** publishes the ports on the host, and a **Tailscale sidecar** per service serves each one at `https://<prefix><name>.<your-tailnet>.ts.net`. A dashboard at `monitor` lists the services and has an Upgrade button.
+- **The images** build in layers, so a change only rebuilds what it touches: `paseo-toolchain` (system packages, Rust, Chromium), then `paseo-base` (upstream Paseo with our [patches](#paseo-patches)), then `dev-base` (agent CLIs, GPG), then the services.
+
+In the web UI, add `paseo-bot` and `paseo-main` as hosts, using `CLIENT_ACCESS_PASSWORD` as the password. Tailnet HTTPS certificates must be enabled.
 
 ## Set up
 
@@ -17,7 +31,7 @@ git clone --recurse-submodules <this repo> && cd devbox
 pnpm install
 pnpm vendor:setup                    # build the dev-container CLI
 cp .env.example .env                 # settings the containers can see
-cp .env.secret.example .env.secret   # secrets only the broker sees: TS_AUTHKEY, GITHUB_TOKEN, GITHUB_TOKEN_MAIN
+cp .env.secret.example .env.secret   # secrets only the broker sees: TS_AUTHKEY, GITHUB_TOKEN_BOT, GITHUB_TOKEN_MAIN
 pnpm keys:setup                      # signing keys, see below
 pnpm run up                          # build and start
 pnpm down                            # stop

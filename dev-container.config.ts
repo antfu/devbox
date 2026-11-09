@@ -47,7 +47,7 @@ const agentEnv = {
 /**
  * A paseo daemon on the shared toolchain. Each one needs its own port, since the relay publishes it on the
  * host, and its own tailnet node. `githubToken` names the .env.secret variable that replaces the stack's
- * GITHUB_TOKEN for this daemon. `identity` picks the commit identity and signing key. A `client` only serves
+ * GITHUB_TOKEN_BOT for this daemon. `identity` picks the commit identity and signing key. A `client` only serves
  * the web UI: it gets no model keys, signing key, git identity or skills, since no agent runs there.
  */
 function paseo({ name, port, githubToken, identity, client = false }: { name: string, port: number, githubToken?: string, identity?: keyof typeof identities, client?: boolean }) {
@@ -100,8 +100,14 @@ function paseo({ name, port, githubToken, identity, client = false }: { name: st
 
 export default defineConfig({
   name: 'devbox',
-  // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
-  builtins: { npm: false },
+  // The bot's GITHUB_TOKEN_BOT in .env.secret is brokered for git and gh, and the cage sees it as GITHUB_TOKEN
+  // and GH_TOKEN, which the tools read; no service here uses npm.
+  builtins: {
+    github: {
+      from: { env: 'GITHUB_TOKEN_BOT' },
+    },
+    npm: false,
+  },
   // The dashboard's bearer token is the same CLIENT_ACCESS_PASSWORD as paseo's; unset, dev-container makes a random one.
   // The daemon (pnpm daemon:install) serves the dashboard, whose Upgrade button pulls, rebuilds and restarts.
   // The dashboard is also served at https://monitor.<tailnet>.ts.net by the tailscale-dashboard sidecar.
@@ -126,14 +132,14 @@ export default defineConfig({
       port: 6767,
       client: true,
     }),
-    // The server for the bot account, on the stack's GITHUB_TOKEN.
+    // The server for the bot account, on the stack's GITHUB_TOKEN_BOT.
     'paseo-bot': paseo({
       name: 'paseo-bot',
       port: 6769,
       identity: 'bot',
     }),
     // The server for the main GitHub account, a separate node with its own home. GITHUB_TOKEN_MAIN in
-    // .env.secret is swapped in for it only; the other services keep GITHUB_TOKEN.
+    // .env.secret is swapped in for it only; the other services keep GITHUB_TOKEN_BOT.
     'paseo-main': paseo({
       name: 'paseo-main',
       port: 6768,
