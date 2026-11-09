@@ -8,7 +8,7 @@
   "author": "Anthony Fu <https://github.com/antfu>",
   "license": "MIT",
   "scripts": {
-    "build": "pnpm run build:toolchain && pnpm run build:paseo && pnpm run build:dev-base && pnpm dc generate && pnpm dc compose build",
+    "build": "tsx src/cli.ts build",
     "build:toolchain": "docker build --tag paseo-toolchain services/toolchain",
     "build:paseo": "tsx src/cli.ts paseo prepare && docker build --build-arg NODE_IMAGE=paseo-toolchain --file .cache/paseo-build/docker/base/Dockerfile --tag paseo-base .cache/paseo-build",
     "paseo:edit": "tsx src/cli.ts paseo edit",
@@ -31,7 +31,7 @@
     "prepare": "git config core.hooksPath .githooks && simple-git-hooks && pnpm run vendor:setup && skills experimental_sync -y"
   },
   "scripts-info": {
-    "build": "Build the container images",
+    "build": "Build the container images: the toolchain, paseo and dev-base chain unless IMAGE_REGISTRY names prebuilt ones, then the stack",
     "build:toolchain": "Build the paseo-toolchain image (system packages, jup, uv, Rust, Chromium) that paseo-base is built on, so paseo changes never rebuild it",
     "build:paseo": "Apply services/paseo/patches to vendor/paseo in .cache/paseo-build and build the paseo-base image from it on paseo-toolchain, with upstream's own Dockerfile",
     "paseo:edit": "Turn the paseo patches into commits in .cache/paseo-work, rebased onto the pinned release",

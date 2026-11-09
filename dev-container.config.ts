@@ -9,6 +9,11 @@ catch {
   // .env is optional, the defaults below apply.
 }
 
+// With IMAGE_REGISTRY set (e.g. ghcr.io/<owner>/containers), the paseo services pull the image that
+// .github/workflows/images.yml builds, instead of building the toolchain, paseo and dev-base here.
+const registry = process.env.IMAGE_REGISTRY?.replace(/\/$/, '')
+const paseoImage = registry && `${registry}/paseo:${process.env.IMAGE_TAG || 'latest'}`
+
 // Several laptops can run this stack on one tailnet. TAILNET_PREFIX (e.g. `mbp-`) goes in front of every
 // tailnet hostname, so each laptop gets its own nodes (`mbp-paseo`, `mbp-monitor`), and its client only
 // lists its own servers.
@@ -48,7 +53,9 @@ const agentEnv = {
 function paseo({ name, port, githubToken, identity, client = false }: { name: string, port: number, githubToken?: string, identity?: keyof typeof identities, client?: boolean }) {
   const hostname = node(name)
   return {
-    build: 'services/paseo',
+    ...paseoImage
+      ? { image: paseoImage }
+      : { build: 'services/paseo' },
     env: {
       ...!client && agentEnv,
       // The global skills of services/paseo/skills.txt are installed on start, for the agents.

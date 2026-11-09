@@ -1,0 +1,112 @@
+name: Images
+
+# Builds the paseo image chain (toolchain, paseo-base with our patches, dev-base, paseo) for arm64 and pushes
+# it to ghcr.io/<owner>/<repo>. Machines set IMAGE_REGISTRY to pull it instead of building.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - services/**
+      - vendor/paseo
+      - src/paseo-patches.ts
+      - .github/workflows/images.yml
+  schedule:
+    # Weekly, so the agent CLIs in dev-base stay current.
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: images
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # The free arm64 runner: the images are for Apple silicon hosts.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Name the images
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            echo "IMAGE=$image"
+            echo "TAG=sha-${GITHUB_SHA::12}"
+          } >> "$GITHUB_ENV"
+
+      # git am needs a committer to replay the patches.
+      - name: Apply the paseo patches
+        run: |
+          git config --global user.name "images"
+          git config --global user.email "images@users.noreply.github.com"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm exec tsx src/cli.ts paseo prepare
+
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Toolchain
+        uses: docker/build-push-action@v7
+        with:
+          context: services/toolchain
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}/toolchain:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}/toolchain:cache
+          cache-to: type=registry,ref=${{ env.IMAGE }}/toolchain:cache,mode=max
+
+      - name: Paseo base
+        uses: docker/build-push-action@v7
+        with:
+          context: .cache/paseo-build
+          file: .cache/paseo-build/docker/base/Dockerfile
+          platforms: linux/arm64
+          push: true
+          build-args: NODE_IMAGE=${{ env.IMAGE }}/toolchain:${{ env.TAG }}
+          tags: ${{ env.IMAGE }}/paseo-base:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}/paseo-base:cache
+          cache-to: type=registry,ref=${{ env.IMAGE }}/paseo-base:cache,mode=max
+
+      # The Dockerfiles say `FROM paseo-base` and `FROM dev-base`; named contexts point those at the images above.
+      - name: Dev base
+        uses: docker/build-push-action@v7
+        with:
+          context: services/dev-base
+          platforms: linux/arm64
+          push: true
+          build-contexts: paseo-base=docker-image://${{ env.IMAGE }}/paseo-base:${{ env.TAG }}
+          tags: ${{ env.IMAGE }}/dev-base:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}/dev-base:cache
+          cache-to: type=registry,ref=${{ env.IMAGE }}/dev-base:cache,mode=max
+
+      - name: Paseo
+        uses: docker/build-push-action@v7
+        with:
+          context: services/paseo
+          platforms: linux/arm64
+          push: true
+          build-contexts: dev-base=docker-image://${{ env.IMAGE }}/dev-base:${{ env.TAG }}
+          tags: |
+            ${{ env.IMAGE }}/paseo:${{ env.TAG }}
+            ${{ env.IMAGE }}/paseo:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}

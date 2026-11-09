@@ -35,6 +35,12 @@ pnpm down            # stop and remove the containers
 
 Tailnet HTTPS certificates must be enabled for `tailscale serve` to work.
 
+## Prebuilt images
+
+Building the toolchain, paseo and dev-base takes a long time. The `Images` workflow ([.github/workflows/images.yml](.github/workflows/images.yml)) builds the chain on GitHub for arm64 and pushes `ghcr.io/<owner>/<repo>/paseo` on every change to `services/` or the paseo pin, on demand, and weekly. To use it on a machine, set `IMAGE_REGISTRY=ghcr.io/<owner>/<repo>` in `.env` (and `IMAGE_TAG` to pin a tag; the default `latest` follows CI). Then `pnpm build` skips the three long builds, and the daemon's upgrade pulls the new image before it restarts anything. If the package is private, run `docker login ghcr.io` once with a token that can read packages. Leave `IMAGE_REGISTRY` empty to keep building locally.
+
+Check the package's visibility under the repo's Packages after the first run: new packages may start private. The image bundles Claude Code, Codex and Chrome, so decide whether you want it public before you make it so.
+
 ## Hands-off server on a MacBook
 
 To run the stack on a MacBook that nobody touches, so it survives closed lids, reboots and power cuts:

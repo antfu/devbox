@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { buildImages } from './build'
 import { IDENTITIES, isIdentityId, setupGpgKey } from './keys'
 import { exportPatches, prepareBuildTree, startEditing } from './paseo-patches'
 import { ROOT } from './shell'
@@ -44,6 +45,15 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
     console.log(`paseo: wrote ${written.length} patches to ${PASEO_PATCH_PATHS.patches}`)
     break
   }
+  case 'build':
+    try {
+      process.loadEnvFile('.env')
+    }
+    catch {
+      // .env is optional.
+    }
+    buildImages(Boolean(process.env.IMAGE_REGISTRY))
+    break
   case 'keys setup': {
     const ids = rest.filter(arg => !arg.startsWith('--'))
     const unknown = ids.filter(id => !isIdentityId(id))
@@ -61,6 +71,6 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
     break
   }
   default:
-    console.error('usage: cli.ts vendor setup|upgrade [dev-container|paseo] | paseo prepare|edit [--force]|export | keys setup [bot|main] [--force]')
+    console.error('usage: cli.ts build | vendor setup|upgrade [dev-container|paseo] | paseo prepare|edit [--force]|export | keys setup [bot|main] [--force]')
     process.exit(1)
 }
