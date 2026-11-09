@@ -9,7 +9,7 @@ catch {
   // .env is optional, the defaults below apply.
 }
 
-// With IMAGE_REGISTRY set (e.g. ghcr.io/<owner>/containers), the paseo services pull the image that
+// With IMAGE_REGISTRY set (e.g. ghcr.io/<owner>/devbox), the paseo services pull the image that
 // .github/workflows/images.yml builds, instead of building the toolchain, paseo and dev-base here.
 const registry = process.env.IMAGE_REGISTRY?.replace(/\/$/, '')
 const paseoImage = registry && `${registry}/paseo:${process.env.IMAGE_TAG || 'latest'}`

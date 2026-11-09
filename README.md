@@ -1,4 +1,4 @@
-# @antfu/containers
+# @antfu/devbox
 
 Run [Paseo](https://github.com/getpaseo/paseo) coding agents in network-caged containers on an always-on machine. It is one [dev-container](https://github.com/antfu/dev-container) stack, and every service is reachable only over Tailscale. Fork it and edit `dev-container.config.ts` for your own accounts.
 
@@ -13,7 +13,7 @@ Each one is at `https://<prefix><name>.<your-tailnet>.ts.net`. In the web UI, ad
 ## Set up
 
 ```sh
-git clone --recurse-submodules <this repo> && cd containers
+git clone --recurse-submodules <this repo> && cd devbox
 pnpm install
 pnpm vendor:setup                    # build the dev-container CLI
 cp .env.example .env                 # settings the containers can see
