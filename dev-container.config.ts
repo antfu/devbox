@@ -99,7 +99,7 @@ function paseo({ name, port, githubToken, identity, client = false }: { name: st
 }
 
 export default defineConfig({
-  name: 'containers',
+  name: 'devbox',
   // GITHUB_TOKEN in .env.secret is brokered for git and gh; no service here uses npm.
   builtins: { npm: false },
   // The dashboard's bearer token is the same CLIENT_ACCESS_PASSWORD as paseo's; unset, dev-container makes a random one.
