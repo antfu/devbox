@@ -28,8 +28,10 @@ patches refer to them in their `Fork-Change` trailer.
 - Compatibility: daemon-only; no wire or client change. The avatar is served as an ordinary automatic icon with
   its own revision, so every client, upstream apps included, shows it. Order: custom icon, then local icon
   files, then the avatar. Only projects whose project key is a GitHub remote (`remote:github.com/...`) are
-  fetched, from `github.com/<owner>.png?size=64`, with a 3 s timeout, cached in memory per owner (a day when
-  the owner is found or missing, ten minutes after a failure). Offline, it falls back to the initial as before.
+  fetched, from `github.com/<owner>.png?size=64`, with a 10 s timeout, cached in memory per owner (a day when
+  the owner is found or missing, one minute after a failure). Offline, it falls back to the initial as before.
+  The timeout was 3 s until v0.15.4, whose heavier startup pushed the first fetch past it; each session keeps
+  the icon it first resolved, so the avatar stayed missing until the client reconnected.
   Checked: unit tests and a live fetch only; the rebuilt image and an upstream client are not checked yet.
 - Drop when: upstream merges #8529 and ships a remote-avatar fallback. If only #8529 lands, drop the PR's part
   on rebase and keep the avatar files and the hook in `project-custom-icon.ts`.

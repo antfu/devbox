@@ -24,10 +24,10 @@ Fork-Change: F-1
 ---
  .../server/src/utils/project-custom-icon.ts   |   5 +-
  .../src/utils/project-github-avatar.test.ts   | 119 ++++++++++++++++
- .../server/src/utils/project-github-avatar.ts |  89 ++++++++++++
+ .../server/src/utils/project-github-avatar.ts |  90 ++++++++++++
  .../server/src/utils/project-icon.test.ts     |  94 +++++++++++++
  packages/server/src/utils/project-icon.ts     | 130 +++++++++++++-----
- 5 files changed, 402 insertions(+), 35 deletions(-)
+ 5 files changed, 403 insertions(+), 35 deletions(-)
  create mode 100644 packages/server/src/utils/project-github-avatar.test.ts
  create mode 100644 packages/server/src/utils/project-github-avatar.ts
 
@@ -56,7 +56,7 @@ index 7d5aba2fa1e1e8435335b1ba695d968282d473ff..e396069d2c087ddcd2c0d197cdfa61e2
  }
 diff --git a/packages/server/src/utils/project-github-avatar.test.ts b/packages/server/src/utils/project-github-avatar.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..2ba104585947d770edef137dcac8d364efcd0c33
+index 0000000000000000000000000000000000000000..48323de06f6c913b57ed4d34557b89ea4f7fb9d0
 --- /dev/null
 +++ b/packages/server/src/utils/project-github-avatar.test.ts
 @@ -0,0 +1,119 @@
@@ -160,7 +160,7 @@ index 0000000000000000000000000000000000000000..2ba104585947d770edef137dcac8d364
 +    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
 +    fail = false;
 +    expect(await avatars.get("remote:github.com/nuxt/devtools")).toBeNull();
-+    now += 11 * 60 * 1000;
++    now += 61 * 1000;
 +    expect(await avatars.get("remote:github.com/nuxt/devtools")).not.toBeNull();
 +    expect(fake.urls).toHaveLength(2);
 +  });
@@ -181,20 +181,21 @@ index 0000000000000000000000000000000000000000..2ba104585947d770edef137dcac8d364
 +});
 diff --git a/packages/server/src/utils/project-github-avatar.ts b/packages/server/src/utils/project-github-avatar.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..ea3d970209212a6685183ae7cb87bb31b3c2fbc8
+index 0000000000000000000000000000000000000000..265699c686899f0724dc56ffd9588668929da5cb
 --- /dev/null
 +++ b/packages/server/src/utils/project-github-avatar.ts
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,90 @@
 +import { isGitHubHost, parseGitHubRemoteIdentity } from "@getpaseo/protocol/git-remote";
 +
 +import { getImageDimensions, type ProjectIcon } from "./project-icon.js";
 +
 +const AVATAR_SIZE = 64;
 +const MAX_AVATAR_BYTES = 32 * 1024;
-+const FETCH_TIMEOUT_MS = 3000;
++// Daemon startup load can push a proxied fetch past a few seconds, and a miss sticks for the session.
++const FETCH_TIMEOUT_MS = 10_000;
 +const FOUND_TTL_MS = 24 * 60 * 60 * 1000;
 +const MISSING_TTL_MS = 24 * 60 * 60 * 1000;
-+const FAILED_TTL_MS = 10 * 60 * 1000;
++const FAILED_TTL_MS = 60 * 1000;
 +const ACCEPTED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 +
 +type AvatarFetch = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
