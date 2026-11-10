@@ -237,6 +237,24 @@ patches refer to them in their `Fork-Change` trailer.
   typecheck and lint; the browser test is written but its run is still pending.
 - Drop when: upstream lets the whole option row answer.
 
+### F-13: Set up the selected project on a host that lacks it, from New workspace
+
+- Status: active, ours only
+- Requested: 2026-11-10, "in \"new workspace\" panel, in the host select dropdown, add (project not
+  exists), with a button on the right for \"Setup\"."
+- Why: a host without the selected project looked like any other host in New workspace's host picker.
+  The picker and Add project are app UI, which no plugin hook reaches.
+- Patches: `feat(app): offer to set up the project on a host that lacks it`
+- Touches: app `components/hosts/host-picker.tsx` (optional `hostOptionExtras`: a per-host note and an
+  action button); `screens/new-workspace/form/index.tsx` (supplies them);
+  `stores/add-project-flow-store.ts` and `add-project-flow/model.ts` (open on "Clone from other host"
+  with a query); `components/add-project-flow.tsx` (passes it through); the model test; `en.ts` strings
+  and one line per other locale.
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. Builds on F-11: Setup opens
+  Add project on that host at "Clone from other host", searching for the project's name, and Back goes
+  to the host's methods. Checked: typecheck, lint and unit tests only; not checked in a browser yet.
+- Drop when: upstream offers to set up a project on another host; drop together with F-11.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
