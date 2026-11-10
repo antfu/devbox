@@ -201,6 +201,26 @@ patches refer to them in their `Fork-Change` trailer.
   checked in a browser yet.
 - Drop when: upstream shows the change request and its follow-ups in the composer.
 
+### F-11: Clone a project from another connected host
+
+- Status: active, ours only
+- Requested: 2026-11-10, "a new patch for \"add project\", that when there are other host connnect,
+  support \"Clone from other host\", that get the project info and clone."
+- Why: moving a project to another machine meant finding its remote URL on the first host and pasting it
+  into "Clone from GitHub" on the second. The Add project flow is app UI, which no plugin hook reaches.
+- Patches: `feat(app): clone a project from another connected host`
+- Touches: app new `add-project-flow/other-host-projects.ts` and its test; `add-project-flow/model.ts`
+  (an `other-host-projects` page and its opener); `components/add-project-flow.tsx` (the method row,
+  the page's title, placeholder, empty text and rows; a hot spot shared with F-6).
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. The list comes from the
+  session data the app already holds for every connected host: each git project's remote is taken from
+  one of its workspaces (`gitRuntime.remoteUrl`), or else from its `remote:` project key. Projects the
+  target host already has (same project key) are left out. Picking one continues with the existing
+  clone steps, so it needs the target host's `projectGithubClone` feature, like "Clone from GitHub".
+  Shown only when another host is connected. Checked: typecheck, lint and unit tests only; not checked
+  in a browser yet.
+- Drop when: upstream adds cloning from another host.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
