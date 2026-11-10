@@ -169,6 +169,25 @@ patches refer to them in their `Fork-Change` trailer.
 - Config: Settings → host → Appearance → Icon.
 - Drop when: upstream ships host icons.
 
+### F-10: Pull request and diff stat in the workspace header
+
+- Status: active, ours only
+- Requested: 2026-11-10, "have the top nav of the session render the pr link, pr status, and diffs.
+  clicking on the diffs open the diffs tab."
+- Why: a workspace's pull request and uncommitted changes only showed in its sidebar row and in the
+  composer, so with the sidebar closed you could not see them. The header is app UI, which no plugin
+  hook reaches.
+- Patches: `feat(app): show the pull request and diff stat in the workspace header`
+- Touches: app new `screens/workspace/workspace-header-git-summary.tsx`; a small hook in
+  `screens/workspace/workspace-screen.tsx` (`WorkspaceHeaderTitleBar` renders it and takes the
+  workspace id; a hot spot, since the file is large and changes often).
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. It reads the workspace's
+  existing `githubRuntime.pullRequest` and `diffStat`, the same data the sidebar row and the composer
+  pill use. The pull request (number, state, CI indicator) opens on the forge; the diff stat opens the
+  Changes tab with `openWorkspaceChanges`, so it follows the user's side-pane preference. Wide layouts
+  only. Checked: typecheck and lint only; not checked in a browser yet.
+- Drop when: upstream shows the pull request in the header.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
