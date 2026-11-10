@@ -10,6 +10,9 @@
 # agents (~/.agents/skills) get them. Local paths do not work there; use a GitHub source. After editing it:
 #   pnpm build && pnpm up
 
+# Paseo's own skills: managing hosts, workspaces and agents, dispatching and handing off tasks
+getpaseo/paseo/skills
+
 # Vercel agent-browser: bundled skills for the browser-automation CLI
 vercel-labs/agent-browser
 

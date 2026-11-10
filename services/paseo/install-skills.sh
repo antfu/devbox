@@ -5,7 +5,8 @@
 # installed with `skills add --global`: Claude Code reads ~/.claude/skills, and the other agents (OpenCode,
 # Pi, Codex) read ~/.agents/skills. It runs again on each start, so new and updated skills arrive with a
 # restart. It does not delay the daemon, and one failed source does not stop the others. It needs the
-# network, which the broker allows. INSTALL_SKILLS=0 skips it, for a daemon that runs no agents.
+# network, which the broker allows. Before that, install-instructions.mjs writes agent-instructions.md into the
+# agents' global CLAUDE.md / AGENTS.md. INSTALL_SKILLS=0 skips both, for a daemon that runs no agents.
 set -uo pipefail
 
 LIST="${SKILLS_LIST:-/etc/paseo-skills.txt}"
@@ -44,6 +45,8 @@ if [[ "${INSTALL_SKILLS:-1}" != 0 && -f "$LIST" ]]; then
   # The home is a host mount that the base entrypoint may still be chowning.
   (
     until gosu "$RUN_USER" test -w "$RUN_HOME"; do sleep 1; done
+    # The shared agent instructions first: they need no network and take no time.
+    gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/install-instructions.mjs
     gosu "$RUN_USER" env HOME="$RUN_HOME" "$0" --install
   ) &
 fi

@@ -91,3 +91,4 @@ pnpm vendor:upgrade paseo    # move to the newest release, then paseo:edit to re
 - **Permissions and setup script.** Our patches add two host settings in the web UI: a default permission mode per provider (the container is the isolation, so bypass mode is fine) and a default worktree setup script such as `pnpm install`.
 - **No Claude trailer.** On start, Claude Code is set to add no `Co-Authored-By` line or "Generated with Claude Code" text. A value you set yourself wins.
 - **Skills.** On start, the servers install the global skills listed in `services/paseo/skills.txt`. Edit it and rebuild to change them.
+- **Agent instructions.** On start, the servers write `services/paseo/agent-instructions.md` into each agent's global instructions (Claude Code's `~/.claude/CLAUDE.md`, and the `AGENTS.md` of Codex, OpenCode and Pi), between marker lines, so the rest of those files stays. Edit it and rebuild to change them.
