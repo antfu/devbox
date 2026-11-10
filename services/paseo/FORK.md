@@ -176,24 +176,30 @@ patches refer to them in their `Fork-Change` trailer.
 - Config: Settings → host → Appearance → Icon.
 - Drop when: upstream ships host icons.
 
-### F-10: Pull request and diff stat in the workspace header
+### F-10: Pull request pill and follow-up actions above the composer
 
 - Status: active, ours only
 - Requested: 2026-11-10, "have the top nav of the session render the pr link, pr status, and diffs.
-  clicking on the diffs open the diffs tab."
-- Why: a workspace's pull request and uncommitted changes only showed in its sidebar row and in the
-  composer, so with the sidebar closed you could not see them. The header is app UI, which no plugin
-  hook reaches.
-- Patches: `feat(app): show the pull request and diff stat in the workspace header`
-- Touches: app new `screens/workspace/workspace-header-git-summary.tsx`; a small hook in
-  `screens/workspace/workspace-screen.tsx` (`WorkspaceHeaderTitleBar` renders it and takes the
-  workspace id; a hot spot, since the file is large and changes often).
+  clicking on the diffs open the diffs tab."; then, the same day, "instead, for the diff pill above the
+  prompt input, add new pills for pr, and if the pr has conflicts, add a \"resolve conflicts\" button
+  that for quick action of sending prompts, and for failed prs \"fix ci\". for finished task that has
+  local diffs but no prs, add \"create pr\" button."
+- Why: the composer's pill row showed the diff stat but not the change request, and acting on a
+  conflicted or failing one meant typing the same prompt each time. The composer is app UI; plugin
+  composer pills cannot read the workspace's change request state or send a prompt to the agent.
+- Patches: `feat(app): show the pull request and its follow-ups above the composer`
+- Touches: app new `composer/pull-request-actions.ts` (which follow-ups apply) and its test,
+  `composer/pull-request-pills.tsx`; a small hook in `panels/agent-tracks.tsx` (renders the pills after
+  the diff stat pill, and counts them when deciding whether the row shows); `en.ts` strings
+  (`workspace.git.pr.quickActions`) and one line per other locale.
 - Compatibility: web UI only; no wire or daemon change, so no feature flag. It reads the workspace's
-  existing `githubRuntime.pullRequest` and `diffStat`, the same data the sidebar row and the composer
-  pill use. The pull request (number, state, CI indicator) opens on the forge; the diff stat opens the
-  Changes tab with `openWorkspaceChanges`, so it follows the user's side-pane preference. Wide layouts
-  only. Checked: typecheck and lint only; not checked in a browser yet.
-- Drop when: upstream shows the pull request in the header.
+  existing `githubRuntime.pullRequest` (state, `mergeable`, checks, `baseRefName`) and `diffStat`. A
+  follow-up sends an ordinary agent message, the same call the composer makes. Follow-ups only show while
+  the agent is idle, so they never interrupt a turn: "Resolve conflicts" when an open change request is
+  `CONFLICTING`, "Fix CI" when one of its checks failed, "Create PR" for local changes with no change
+  request. The prompt texts are in `en.ts`. Checked: typecheck, lint and the new unit test only; not
+  checked in a browser yet.
+- Drop when: upstream shows the change request and its follow-ups in the composer.
 
 ## Sync log
 

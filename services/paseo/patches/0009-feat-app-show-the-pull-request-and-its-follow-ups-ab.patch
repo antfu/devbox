@@ -1,0 +1,534 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Anthony Fu <github@antfu.me>
+Date: Tue, 10 Nov 2026 14:50:04 +0900
+Subject: [PATCH] feat(app): show the pull request and its follow-ups above the
+ composer
+
+The composer's pill row showed the diff stat but not the workspace's
+change request, and acting on a conflicted or failing one meant typing
+the same prompt every time. The row now shows the change request (number,
+state and CI, linking to the forge) next to the diff stat, and while the
+agent is idle it offers follow-ups that send a prompt to it: "Resolve
+conflicts" when the change request conflicts with its base, "Fix CI"
+when a check failed, and "Create PR" for local changes with no change
+request.
+
+Fork-Change: F-10
+---
+ .../src/composer/pull-request-actions.test.ts |  77 +++++++
+ .../app/src/composer/pull-request-actions.ts  |  33 +++
+ .../app/src/composer/pull-request-pills.tsx   | 209 ++++++++++++++++++
+ packages/app/src/i18n/resources/ar.ts         |   1 +
+ packages/app/src/i18n/resources/en.ts         |  16 ++
+ packages/app/src/i18n/resources/es.ts         |   1 +
+ packages/app/src/i18n/resources/fr.ts         |   1 +
+ packages/app/src/i18n/resources/ja.ts         |   1 +
+ packages/app/src/i18n/resources/ko.ts         |   1 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   1 +
+ packages/app/src/i18n/resources/ru.ts         |   1 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   1 +
+ packages/app/src/panels/agent-tracks.tsx      |   7 +
+ 13 files changed, 350 insertions(+)
+ create mode 100644 packages/app/src/composer/pull-request-actions.test.ts
+ create mode 100644 packages/app/src/composer/pull-request-actions.ts
+ create mode 100644 packages/app/src/composer/pull-request-pills.tsx
+
+diff --git a/packages/app/src/composer/pull-request-actions.test.ts b/packages/app/src/composer/pull-request-actions.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab7a51e58b84760351e66320cc3124d324af01a7
+--- /dev/null
++++ b/packages/app/src/composer/pull-request-actions.test.ts
+@@ -0,0 +1,77 @@
++import { describe, expect, it } from "vitest";
++import type { PrHint } from "@/git/pr-hint";
++import { selectPullRequestQuickActions } from "./pull-request-actions";
++
++function pr(overrides: Partial<PrHint> = {}): PrHint {
++  return {
++    url: "https://github.com/acme/app/pull/7",
++    number: 7,
++    state: "open",
++    forge: "github",
++    ...overrides,
++  };
++}
++
++describe("selectPullRequestQuickActions", () => {
++  it("offers to create a pull request for local changes without one", () => {
++    expect(
++      selectPullRequestQuickActions({
++        prHint: null,
++        mergeable: null,
++        hasLocalChanges: true,
++        isAgentIdle: true,
++      }),
++    ).toEqual(["createPr"]);
++    expect(
++      selectPullRequestQuickActions({
++        prHint: null,
++        mergeable: null,
++        hasLocalChanges: false,
++        isAgentIdle: true,
++      }),
++    ).toEqual([]);
++  });
++
++  it("offers to resolve conflicts and fix CI on an open pull request", () => {
++    expect(
++      selectPullRequestQuickActions({
++        prHint: pr({ checksStatus: "failure" }),
++        mergeable: "CONFLICTING",
++        hasLocalChanges: true,
++        isAgentIdle: true,
++      }),
++    ).toEqual(["resolveConflicts", "fixCi"]);
++    expect(
++      selectPullRequestQuickActions({
++        prHint: pr({ checks: [{ name: "test", status: "failure", url: null }] }),
++        mergeable: "MERGEABLE",
++        hasLocalChanges: false,
++        isAgentIdle: true,
++      }),
++    ).toEqual(["fixCi"]);
++  });
++
++  it("offers nothing for a healthy, merged or closed pull request", () => {
++    for (const hint of [pr({ checksStatus: "success" }), pr({ state: "merged" })]) {
++      expect(
++        selectPullRequestQuickActions({
++          prHint: hint,
++          mergeable: hint.state === "open" ? "MERGEABLE" : "CONFLICTING",
++          hasLocalChanges: true,
++          isAgentIdle: true,
++        }),
++      ).toEqual([]);
++    }
++  });
++
++  it("offers nothing while the agent is working", () => {
++    expect(
++      selectPullRequestQuickActions({
++        prHint: pr({ checksStatus: "failure" }),
++        mergeable: "CONFLICTING",
++        hasLocalChanges: true,
++        isAgentIdle: false,
++      }),
++    ).toEqual([]);
++  });
++});
+diff --git a/packages/app/src/composer/pull-request-actions.ts b/packages/app/src/composer/pull-request-actions.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b0413069fcd7072cc97c13586e01bc823d4367d
+--- /dev/null
++++ b/packages/app/src/composer/pull-request-actions.ts
+@@ -0,0 +1,33 @@
++import type { PrHint } from "@/git/pr-hint";
++
++export type PullRequestQuickAction = "resolveConflicts" | "fixCi" | "createPr";
++
++export interface PullRequestActionsInput {
++  prHint: PrHint | null;
++  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null;
++  hasLocalChanges: boolean;
++  isAgentIdle: boolean;
++}
++
++/**
++ * The follow-ups the composer offers for the workspace's change request. Each one sends a prompt to
++ * this agent, so they only show while the agent is idle: a busy agent would have its turn
++ * interrupted. An open change request offers to resolve its merge conflicts and to fix failed CI; a
++ * workspace with local changes and no change request offers to create one.
++ */
++export function selectPullRequestQuickActions(
++  input: PullRequestActionsInput,
++): PullRequestQuickAction[] {
++  if (!input.isAgentIdle) return [];
++  if (!input.prHint) return input.hasLocalChanges ? ["createPr"] : [];
++  if (input.prHint.state !== "open") return [];
++  const actions: PullRequestQuickAction[] = [];
++  if (input.mergeable === "CONFLICTING") actions.push("resolveConflicts");
++  if (hasFailedChecks(input.prHint)) actions.push("fixCi");
++  return actions;
++}
++
++function hasFailedChecks(hint: PrHint): boolean {
++  if (hint.checks?.some((check) => check.status === "failure")) return true;
++  return hint.checksStatus === "failure";
++}
+diff --git a/packages/app/src/composer/pull-request-pills.tsx b/packages/app/src/composer/pull-request-pills.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..9bd4d1017c851a381cb5b322060e960be8c84e2b
+--- /dev/null
++++ b/packages/app/src/composer/pull-request-pills.tsx
+@@ -0,0 +1,209 @@
++import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
++import { useTranslation } from "react-i18next";
++import { Text } from "react-native";
++import { CheckIndicator } from "@/components/sidebar/workspace-meta-row/check-indicator";
++import { selectCheckSummary } from "@/components/sidebar/workspace-meta-row/check-summary";
++import { PressHighlight } from "@/components/ui/press-highlight";
++import { dispatchComposerAgentMessage } from "@/composer/actions";
++import { composerPillStyles } from "@/composer/pill-styles";
++import {
++  selectPullRequestQuickActions,
++  type PullRequestQuickAction,
++} from "@/composer/pull-request-actions";
++import { createMessageSubmissionWriter } from "@/composer/submission/writer";
++import { useToast } from "@/contexts/toast-context";
++import { getForgePresentation, normalizeForge } from "@/git/forge";
++import { selectPrHintFromStatus, type PrHint } from "@/git/pr-hint";
++import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
++import { useHostRuntimeClient } from "@/runtime/host-runtime";
++import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
++import { useWorkspaceFields } from "@/stores/session-store-hooks";
++import { openExternalUrl } from "@/utils/open-external-url";
++
++const ICON_SIZE = 14;
++
++interface WorkspacePullRequestState {
++  prHint: PrHint | null;
++  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null;
++  baseRefName: string | null;
++  hasLocalChanges: boolean;
++}
++
++function useWorkspacePullRequestState(
++  serverId: string,
++  workspaceId: string,
++): WorkspacePullRequestState | null {
++  return useWorkspaceFields(serverId, workspaceId, (workspace) => {
++    const pullRequest = workspace.githubRuntime?.pullRequest ?? null;
++    return {
++      prHint: selectPrHintFromStatus(pullRequest, workspace.forge),
++      mergeable: pullRequest?.mergeable ?? null,
++      baseRefName: pullRequest?.baseRefName ?? null,
++      hasLocalChanges: Boolean(
++        workspace.diffStat &&
++        (workspace.diffStat.additions > 0 || workspace.diffStat.deletions > 0),
++      ),
++    };
++  });
++}
++
++/** Whether `WorkspacePullRequestPills` draws anything, so the track bar knows to show itself. */
++export function useHasWorkspacePullRequestPills(
++  serverId: string,
++  workspaceId: string,
++  agentId: string,
++): boolean {
++  const state = useWorkspacePullRequestState(serverId, workspaceId);
++  const isAgentIdle = useIsAgentIdle(serverId, agentId);
++  if (!state) return false;
++  return (
++    state.prHint !== null || selectPullRequestQuickActions({ ...state, isAgentIdle }).length > 0
++  );
++}
++
++function useIsAgentIdle(serverId: string, agentId: string): boolean {
++  return useSessionStore(
++    (state) => !selectAgentTurnPresentation(state.sessions[serverId], agentId).isActive,
++  );
++}
++
++/**
++ * The workspace's change request beside the diff stat above the composer, and the follow-ups it
++ * calls for: resolve conflicts and fix CI on an open change request, create one for local changes
++ * that have none. A follow-up sends its prompt to this agent.
++ */
++export const WorkspacePullRequestPills = memo(function WorkspacePullRequestPills({
++  serverId,
++  workspaceId,
++  agentId,
++}: {
++  serverId: string;
++  workspaceId: string;
++  agentId: string;
++}): ReactElement | null {
++  const { t } = useTranslation();
++  const toast = useToast();
++  const client = useHostRuntimeClient(serverId);
++  const state = useWorkspacePullRequestState(serverId, workspaceId);
++  const isAgentIdle = useIsAgentIdle(serverId, agentId);
++  const actions = useMemo(
++    () => (state ? selectPullRequestQuickActions({ ...state, isAgentIdle }) : []),
++    [isAgentIdle, state],
++  );
++
++  const runAction = useCallback(
++    async (action: PullRequestQuickAction) => {
++      if (!client) {
++        toast.error(t("workspace.terminal.hostDisconnected"));
++        return;
++      }
++      const text = t(`workspace.git.pr.quickActions.${action}.prompt`, {
++        url: state?.prHint?.url ?? "",
++        base: state?.baseRefName ?? "",
++      });
++      try {
++        await dispatchComposerAgentMessage({
++          client,
++          agentId,
++          text,
++          attachments: [],
++          encodeImages: async () => undefined,
++          submission: createMessageSubmissionWriter(serverId),
++        });
++      } catch (error) {
++        toast.error(error instanceof Error ? error.message : String(error));
++      }
++    },
++    [agentId, client, serverId, state, t, toast],
++  );
++
++  if (!state) return null;
++  return (
++    <>
++      {state.prHint ? <PullRequestPill hint={state.prHint} /> : null}
++      {actions.map((action) => (
++        <QuickActionPill key={action} action={action} onRun={runAction} />
++      ))}
++    </>
++  );
++});
++
++function PullRequestPill({ hint }: { hint: PrHint }) {
++  const { t } = useTranslation();
++  const [isHovered, setIsHovered] = useState(false);
++  const presentation = getForgePresentation(normalizeForge(hint.forge));
++  const checkSummary = useMemo(() => selectCheckSummary(hint), [hint]);
++  const handlePress = useCallback(() => void openExternalUrl(hint.url), [hint.url]);
++  const handleHoverIn = useCallback(() => setIsHovered(true), []);
++  const handleHoverOut = useCallback(() => setIsHovered(false), []);
++  const bodyStyle = useMemo(
++    () => [composerPillStyles.body, isHovered && composerPillStyles.bodyActive],
++    [isHovered],
++  );
++
++  return (
++    <PressHighlight
++      testID="composer-pull-request-pill"
++      accessibilityRole="link"
++      accessibilityLabel={t("workspace.git.pr.accessibility.pullRequest", {
++        number: hint.number,
++        context: presentation.changeRequestContext,
++      })}
++      onPress={handlePress}
++      onHoverIn={handleHoverIn}
++      onHoverOut={handleHoverOut}
++      style={bodyStyle}
++    >
++      <PullRequestStateIcon state={hint.state} size={ICON_SIZE} />
++      <Text
++        style={[composerPillStyles.label, isHovered && composerPillStyles.labelActive]}
++        numberOfLines={1}
++      >
++        {presentation.numberPrefix}
++        {hint.number}
++      </Text>
++      {checkSummary ? <CheckIndicator summary={checkSummary} size={ICON_SIZE} /> : null}
++    </PressHighlight>
++  );
++}
++
++function QuickActionPill({
++  action,
++  onRun,
++}: {
++  action: PullRequestQuickAction;
++  onRun: (action: PullRequestQuickAction) => Promise<void>;
++}) {
++  const { t } = useTranslation();
++  const [isHovered, setIsHovered] = useState(false);
++  const [isSending, setIsSending] = useState(false);
++  const handlePress = useCallback(() => {
++    setIsSending(true);
++    void onRun(action).finally(() => setIsSending(false));
++  }, [action, onRun]);
++  const handleHoverIn = useCallback(() => setIsHovered(true), []);
++  const handleHoverOut = useCallback(() => setIsHovered(false), []);
++  const bodyStyle = useMemo(
++    () => [composerPillStyles.body, isHovered && composerPillStyles.bodyActive],
++    [isHovered],
++  );
++
++  return (
++    <PressHighlight
++      testID={`composer-pull-request-action-${action}`}
++      accessibilityRole="button"
++      onPress={handlePress}
++      onHoverIn={handleHoverIn}
++      onHoverOut={handleHoverOut}
++      disabled={isSending}
++      style={bodyStyle}
++    >
++      <Text
++        style={[composerPillStyles.label, isHovered && composerPillStyles.labelActive]}
++        numberOfLines={1}
++      >
++        {t(`workspace.git.pr.quickActions.${action}.label`)}
++      </Text>
++    </PressHighlight>
++  );
++}
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index 94165cf1343a26a99d4d81efb86e9189e4611af2..a72c4b29e58f38b7d943bb70efbdb4ea1944200a 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -990,6 +990,7 @@ export const ar: TranslationResources = {
+         failedOpen: "فشل في فتح مساحة العمل",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "عرض",
+           openOn: "فتح على {{brand}}",
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index f11f28052d3b0f5b17a5be2afff671348b8c92ff..2a6680c0e6cd84c9493ee2c08fc74eadd40b39e4 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -998,6 +998,22 @@ export const en = {
+         failedOpen: "Failed to open workspace",
+       },
+       pr: {
++        quickActions: {
++          resolveConflicts: {
++            label: "Resolve conflicts",
++            prompt:
++              "The pull request {{url}} has merge conflicts with {{base}}. Fetch the latest {{base}}, merge it into this branch, resolve the conflicts, run the checks, and push.",
++          },
++          fixCi: {
++            label: "Fix CI",
++            prompt:
++              "CI is failing on the pull request {{url}}. Look at the failed checks, fix the cause, run the checks locally, and push the fix.",
++          },
++          createPr: {
++            label: "Create PR",
++            prompt: "Create a pull request for the changes in this workspace.",
++          },
++        },
+         actions: {
+           viewPullRequest: "View",
+           openOn: "Open on {{brand}}",
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..8c0dee2de377f5d27e9a82de6870734ba537f0d8 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -1023,6 +1023,7 @@ export const es: TranslationResources = {
+         failedOpen: "No se pudo abrir el espacio de trabajo",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "Ver",
+           openOn: "Abrir en {{brand}}",
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index 39967bc20db422ccccc045fd15c9255f8feac6b7..4f9b4dcd0bcfb2e05a8ba2546f83cbd68fc2b9b3 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -1016,6 +1016,7 @@ export const fr: TranslationResources = {
+         failedOpen: "Impossible d’ouvrir l’espace de travail",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "Voir",
+           openOn: "Ouvrir sur {{brand}}",
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..64fafeb3c7bf8b057c698285805b1e0ed90e4337 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -1003,6 +1003,7 @@ export const ja: TranslationResources = {
+         failedOpen: "ワークスペースを開けませんでした",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "表示",
+           openOn: "{{brand}}で開く",
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index ad1ba29e67b3938549d90d963f48a8e045141b27..24d5f3b6d8100a3e476966b383354da18a9afa8b 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -997,6 +997,7 @@ export const ko: TranslationResources = {
+         failedOpen: "워크스페이스를 열지 못했습니다",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "보기",
+           openOn: "{{brand}}에서 열기",
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index 52d8a2dff18b06abf2309d25750e35bbd3c378be..4e889dfe984d2c4b7c687b6ddc23b3abc6794297 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -1013,6 +1013,7 @@ export const ptBR: TranslationResources = {
+         failedOpen: "Falha ao abrir workspace",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "Ver",
+           openOn: "Abrir no {{brand}}",
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..f7f26f67af9795027cfbd44c42ecf857c3a67a90 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -1007,6 +1007,7 @@ export const ru: TranslationResources = {
+         failedOpen: "Не удалось открыть рабочее пространство",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "Просмотреть",
+           openOn: "Открыть на {{brand}}",
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..61d46056376b466e37196a20bed05bc99111f369 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -982,6 +982,7 @@ export const zhCN: TranslationResources = {
+         failedOpen: "打开 workspace 失败",
+       },
+       pr: {
++        quickActions: en.workspace.git.pr.quickActions,
+         actions: {
+           viewPullRequest: "查看",
+           openOn: "在 {{brand}} 上打开",
+diff --git a/packages/app/src/panels/agent-tracks.tsx b/packages/app/src/panels/agent-tracks.tsx
+index 6984633bcc02e4c2871db7fdb1c8f31a2fc82dc8..d1e0c3748698fdc8c993bbef182800a632f12f8f 100644
+--- a/packages/app/src/panels/agent-tracks.tsx
++++ b/packages/app/src/panels/agent-tracks.tsx
+@@ -2,6 +2,10 @@ import type { AgentAddress } from "@getpaseo/protocol/addresses";
+ import { memo, useCallback, type ReactElement } from "react";
+ import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
+ import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
++import {
++  useHasWorkspacePullRequestPills,
++  WorkspacePullRequestPills,
++} from "@/composer/pull-request-pills";
+ import { AgentTaskList } from "@/composer/task-list";
+ import { ComposerTrackBar } from "@/composer/tracks";
+ import { useIsCompactFormFactor } from "@/constants/layout";
+@@ -54,6 +58,7 @@ export const AgentTracks = memo(function AgentTracks({
+ }): ReactElement | null {
+   const { tabId } = usePaneContext();
+   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
++  const hasPullRequestPills = useHasWorkspacePullRequestPills(serverId, workspaceId, agentId);
+   const isCompact = useIsCompactFormFactor();
+   const openInSidePane = useSettings((settings) => settings.openInSidePane);
+   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+@@ -114,6 +119,7 @@ export const AgentTracks = memo(function AgentTracks({
+ 
+   if (
+     !hasWorkspaceDiffStat &&
++    !hasPullRequestPills &&
+     !hasAgentTracks({
+       parentAgentId,
+       subagentRows,
+@@ -151,6 +157,7 @@ export const AgentTracks = memo(function AgentTracks({
+         workspaceId={workspaceId}
+         onPress={handleOpenChanges}
+       />
++      <WorkspacePullRequestPills serverId={serverId} workspaceId={workspaceId} agentId={agentId} />
+     </ComposerTrackBar>
+   );
+ });
