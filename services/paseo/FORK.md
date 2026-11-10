@@ -264,6 +264,25 @@ patches refer to them in their `Fork-Change` trailer.
   to the host's methods. Checked: typecheck, lint and unit tests only; not checked in a browser yet.
 - Drop when: upstream offers to set up a project on another host; drop together with F-11.
 
+### F-14: Customize the pull request quick action prompts
+
+- Status: active, ours only
+- Requested: 2026-11-10, "add settings page for customize the quick actions prompts."
+- Why: F-10's follow-ups always sent the built-in prompt. Settings pages are app UI; a plugin settings
+  page could store prompts, but the composer pills (a patch) could not read them.
+- Patches: `feat(app): customize the pull request quick action prompts`
+- Touches: app new `composer/quick-action-prompts.ts` (a persisted store, and the `{{url}}`/`{{base}}`
+  filler) and its test, `screens/settings/quick-actions-section.tsx`; hooks in
+  `composer/pull-request-pills.tsx` (F-10's file), `screens/settings-screen.tsx` (a sidebar item) and
+  `utils/host-routes.ts` (the `quick-actions` slug); `en.ts` strings (`settings.quickActions`,
+  `settings.sections.quickActions`) and one line each per other locale.
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. The prompts are saved per
+  device under their own storage key (`composer-quick-action-prompts`), outside the app settings, so the
+  settings schema is unchanged. A blank prompt, or Reset, goes back to the default from `en.ts`.
+  Checked: typecheck, lint and unit tests only; not checked in a browser yet.
+- Config: Settings → Quick actions.
+- Drop when: upstream adds editable quick actions; drop together with F-10.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
