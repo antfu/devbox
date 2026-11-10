@@ -4,7 +4,7 @@ This file lists every change our paseo patch series carries on top of upstream, 
 it are in [AGENTS.md](../../AGENTS.md#the-paseo-patches).
 
 - Upstream: [getpaseo/paseo](https://github.com/getpaseo/paseo), checked out at `vendor/paseo`
-- Base: `v0.14.0`
+- Base: `v0.15.4`
 - Series: [patches/](patches), one `git format-patch` file per change, applied in file name order
 
 ## Changes
@@ -259,6 +259,10 @@ patches refer to them in their `Fork-Change` trailer.
 
 One line per rebase onto a new upstream base, newest first.
 
+- 2026-11-10: moved to `v0.15.4`; all 12 patches (F-1 to F-6, F-8 to F-13) applied with `git am --3way`
+  and no conflicts, and none is upstreamed yet ([#8529](https://github.com/getpaseo/paseo/pull/8529) is still open).
+  F-4's config fields moved into `worktreeDefaultSetupField`, because upstream's new fields pushed two
+  config builders past the lint complexity limit.
 - 2026-11-02: started at `v0.14.0` with F-1 to F-6.
 
 ## Entry template

@@ -35,26 +35,26 @@ Fork-Change: F-4
  .../app/src/screens/settings/host-page.tsx    |   2 +
  .../settings/worktree-default-setup.tsx       | 162 ++++++++++++++++++
  packages/protocol/src/messages.ts             |   6 +
- packages/server/src/server/bootstrap.ts       |   6 +
+ packages/server/src/server/bootstrap.ts       |   7 +
  packages/server/src/server/config.ts          |   8 +
  .../src/server/daemon-config-store.test.ts    |  36 ++++
- .../server/src/server/daemon-config-store.ts  |  10 ++
+ .../server/src/server/daemon-config-store.ts  |  11 ++
  .../server/src/server/persisted-config.ts     |   1 +
  .../server/src/server/websocket-server.ts     |   2 +
  .../src/utils/worktree-default-setup.test.ts  |  95 ++++++++++
- .../src/utils/worktree-default-setup.ts       |  46 +++++
+ .../src/utils/worktree-default-setup.ts       |  56 ++++++
  packages/server/src/utils/worktree.ts         |   4 +-
  .../public/schemas/paseo.config.v1.json       |   6 +
- 23 files changed, 406 insertions(+), 1 deletion(-)
+ 23 files changed, 418 insertions(+), 1 deletion(-)
  create mode 100644 packages/app/src/screens/settings/worktree-default-setup.tsx
  create mode 100644 packages/server/src/utils/worktree-default-setup.test.ts
  create mode 100644 packages/server/src/utils/worktree-default-setup.ts
 
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index c2ffa0179dd2e5df8d016f2686cf3a1f903369cf..2720f2b22830f628f478c008ce49ae5822142040 100644
+index 554edfe612084467b434337d508f9bfa27355afb..a30cdb3977571ca770bef9dad2fc4cf10582b0aa 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -2787,6 +2787,7 @@ export const ar: TranslationResources = {
+@@ -2859,6 +2859,7 @@ export const ar: TranslationResources = {
        },
        workspaces: {
          unavailable: "Connect to this host to manage workspaces",
@@ -63,10 +63,10 @@ index c2ffa0179dd2e5df8d016f2686cf3a1f903369cf..2720f2b22830f628f478c008ce49ae58
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index b34c88482471e3d2e8c3ab0afa47fc4fbb08bb19..be298be2474a5f78bfdc5668c7872887a0bb19c8 100644
+index fbc3286a258ebc53e4d6e5dd0bfb10612e6755e5..c1d01ba0216d065c7356fc5545530f2af98faa16 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -2884,6 +2884,16 @@ export const en = {
+@@ -2957,6 +2957,16 @@ export const en = {
        },
        workspaces: {
          unavailable: "Connect to this host to manage workspaces",
@@ -84,10 +84,10 @@ index b34c88482471e3d2e8c3ab0afa47fc4fbb08bb19..be298be2474a5f78bfdc5668c7872887
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 1399ddc96a4e84874badcde0d30e7cd0f20ed5c1..bfb574d8d6c1cf6a15bc5155a61be7bf75d4198f 100644
+index 4bcc80a7dcc9998e4dbfd6739c8c8d5efea29027..70220438995bda74f140b7c2a470b4cad06690ab 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -2809,6 +2809,7 @@ export const es: TranslationResources = {
+@@ -2883,6 +2883,7 @@ export const es: TranslationResources = {
        },
        workspaces: {
          unavailable: "Connect to this host to manage workspaces",
@@ -96,10 +96,10 @@ index 1399ddc96a4e84874badcde0d30e7cd0f20ed5c1..bfb574d8d6c1cf6a15bc5155a61be7bf
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index f7b075c0de5658cbe76722b0c3762474f5251041..730bc1ccd7a142229123ff4d84129857ab927874 100644
+index 6aa6942a0285054781840c5dae1ba41c24919aa0..91287cee016947e562f8a2067ea1ed847b96cc2a 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -2812,6 +2812,7 @@ export const fr: TranslationResources = {
+@@ -2887,6 +2887,7 @@ export const fr: TranslationResources = {
        },
        workspaces: {
          unavailable: "Connectez-vous à cet hôte pour gérer les espaces de travail",
@@ -108,10 +108,10 @@ index f7b075c0de5658cbe76722b0c3762474f5251041..730bc1ccd7a142229123ff4d84129857
        terminalProfiles: {
          unavailable: "Connectez-vous à cet hôte pour gérer les profils de terminal",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 83c08bab59238bd4765240548d0c9a9d76ab2d67..1a22bea4bbfcc8f191e98cc8e473cb1647b9bd2d 100644
+index d13d95e947207d44b5f3dfb42c18db4dd0653784..b114634b86c62efb5b81efece0d45ce73290d73c 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -2776,6 +2776,7 @@ export const ja: TranslationResources = {
+@@ -2851,6 +2851,7 @@ export const ja: TranslationResources = {
        },
        workspaces: {
          unavailable: "ワークスペースを管理するにはこのホストに接続してください",
@@ -120,10 +120,10 @@ index 83c08bab59238bd4765240548d0c9a9d76ab2d67..1a22bea4bbfcc8f191e98cc8e473cb16
        terminalProfiles: {
          unavailable: "ターミナルプロファイルを管理するにはこのホストに接続してください",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index a37460910d44acce6f89fee44aee57afe463b89b..0c4da74d22dab6b181f01e1d2e884af6e7b15e85 100644
+index 9204efdf65b3fe95b695f923794f1d8eefd74dd0..350a648ad2f32cba2d666cd5e754573cfb24393f 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -2764,6 +2764,7 @@ export const ko: TranslationResources = {
+@@ -2837,6 +2837,7 @@ export const ko: TranslationResources = {
        },
        workspaces: {
          unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
@@ -132,10 +132,10 @@ index a37460910d44acce6f89fee44aee57afe463b89b..0c4da74d22dab6b181f01e1d2e884af6
        terminalProfiles: {
          unavailable: "터미널 프로필을 관리하려면 이 호스트에 연결하세요",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 28850e0d4a53e901e2d90db61650d15675ae73ab..df25fc0ac149f172e56cec300051778ec3abd377 100644
+index d2fa8b16033e298986895c0a7851a53130583f9e..db550ce10bb2f1be92f7385ae90b9c8fc3ef4a19 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -2791,6 +2791,7 @@ export const ptBR: TranslationResources = {
+@@ -2864,6 +2864,7 @@ export const ptBR: TranslationResources = {
        },
        workspaces: {
          unavailable: "Conecte-se a este host para gerenciar workspaces",
@@ -144,10 +144,10 @@ index 28850e0d4a53e901e2d90db61650d15675ae73ab..df25fc0ac149f172e56cec300051778e
        terminalProfiles: {
          unavailable: "Conecte-se a este host para gerenciar perfis de terminal",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 7e5dc1f6f3f8e18f9578b6abc146171e8a9451a9..40360bc33ee07749b2e5a9b5dd4b7612157aa5a2 100644
+index acd08c9494ab63709dea41b9aa2eaab140fb030f..9d82aefc8e390c838ffc94ae64564ca7a27897bd 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -2801,6 +2801,7 @@ export const ru: TranslationResources = {
+@@ -2875,6 +2875,7 @@ export const ru: TranslationResources = {
        },
        workspaces: {
          unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
@@ -156,10 +156,10 @@ index 7e5dc1f6f3f8e18f9578b6abc146171e8a9451a9..40360bc33ee07749b2e5a9b5dd4b7612
        terminalProfiles: {
          unavailable: "Подключитесь к этому хосту, чтобы управлять профилями терминала",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index ea6aaf0d7fc2b337b508fd81bf3accf5e94b73b4..88f466755040a0d62a4a6692d4f607ef4cce5fbf 100644
+index 5251c321f3c00d6e6d3d1b2dcdd9d41facd959f1..b61fad78c00f75ce758c85e7a0b4705738457979 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -2722,6 +2722,7 @@ export const zhCN: TranslationResources = {
+@@ -2793,6 +2793,7 @@ export const zhCN: TranslationResources = {
        },
        workspaces: {
          unavailable: "连接到这个 Host 以管理 Workspace",
@@ -168,10 +168,10 @@ index ea6aaf0d7fc2b337b508fd81bf3accf5e94b73b4..88f466755040a0d62a4a6692d4f607ef
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/screens/project-settings-screen.tsx b/packages/app/src/screens/project-settings-screen.tsx
-index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b99584291eeec07c 100644
+index ae6f31fef1172054bbf707303308259090f635c1..f1655480f648a2de3304d7b5b1f2a5f60bd851d0 100644
 --- a/packages/app/src/screens/project-settings-screen.tsx
 +++ b/packages/app/src/screens/project-settings-screen.tsx
-@@ -30,6 +30,7 @@ import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+@@ -29,6 +29,7 @@ import { EditingTextInput as TextInput } from "@/components/ui/text-input";
  import { SettingsTextAreaCard } from "@/components/settings-textarea";
  import { SettingsGroup } from "@/components/settings/headings/settings-group";
  import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -179,7 +179,7 @@ index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b9958429
  import { settingsStyles } from "@/styles/settings";
  import { useProjects } from "@/hooks/use-projects";
  import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
-@@ -392,6 +393,7 @@ function renderContent({
+@@ -389,6 +390,7 @@ function renderContent({
        revision={loadedRevision}
        hasUncommittedWorktreeSetupChanges={hasUncommittedWorktreeSetupChanges}
        repoRoot={selectedHost.repoRoot}
@@ -187,7 +187,7 @@ index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b9958429
        queryKey={queryKey}
        client={client}
        onReload={onReload}
-@@ -473,6 +475,7 @@ interface ProjectConfigFormProps {
+@@ -470,6 +472,7 @@ interface ProjectConfigFormProps {
    revision: PaseoConfigRevision | null;
    hasUncommittedWorktreeSetupChanges: boolean;
    repoRoot: string;
@@ -195,7 +195,7 @@ index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b9958429
    queryKey: readonly [string, string, string];
    client: DaemonClient;
    onReload: () => void;
-@@ -483,6 +486,7 @@ function ProjectConfigForm({
+@@ -480,6 +483,7 @@ function ProjectConfigForm({
    revision,
    hasUncommittedWorktreeSetupChanges,
    repoRoot,
@@ -203,7 +203,7 @@ index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b9958429
    queryKey,
    client,
    onReload,
-@@ -715,6 +719,7 @@ function ProjectConfigForm({
+@@ -708,6 +712,7 @@ function ProjectConfigForm({
              onChangeText={handleSetupChange}
              placeholder="npm install"
            />
@@ -212,18 +212,18 @@ index a23784f5dcc79d82cdb5ac33bb84d59cfd3c823e..af12026c95fd1097069cc455b9958429
  
          <SettingsSection
 diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
-index 4761e3948cd420672abb10c72a80d19e1cebeedd..430adcfdc56306eac7772489638730f694b666b4 100644
+index c0a1d9dbc1e9638ae98f47b71afbc0abdbc24a16..ed75fbfd91531af83eb6d611b8e192b56fbe89ff 100644
 --- a/packages/app/src/screens/settings/host-page.tsx
 +++ b/packages/app/src/screens/settings/host-page.tsx
-@@ -67,6 +67,7 @@ import { useProviderIcon } from "@/components/provider-icons";
- import { BrowserToolsOptInCard } from "./browser-tools-card";
+@@ -69,6 +69,7 @@ import { PaseoToolsCard } from "./paseo-tools-card";
+ import { RestartRecoveryCard } from "./restart-recovery-card";
  import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
  import { ProviderDefaultModeCard } from "./provider-default-mode-card";
 +import { WorktreeDefaultSetupCard } from "./worktree-default-setup";
  import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
  
  const ThemedRestart = withUnistyles(RotateCw);
-@@ -321,6 +322,7 @@ export function HostWorkspacesPage({ serverId }: { serverId: string }) {
+@@ -324,6 +325,7 @@ export function HostWorkspacesPage({ serverId }: { serverId: string }) {
        {isConnected ? (
          <SettingsSection title={t("settings.hostSections.workspaces")}>
            <AutoArchiveMergedWorkspacesCard serverId={serverId} />
@@ -400,10 +400,10 @@ index 0000000000000000000000000000000000000000..af3a2d3827e7fa97734de086e63a8b3d
 +  },
 +}));
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index 492ff90108af6eab3044380eff1e43a801b66f29..fa0c187191803b6453e6e0276898419b6d3d5cef 100644
+index ddb08ad8259d023bdfb2c392ad11cd7f18a4c6da..74121adac03ba746081da6171de03d64dd48086f 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
-@@ -248,6 +248,9 @@ export const MutableDaemonConfigSchema = z
+@@ -253,6 +253,9 @@ export const MutableDaemonConfigSchema = z
      // COMPAT(speechSettings): added in v0.12.0, optional because older daemons omit it.
      features: SpeechSettingsSchema.optional(),
      envOverrides: z.record(z.string(), z.string()).optional(),
@@ -413,7 +413,7 @@ index 492ff90108af6eab3044380eff1e43a801b66f29..fa0c187191803b6453e6e0276898419b
    })
    .passthrough();
  
-@@ -270,6 +273,7 @@ export const MutableDaemonConfigPatchSchema = z
+@@ -278,6 +281,7 @@ export const MutableDaemonConfigPatchSchema = z
      pluginsEnabled: z.boolean().optional(),
      plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
      features: SpeechSettingsPatchSchema.optional(),
@@ -421,7 +421,7 @@ index 492ff90108af6eab3044380eff1e43a801b66f29..fa0c187191803b6453e6e0276898419b
    })
    .partial()
    .passthrough();
-@@ -3847,6 +3851,8 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -3888,6 +3892,8 @@ export const ServerInfoStatusPayloadSchema = z
          agentConfigApply: z.boolean().optional(),
          // COMPAT(providerDefaultMode): added in v0.14.0, remove gate after 2027-05-02.
          providerDefaultMode: z.boolean().optional(),
@@ -431,18 +431,21 @@ index 492ff90108af6eab3044380eff1e43a801b66f29..fa0c187191803b6453e6e0276898419b
        .optional(),
    })
 diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
-index 83ef2acb8356b66eada2e4b494eecb05a0b35c62..1a3a289f65500dd0ec4e0ec08ce9a8885d5bf213 100644
+index cf62c525ba7495561616650275167ba982df1805..9c24b9c6685d63c34719aff9c3865c2ca4cadb08 100644
 --- a/packages/server/src/server/bootstrap.ts
 +++ b/packages/server/src/server/bootstrap.ts
-@@ -228,6 +228,7 @@ import { WorkspaceAutoName } from "./workspace-auto-name.js";
+@@ -230,6 +230,10 @@ import { WorkspaceAutoName } from "./workspace-auto-name.js";
  import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
  import { workspaceIdsOnCheckout } from "./workspace-directory.js";
  import { configureGitProcessPolicy } from "../utils/run-git-command.js";
-+import { attachWorktreeDefaultSetup } from "../utils/worktree-default-setup.js";
++import {
++  attachWorktreeDefaultSetup,
++  worktreeDefaultSetupField,
++} from "../utils/worktree-default-setup.js";
  import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
  import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
  import {
-@@ -471,6 +472,7 @@ export interface PaseoDaemonConfig {
+@@ -478,6 +482,7 @@ export interface PaseoDaemonConfig {
      }>;
    };
    providerOverrides?: Record<string, ProviderOverride>;
@@ -450,17 +453,15 @@ index 83ef2acb8356b66eada2e4b494eecb05a0b35c62..1a3a289f65500dd0ec4e0ec08ce9a888
    log?: PersistedConfig["log"];
    onLifecycleIntent?: (intent: DaemonLifecycleIntent) => void;
    pushNotificationSender?: PushNotificationSender;
-@@ -595,6 +597,9 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
+@@ -606,6 +611,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
      pluginsEnabled: config.pluginsEnabled ?? false,
      plugins: config.plugins ?? {},
      skills: { selection: config.skillSelection },
-+    ...(config.worktreeDefaultSetup !== undefined
-+      ? { worktreeDefaultSetup: config.worktreeDefaultSetup }
-+      : {}),
++    ...worktreeDefaultSetupField(config.worktreeDefaultSetup),
    };
  
    if (config.terminalProfiles !== undefined) {
-@@ -654,6 +659,7 @@ export async function createPaseoDaemon(
+@@ -665,6 +671,7 @@ export async function createPaseoDaemon(
        },
      },
    });
@@ -469,10 +470,10 @@ index 83ef2acb8356b66eada2e4b494eecb05a0b35c62..1a3a289f65500dd0ec4e0ec08ce9a888
    void orchestrationSkills.autoUpdate().catch((error) => {
      logger.error({ err: error }, "Failed to maintain orchestration skills at startup");
 diff --git a/packages/server/src/server/config.ts b/packages/server/src/server/config.ts
-index add78aa7f58ef8e974d5c49421b8f8e6cae78ffd..d18b575468a8a3f9d3ce66d0c61d6f042a151593 100644
+index 5340bbbcd3be21b717c8f958d7d2d8551e7e8d9f..699eed30a35232ef96659fc6803d9ea9cb5e4b03 100644
 --- a/packages/server/src/server/config.ts
 +++ b/packages/server/src/server/config.ts
-@@ -527,6 +527,12 @@ function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedCo
+@@ -531,6 +531,12 @@ function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedCo
    return persisted.daemon?.browserTools?.enabled ?? false;
  }
  
@@ -485,7 +486,7 @@ index add78aa7f58ef8e974d5c49421b8f8e6cae78ffd..d18b575468a8a3f9d3ce66d0c61d6f04
  /**
   * Both profile lists stay `undefined` when absent rather than defaulting to an
   * empty array: for terminal profiles that is what selects the built-in
-@@ -593,6 +599,7 @@ export type ResolvedDaemonSettings = Pick<
+@@ -601,6 +607,7 @@ export type ResolvedDaemonSettings = Pick<
    | "providerCatalogRefreshTimeoutMs"
    | "metadataGeneration"
    | "providerOverrides"
@@ -493,7 +494,7 @@ index add78aa7f58ef8e974d5c49421b8f8e6cae78ffd..d18b575468a8a3f9d3ce66d0c61d6f04
  >;
  
  export function resolveConfigFromPersisted(
-@@ -682,6 +689,7 @@ export function resolveReloadableConfig(
+@@ -691,6 +698,7 @@ export function resolveReloadableConfig(
      providerOverrides: extractProviderOverrides(
        persisted.agents?.providers as Record<string, unknown> | undefined,
      ),
@@ -502,10 +503,10 @@ index add78aa7f58ef8e974d5c49421b8f8e6cae78ffd..d18b575468a8a3f9d3ce66d0c61d6f04
    };
  }
 diff --git a/packages/server/src/server/daemon-config-store.test.ts b/packages/server/src/server/daemon-config-store.test.ts
-index 4fc28d78d554fd5a1ecbf4340195e2fb9e709861..e3e4f586cd6fb8bc70a40aa5d47c3146847b727b 100644
+index 28775e9c9cfbd20f4c1b7b8fa6dfe43ca35a7072..be59d828bb18b43478e46bf66c9e06300d6254c3 100644
 --- a/packages/server/src/server/daemon-config-store.test.ts
 +++ b/packages/server/src/server/daemon-config-store.test.ts
-@@ -811,6 +811,42 @@ describe("DaemonConfigStore", () => {
+@@ -816,6 +816,42 @@ describe("DaemonConfigStore", () => {
      expect(loadConfig(paseoHome, { env: {} }).providerOverrides?.claude?.defaultModeId).toBeNull();
    });
  
@@ -549,18 +550,21 @@ index 4fc28d78d554fd5a1ecbf4340195e2fb9e709861..e3e4f586cd6fb8bc70a40aa5d47c3146
      const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
      tempDirs.push(paseoHome);
 diff --git a/packages/server/src/server/daemon-config-store.ts b/packages/server/src/server/daemon-config-store.ts
-index 57b9a6b9161f21ac69d649bb70b77deffe860401..1fdfffdf0f59362f735f4f9886be4820a2877505 100644
+index e83874235f462b2c7ffae3c5a7b4b7f7454d8940..db0f86f3757059d2299069bd140ec94c2d22de1e 100644
 --- a/packages/server/src/server/daemon-config-store.ts
 +++ b/packages/server/src/server/daemon-config-store.ts
-@@ -12,6 +12,7 @@ import {
+@@ -12,6 +12,10 @@ import {
  import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
  import type { SpeechSettingsPatch } from "@getpaseo/protocol/speech/rpc-schemas";
  import { mergeSpeechSettingsPatch, type SpeechSettingsOwner } from "./speech/speech-settings.js";
-+import { mergeWorktreeDefaultSetup } from "../utils/worktree-default-setup.js";
++import {
++  mergeWorktreeDefaultSetup,
++  worktreeDefaultSetupField,
++} from "../utils/worktree-default-setup.js";
  
  export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
  
-@@ -36,6 +37,7 @@ interface SupportedMutableConfigPatch {
+@@ -39,6 +43,7 @@ interface SupportedMutableConfigPatch {
    pluginsEnabled?: boolean;
    plugins?: MutableDaemonConfig["plugins"];
    features?: SpeechSettingsPatch;
@@ -568,7 +572,7 @@ index 57b9a6b9161f21ac69d649bb70b77deffe860401..1fdfffdf0f59362f735f4f9886be4820
  }
  
  const SPEECH_PERSISTED_PATHS = ["features.dictation", "features.voiceMode"];
-@@ -198,6 +200,7 @@ const RELOADABLE_PATHS = [
+@@ -204,6 +209,7 @@ const RELOADABLE_PATHS = [
    "agents.metadataGeneration",
    "agents.skills.selection",
    "pluginsEnabled",
@@ -576,7 +580,7 @@ index 57b9a6b9161f21ac69d649bb70b77deffe860401..1fdfffdf0f59362f735f4f9886be4820
  ] as const;
  
  const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
-@@ -223,6 +226,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
+@@ -232,6 +238,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
    ["agents.metadataGeneration", "metadataGeneration"],
    ["agents.skills.selection", "skills.selection"],
    ["pluginsEnabled", "pluginsEnabled"],
@@ -584,17 +588,15 @@ index 57b9a6b9161f21ac69d649bb70b77deffe860401..1fdfffdf0f59362f735f4f9886be4820
  ]);
  
  function pathBelongsTo(path: string, owner: string): boolean {
-@@ -303,6 +307,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
+@@ -315,6 +322,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
      ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
      ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
      ...(patch.features !== undefined ? { features: patch.features } : {}),
-+    ...(patch.worktreeDefaultSetup !== undefined
-+      ? { worktreeDefaultSetup: patch.worktreeDefaultSetup }
-+      : {}),
++    ...worktreeDefaultSetupField(patch.worktreeDefaultSetup),
    };
  }
  
-@@ -688,6 +695,9 @@ function mergeMutablePatchIntoPersistedConfig(params: {
+@@ -700,6 +708,9 @@ function mergeMutablePatchIntoPersistedConfig(params: {
      ...withSpeech,
      ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
      ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
@@ -605,7 +607,7 @@ index 57b9a6b9161f21ac69d649bb70b77deffe860401..1fdfffdf0f59362f735f4f9886be4820
      ...(agents ? { agents } : { agents: undefined }),
    } as PersistedConfig;
 diff --git a/packages/server/src/server/persisted-config.ts b/packages/server/src/server/persisted-config.ts
-index 51bfb3d3a4e06a738e86fd2a4c04c5f8e29ee58e..94346dca662b0008e24817779d1a6c6cb0c8e960 100644
+index 3138ec9132c2fb62d1927519ac946131eb6bde94..44c933fc15941c1938c7c8bcd6827352c7bb8e63 100644
 --- a/packages/server/src/server/persisted-config.ts
 +++ b/packages/server/src/server/persisted-config.ts
 @@ -71,6 +71,7 @@ const WorktreesConfigSchema = z
@@ -617,10 +619,10 @@ index 51bfb3d3a4e06a738e86fd2a4c04c5f8e29ee58e..94346dca662b0008e24817779d1a6c6c
    .strict();
  
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index e628b872eb60a9ba71f3e4aaa62583c7b6fb71b1..a6f492502ce1a09dffc902681e5c12f7b944eceb 100644
+index 6d73b6e52fe5af1476cb27c02410249e3a11e103..693680eb08438bb14818d9522dd4ca2e0cede029 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2119,6 +2119,8 @@ export class VoiceAssistantWebSocketServer {
+@@ -2183,6 +2183,8 @@ export class VoiceAssistantWebSocketServer {
          agentConfigApply: true,
          // COMPAT(providerDefaultMode): added in v0.14.0, remove gate after 2027-05-02.
          providerDefaultMode: true,
@@ -732,10 +734,10 @@ index 0000000000000000000000000000000000000000..48fbfa05179fe9a014749c29bbf70d67
 +});
 diff --git a/packages/server/src/utils/worktree-default-setup.ts b/packages/server/src/utils/worktree-default-setup.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..cb239e39bcfcf737c3094f1b14c8a2a5be918e66
+index 0000000000000000000000000000000000000000..cd5dfc6e898c8ec7f37c0e0df2a58efd41514ada
 --- /dev/null
 +++ b/packages/server/src/utils/worktree-default-setup.ts
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,56 @@
 +import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
 +import { normalizeLifecycleCommands } from "@getpaseo/protocol/paseo-config-schema";
 +import type { PersistedConfig } from "../server/persisted-config.js";
@@ -782,8 +784,18 @@ index 0000000000000000000000000000000000000000..cb239e39bcfcf737c3094f1b14c8a2a5
 +  const next = defaultSetup === null ? rest : { ...rest, defaultSetup };
 +  return Object.keys(next).length > 0 ? next : undefined;
 +}
++
++/**
++ * The `worktreeDefaultSetup` field, or nothing, to spread into a config or patch object. A helper so
++ * the large config builders that carry it stay one branch simpler.
++ */
++export function worktreeDefaultSetupField<T extends string[] | null>(
++  value: T | undefined,
++): { worktreeDefaultSetup?: T } {
++  return value !== undefined ? { worktreeDefaultSetup: value } : {};
++}
 diff --git a/packages/server/src/utils/worktree.ts b/packages/server/src/utils/worktree.ts
-index 3ddc71b4726fd0f428a13bdda8f0f3d439561067..7e8a91fda3b87b684d2c9dbae1e2220fb38ee0d6 100644
+index 2fc8bc05db73d4bbf8ecdcf91a44be7cfdf584c1..a9c8bdec956bcbf500599ae0edae33d700463a52 100644
 --- a/packages/server/src/utils/worktree.ts
 +++ b/packages/server/src/utils/worktree.ts
 @@ -12,6 +12,7 @@ import {
@@ -794,7 +806,7 @@ index 3ddc71b4726fd0f428a13bdda8f0f3d439561067..7e8a91fda3b87b684d2c9dbae1e2220f
  export {
    PaseoConfigRawSchema,
    PaseoLifecycleCommandRawSchema,
-@@ -270,7 +271,8 @@ async function readPaseoConfigOrThrow(repoRoot: string): Promise<PaseoConfig | n
+@@ -273,7 +274,8 @@ async function readPaseoConfigOrThrow(repoRoot: string): Promise<PaseoConfig | n
  }
  
  export async function getWorktreeSetupCommands(repoRoot: string): Promise<string[]> {
@@ -805,10 +817,10 @@ index 3ddc71b4726fd0f428a13bdda8f0f3d439561067..7e8a91fda3b87b684d2c9dbae1e2220f
  
  export async function getWorktreeTeardownCommands(repoRoot: string): Promise<string[]> {
 diff --git a/packages/website/public/schemas/paseo.config.v1.json b/packages/website/public/schemas/paseo.config.v1.json
-index aac1bce4085baf9421e9a4c82c73e47949c09f0f..17fb1ed952b8fe9b066393a7c5489273222b013d 100644
+index 36b27169e485667ed3b520b519bcfb043f1fe931..a69179cd352e9c3e17a559fc7d80e57e627645d7 100644
 --- a/packages/website/public/schemas/paseo.config.v1.json
 +++ b/packages/website/public/schemas/paseo.config.v1.json
-@@ -338,6 +338,12 @@
+@@ -346,6 +346,12 @@
              }
            },
            "additionalProperties": false

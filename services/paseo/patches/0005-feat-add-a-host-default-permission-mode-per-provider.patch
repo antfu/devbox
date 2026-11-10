@@ -152,10 +152,10 @@ index 1522ce082edb2a68a14f04622ec617b7572a0c05..7c0562378e7e126a98219fdad15de01b
        resolution,
        selectableProviderDefinitionMap,
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 81050ae5ee237ee8768e0fb093ff584070ed3176..c2ffa0179dd2e5df8d016f2686cf3a1f903369cf 100644
+index 098a49ae52f785e40e3b75112b232aad154412d6..554edfe612084467b434337d508f9bfa27355afb 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -2783,6 +2783,7 @@ export const ar: TranslationResources = {
+@@ -2855,6 +2855,7 @@ export const ar: TranslationResources = {
            hint: "تحرير الذاكرة بعد ساعة من الخمول.",
            info: "يوقف عملية الوكيل مع الاحتفاظ بمحادثته. أرسل رسالة لاستئنافها.\n\nيمنع العمل النشط والإشعارات المعلّقة وفحوصات أمان المزوّد عملية التنظيف.",
          },
@@ -164,10 +164,10 @@ index 81050ae5ee237ee8768e0fb093ff584070ed3176..c2ffa0179dd2e5df8d016f2686cf3a1f
        workspaces: {
          unavailable: "Connect to this host to manage workspaces",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index 655f041ecd1c77a5a3d73a0a0b5895a05ce09ddf..b34c88482471e3d2e8c3ab0afa47fc4fbb08bb19 100644
+index ae9e9347e5c920fa44c0d5b24938d49b1e5c5a35..fbc3286a258ebc53e4d6e5dd0bfb10612e6755e5 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -2875,6 +2875,12 @@ export const en = {
+@@ -2948,6 +2948,12 @@ export const en = {
            hint: "Free up memory after an hour of inactivity.",
            info: "Stops the agent's process while keeping its conversation. Send a message to resume.\n\nActive work, pending notifications, and provider safety checks prevent cleanup.",
          },
@@ -181,10 +181,10 @@ index 655f041ecd1c77a5a3d73a0a0b5895a05ce09ddf..b34c88482471e3d2e8c3ab0afa47fc4f
        workspaces: {
          unavailable: "Connect to this host to manage workspaces",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index f7e3472134c0e13d9498ef2ef6d47eeb78a37325..1399ddc96a4e84874badcde0d30e7cd0f20ed5c1 100644
+index 3d28cda81f0d5ff92d99c97cf8af4d3dad859aaa..4bcc80a7dcc9998e4dbfd6739c8c8d5efea29027 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -2805,6 +2805,7 @@ export const es: TranslationResources = {
+@@ -2879,6 +2879,7 @@ export const es: TranslationResources = {
            hint: "Libera memoria tras una hora de inactividad.",
            info: "Detiene el proceso del agente y conserva la conversación. Envía un mensaje para reanudarla.\n\nEl trabajo activo, las notificaciones pendientes y las comprobaciones de seguridad del proveedor impiden la limpieza.",
          },
@@ -193,10 +193,10 @@ index f7e3472134c0e13d9498ef2ef6d47eeb78a37325..1399ddc96a4e84874badcde0d30e7cd0
        workspaces: {
          unavailable: "Connect to this host to manage workspaces",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 86ff05375010f16f97cc85509a00f7b02c6fc651..f7b075c0de5658cbe76722b0c3762474f5251041 100644
+index da19c643ad120ff7bf2fa6f2430e090ec67c2951..6aa6942a0285054781840c5dae1ba41c24919aa0 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -2808,6 +2808,7 @@ export const fr: TranslationResources = {
+@@ -2883,6 +2883,7 @@ export const fr: TranslationResources = {
            hint: "Libère de la mémoire après une heure d’inactivité.",
            info: "Arrête le processus de l’agent tout en conservant sa conversation. Envoyez un message pour la reprendre.\n\nLe travail en cours, les notifications en attente et les vérifications de sécurité du fournisseur empêchent le nettoyage.",
          },
@@ -205,10 +205,10 @@ index 86ff05375010f16f97cc85509a00f7b02c6fc651..f7b075c0de5658cbe76722b0c3762474
        workspaces: {
          unavailable: "Connectez-vous à cet hôte pour gérer les espaces de travail",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 5a4b594a249a7abb130a8a3e0ab646e82d43ed88..83c08bab59238bd4765240548d0c9a9d76ab2d67 100644
+index 73e14a0b68fa42ffd96faf57da89afe08546a34a..d13d95e947207d44b5f3dfb42c18db4dd0653784 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -2772,6 +2772,7 @@ export const ja: TranslationResources = {
+@@ -2847,6 +2847,7 @@ export const ja: TranslationResources = {
            hint: "1 時間のアイドル状態の後にメモリを解放します。",
            info: "会話を保持したままエージェントのプロセスを停止します。メッセージを送信すると再開します。\n\n実行中の作業、保留中の通知、プロバイダーの安全性チェックがある場合は解放しません。",
          },
@@ -217,10 +217,10 @@ index 5a4b594a249a7abb130a8a3e0ab646e82d43ed88..83c08bab59238bd4765240548d0c9a9d
        workspaces: {
          unavailable: "ワークスペースを管理するにはこのホストに接続してください",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index 242324dd20aba346b9af88c4960c09ebc493cdec..a37460910d44acce6f89fee44aee57afe463b89b 100644
+index 117d5d68bc90c88426e996a1f8249e570c6d1f75..9204efdf65b3fe95b695f923794f1d8eefd74dd0 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -2760,6 +2760,7 @@ export const ko: TranslationResources = {
+@@ -2833,6 +2833,7 @@ export const ko: TranslationResources = {
            hint: "1시간 동안 활동이 없으면 메모리를 확보합니다.",
            info: "대화를 유지하면서 에이전트 프로세스를 중지합니다. 메시지를 보내면 다시 이어집니다.\n\n진행 중인 작업, 대기 중인 알림, 프로바이더 안전 검사가 있으면 정리하지 않습니다.",
          },
@@ -229,10 +229,10 @@ index 242324dd20aba346b9af88c4960c09ebc493cdec..a37460910d44acce6f89fee44aee57af
        workspaces: {
          unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index bbef1d73c5cdb46d9ddc7dad558ba410fae003f7..28850e0d4a53e901e2d90db61650d15675ae73ab 100644
+index 4460039b7f950a71664a046671c8ff344b003d84..d2fa8b16033e298986895c0a7851a53130583f9e 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -2787,6 +2787,7 @@ export const ptBR: TranslationResources = {
+@@ -2860,6 +2860,7 @@ export const ptBR: TranslationResources = {
            hint: "Libera memória após uma hora de inatividade.",
            info: "Encerra o processo do agente e mantém a conversa. Envie uma mensagem para retomar.\n\nTrabalho ativo, notificações pendentes e verificações de segurança do provedor impedem a limpeza.",
          },
@@ -241,10 +241,10 @@ index bbef1d73c5cdb46d9ddc7dad558ba410fae003f7..28850e0d4a53e901e2d90db61650d156
        workspaces: {
          unavailable: "Conecte-se a este host para gerenciar workspaces",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index aa06a9b919d185b5d12cd312479ac759156f5ec7..7e5dc1f6f3f8e18f9578b6abc146171e8a9451a9 100644
+index 012e6eb47bcfd55887d0f40c1b04692be780be1b..acd08c9494ab63709dea41b9aa2eaab140fb030f 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -2797,6 +2797,7 @@ export const ru: TranslationResources = {
+@@ -2871,6 +2871,7 @@ export const ru: TranslationResources = {
            hint: "Освобождает память после часа бездействия.",
            info: "Останавливает процесс агента, сохраняя разговор. Отправьте сообщение, чтобы продолжить.\n\nАктивная работа, ожидающие уведомления и проверки безопасности провайдера предотвращают очистку.",
          },
@@ -253,10 +253,10 @@ index aa06a9b919d185b5d12cd312479ac759156f5ec7..7e5dc1f6f3f8e18f9578b6abc146171e
        workspaces: {
          unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index f5d0c44eeec98d46ead2bd319d4c483548e9a1c7..ea6aaf0d7fc2b337b508fd81bf3accf5e94b73b4 100644
+index 1c6106553ecc03f26d229e0b60addd4334e358db..5251c321f3c00d6e6d3d1b2dcdd9d41facd959f1 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -2718,6 +2718,7 @@ export const zhCN: TranslationResources = {
+@@ -2789,6 +2789,7 @@ export const zhCN: TranslationResources = {
            hint: "空闲一小时后释放内存。",
            info: "停止 Agent 进程，但保留对话。发送消息即可继续。\n\n进行中的工作、待处理的通知和 Provider 安全检查会阻止清理。",
          },
@@ -427,20 +427,20 @@ index 0000000000000000000000000000000000000000..49f25b1527af1a7f0fb33e9fba213cac
 +  return { ...preferences, providerPreferences };
 +}
 diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
-index 0fb6fb5aa9306723cc3f453c8c63bb83a2384efc..4761e3948cd420672abb10c72a80d19e1cebeedd 100644
+index 9c0c95248840b9337d43e430adfee33216e1dcbb..c0a1d9dbc1e9638ae98f47b71afbc0abdbc24a16 100644
 --- a/packages/app/src/screens/settings/host-page.tsx
 +++ b/packages/app/src/screens/settings/host-page.tsx
-@@ -66,6 +66,7 @@ import type { Theme } from "@/styles/theme";
- import { useProviderIcon } from "@/components/provider-icons";
- import { BrowserToolsOptInCard } from "./browser-tools-card";
+@@ -68,6 +68,7 @@ import { BrowserToolsOptInCard } from "./browser-tools-card";
+ import { PaseoToolsCard } from "./paseo-tools-card";
+ import { RestartRecoveryCard } from "./restart-recovery-card";
  import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
 +import { ProviderDefaultModeCard } from "./provider-default-mode-card";
  import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
  
  const ThemedRestart = withUnistyles(RotateCw);
-@@ -293,6 +294,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
-           <BrowserToolsOptInCard serverId={serverId} />
+@@ -296,6 +297,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
            <AppendSystemPromptCard serverId={serverId} />
+           <RestartRecoveryCard serverId={serverId} />
            <IdleRuntimeCleanupCard serverId={serverId} />
 +          <ProviderDefaultModeCard serverId={serverId} />
          </SettingsSection>
@@ -605,7 +605,7 @@ index 0000000000000000000000000000000000000000..ab54e3158c511e6b4b6b2e999e324131
 +  );
 +}
 diff --git a/packages/protocol/src/agent-types.ts b/packages/protocol/src/agent-types.ts
-index c7fffe8ce97d73d6fa35ba1e160f33c95de10e0b..a0e6dd35124ea592babe39ae0e9032044e16ad72 100644
+index ca04655430e30f50dbf1777a5f8588c6c817b3c0..c2d20eea178160de05cadda25886b39f47beee2b 100644
 --- a/packages/protocol/src/agent-types.ts
 +++ b/packages/protocol/src/agent-types.ts
 @@ -127,6 +127,7 @@ export interface ProviderSnapshotEntry {
@@ -617,7 +617,7 @@ index c7fffe8ce97d73d6fa35ba1e160f33c95de10e0b..a0e6dd35124ea592babe39ae0e903204
  
  export interface AgentFeatureToggle {
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index 9ca1b899ce10f3f3b4e4abb3dda3c96c6266c4a3..492ff90108af6eab3044380eff1e43a801b66f29 100644
+index 201a13532fe27b73e348cf063bddb13d393c1457..ddb08ad8259d023bdfb2c392ad11cd7f18a4c6da 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
 @@ -172,6 +172,8 @@ const MutableDaemonProviderConfigSchema = z
@@ -629,7 +629,7 @@ index 9ca1b899ce10f3f3b4e4abb3dda3c96c6266c4a3..492ff90108af6eab3044380eff1e43a8
    })
    .passthrough();
  
-@@ -380,6 +382,9 @@ export const ProviderSnapshotEntrySchema = z.object({
+@@ -388,6 +390,9 @@ export const ProviderSnapshotEntrySchema = z.object({
    description: z.string().optional(),
    iconSvg: z.string().optional(),
    defaultModeId: z.string().nullable().optional(),
@@ -639,7 +639,7 @@ index 9ca1b899ce10f3f3b4e4abb3dda3c96c6266c4a3..492ff90108af6eab3044380eff1e43a8
  });
  
  export const CompactProviderSnapshotModelSchema = AgentModelDefinitionSchema.omit({
-@@ -3840,6 +3845,8 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -3881,6 +3886,8 @@ export const ServerInfoStatusPayloadSchema = z
          agentProfiles: z.boolean().optional(),
          // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
          agentConfigApply: z.boolean().optional(),
@@ -662,7 +662,7 @@ index c94f8ca965d6b2ce3475836e45d1c57a69bb944b..b61d2a6c8f49728c5bdee139cea7a40e
  
  const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi", "omp"] as const;
 diff --git a/packages/server/src/server/agent/agent-sdk-types.ts b/packages/server/src/server/agent/agent-sdk-types.ts
-index 507cfbceb88fe80c154e35f1a690ba8f00b65d5e..d9a67e1ebf8e430cac8cac1b101b18ea00aba084 100644
+index 903bbe5c99a3735d52c7cd811d85d044305402b8..7cb8d1451b0310ebeda174483cc19ea584501600 100644
 --- a/packages/server/src/server/agent/agent-sdk-types.ts
 +++ b/packages/server/src/server/agent/agent-sdk-types.ts
 @@ -137,6 +137,7 @@ export interface ProviderSnapshotEntry {
@@ -944,10 +944,10 @@ index b10a4f8e02db9fa8d3e9e49e8a78937cf93072c6..73d8b343662dc009586a7e18d0b79373
        const previous = target.snapshot;
        if (sameSnapshotRecords(previous.records, records)) continue;
 diff --git a/packages/server/src/server/daemon-config-store.test.ts b/packages/server/src/server/daemon-config-store.test.ts
-index e3b6f4889567da6c94f7f4f9e8d0e5ee6fe777a0..4fc28d78d554fd5a1ecbf4340195e2fb9e709861 100644
+index d9b2e941813208fe07397a898f07282f4c362ec2..28775e9c9cfbd20f4c1b7b8fa6dfe43ca35a7072 100644
 --- a/packages/server/src/server/daemon-config-store.test.ts
 +++ b/packages/server/src/server/daemon-config-store.test.ts
-@@ -779,6 +779,38 @@ describe("DaemonConfigStore", () => {
+@@ -784,6 +784,38 @@ describe("DaemonConfigStore", () => {
      });
    });
  
@@ -987,10 +987,10 @@ index e3b6f4889567da6c94f7f4f9e8d0e5ee6fe777a0..4fc28d78d554fd5a1ecbf4340195e2fb
      const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
      tempDirs.push(paseoHome);
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index 1f625d4503f0cc9fc2dfa3f2a2a522d98f8fc9dc..e628b872eb60a9ba71f3e4aaa62583c7b6fb71b1 100644
+index 5f43a5e3b27b62f3ca64b597f15ef4a4fcc797ce..6d73b6e52fe5af1476cb27c02410249e3a11e103 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2117,6 +2117,8 @@ export class VoiceAssistantWebSocketServer {
+@@ -2181,6 +2181,8 @@ export class VoiceAssistantWebSocketServer {
          agentProfiles: true,
          // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
          agentConfigApply: true,
@@ -1000,10 +1000,10 @@ index 1f625d4503f0cc9fc2dfa3f2a2a522d98f8fc9dc..e628b872eb60a9ba71f3e4aaa62583c7
      };
    }
 diff --git a/packages/website/public/schemas/paseo.config.v1.json b/packages/website/public/schemas/paseo.config.v1.json
-index c1c32ed20a4d5e6b882f1d67f2b1bd8b5e9fda17..aac1bce4085baf9421e9a4c82c73e47949c09f0f 100644
+index bae380d4c8a5510adb59cb6ba3be922a92e0435b..36b27169e485667ed3b520b519bcfb043f1fe931 100644
 --- a/packages/website/public/schemas/paseo.config.v1.json
 +++ b/packages/website/public/schemas/paseo.config.v1.json
-@@ -506,6 +506,17 @@
+@@ -514,6 +514,17 @@
                },
                "order": {
                  "type": "number"

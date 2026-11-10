@@ -22,7 +22,7 @@ Fork-Change: F-5
  delete mode 100644 packages/app/src/components/worktree-setup-callout-source.tsx
 
 diff --git a/packages/app/src/app/_layout.tsx b/packages/app/src/app/_layout.tsx
-index 083c6b21449930165ca0a1d488298a07db6cd3f1..a16233210a8613702d74736ef298180ba7213bed 100644
+index 29817847758e49ffaedb0b004b0eec20196846e3..35295aa53bdc044fff062618ad2add6efd6156f2 100644
 --- a/packages/app/src/app/_layout.tsx
 +++ b/packages/app/src/app/_layout.tsx
 @@ -30,7 +30,6 @@ import { CommandCenterProvider } from "@/command-center/provider";
@@ -33,7 +33,7 @@ index 083c6b21449930165ca0a1d488298a07db6cd3f1..a16233210a8613702d74736ef298180b
  import { DownloadToast } from "@/components/download-toast";
  import { QuittingOverlay } from "@/components/quitting-overlay";
  import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
-@@ -487,7 +486,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
+@@ -517,7 +516,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
          <RosettaCalloutSource />
          <UpdateCalloutSource />
          <LegacyAgentSkillsMigration />

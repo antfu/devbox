@@ -96,7 +96,7 @@ index fb2f98841e0ccefee8befa33fe6dbad39040fa78..ef8b174554c9ba937913749b9e343474
        ).toBeVisible({ timeout: 30_000 });
      } finally {
 diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
-index 333eb6822103c3b3b9e6c2a9b6f47d32a9f9b9c2..00506f15aefe5348bf389217a8f77435733dd646 100644
+index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6d0e377a1 100644
 --- a/packages/app/src/components/sidebar-workspace-list.tsx
 +++ b/packages/app/src/components/sidebar-workspace-list.tsx
 @@ -30,7 +30,7 @@ import {
@@ -190,7 +190,7 @@ index 333eb6822103c3b3b9e6c2a9b6f47d32a9f9b9c2..00506f15aefe5348bf389217a8f77435
  function ProjectHeaderRow({
    project,
    displayName,
-@@ -1795,15 +1727,6 @@ function ProjectBlock({
+@@ -1805,15 +1737,6 @@ function ProjectBlock({
            ) : null}
          </>
        );
@@ -206,7 +206,7 @@ index 333eb6822103c3b3b9e6c2a9b6f47d32a9f9b9c2..00506f15aefe5348bf389217a8f77435
      }
    }
  
-@@ -2572,51 +2495,6 @@ const styles = StyleSheet.create((theme) => ({
+@@ -2604,51 +2527,6 @@ const styles = StyleSheet.create((theme) => ({
      paddingBottom: theme.spacing[3],
    },
    workspaceListContainer: {},

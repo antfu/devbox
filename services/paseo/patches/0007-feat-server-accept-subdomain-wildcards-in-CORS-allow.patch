@@ -22,10 +22,10 @@ Fork-Change: F-8
  create mode 100644 packages/server/src/server/cors-origins.ts
 
 diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
-index 1a3a289f65500dd0ec4e0ec08ce9a8885d5bf213..7558179fc92eb8cc80ea97d6eaa37c2107ea9408 100644
+index 9c24b9c6685d63c34719aff9c3865c2ca4cadb08..1f65548f5f84ba5235d5ce038c87a99d8b046430 100644
 --- a/packages/server/src/server/bootstrap.ts
 +++ b/packages/server/src/server/bootstrap.ts
-@@ -217,6 +217,7 @@ import {
+@@ -219,6 +219,7 @@ import {
  import { terminateWithTreeKill } from "../utils/tree-kill.js";
  import { withTimeout } from "../utils/promise-timeout.js";
  import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
@@ -33,7 +33,7 @@ index 1a3a289f65500dd0ec4e0ec08ce9a8885d5bf213..7558179fc92eb8cc80ea97d6eaa37c21
  import {
    createRequireBearerMiddleware,
    isAgentMcpRequestAuthorized,
-@@ -804,7 +805,7 @@ export async function createPaseoDaemon(
+@@ -819,7 +820,7 @@ export async function createPaseoDaemon(
  
    app.use((req, res, next) => {
      const origin = req.headers.origin;
@@ -124,10 +124,10 @@ index 0000000000000000000000000000000000000000..8f93da8403665acf7c56d690d30503cf
 +  return false;
 +}
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index a6f492502ce1a09dffc902681e5c12f7b944eceb..52a95d950c0642140f66e77cd88fcb4e05ead899 100644
+index 693680eb08438bb14818d9522dd4ca2e0cede029..4a424365fc2d9cd6f6550c306f38904324edf38b 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -48,6 +48,7 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
+@@ -52,6 +52,7 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
  import { MAX_WEBSOCKET_MESSAGE_BYTES } from "@getpaseo/protocol/websocket-message-limit";
  import type { HostnamesConfig } from "./hostnames.js";
  import { isHostnameAllowed } from "./hostnames.js";
@@ -135,7 +135,7 @@ index a6f492502ce1a09dffc902681e5c12f7b944eceb..52a95d950c0642140f66e77cd88fcb4e
  import {
    Session,
    type SessionLifecycleIntent,
-@@ -958,7 +959,7 @@ export class VoiceAssistantWebSocketServer {
+@@ -963,7 +964,7 @@ export class VoiceAssistantWebSocketServer {
      }
      const sameOrigin = isWebSocketSameOrigin(origin, requestHost);
  
