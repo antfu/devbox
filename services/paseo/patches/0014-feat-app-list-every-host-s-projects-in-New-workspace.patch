@@ -1,0 +1,274 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Tue, 10 Nov 2026 18:06:00 +0000
+Subject: [PATCH] feat(app): list every host's projects in New workspace
+
+New workspace's project picker only listed the projects of the selected
+host, so starting work on a project another host has meant switching the
+host first, then finding the project. The picker now lists the projects
+of every connected host. Picking one the selected host lacks moves the
+form to a host that has it.
+
+Fork-Change: F-15
+---
+ .../app/src/screens/new-workspace-screen.tsx  |  1 +
+ .../project-icon-targets.test.ts              |  6 ++
+ .../new-workspace/project-icon-targets.ts     |  4 +-
+ .../new-workspace/project-picker.test.tsx     | 89 ++++++++++++++++++-
+ .../screens/new-workspace/project-picker.ts   | 52 ++++++++++-
+ 5 files changed, 146 insertions(+), 6 deletions(-)
+
+diff --git a/packages/app/src/screens/new-workspace-screen.tsx b/packages/app/src/screens/new-workspace-screen.tsx
+index 3cb01ae9df95f9ab0e08141ee645e99aa5bf3b54..880e10ef6b0651ed37d0b7c3fd53bfbf10872f90 100644
+--- a/packages/app/src/screens/new-workspace-screen.tsx
++++ b/packages/app/src/screens/new-workspace-screen.tsx
+@@ -974,6 +974,7 @@ export function NewWorkspaceScreen({
+     routeProjectContextViewKey,
+     lastActiveProject,
+     allowAllProjects: supportsWorkspaceMultiplicity,
++    onSelectHost: handleSelectHost,
+   });
+   const projectIconTargets = useMemo(
+     () => buildNewWorkspaceProjectIconTargets(projects, selectedServerId),
+diff --git a/packages/app/src/screens/new-workspace/project-icon-targets.test.ts b/packages/app/src/screens/new-workspace/project-icon-targets.test.ts
+index cb1d3616cd690a5e5efcd6de056aa748c9346a7d..35fa01ccc436598457d7bcfc668ff36a63d02eb2 100644
+--- a/packages/app/src/screens/new-workspace/project-icon-targets.test.ts
++++ b/packages/app/src/screens/new-workspace/project-icon-targets.test.ts
+@@ -34,4 +34,10 @@ describe("buildNewWorkspaceProjectIconTargets", () => {
+       },
+     ]);
+   });
++
++  it("takes the icon from another host when the selected host lacks the project", () => {
++    expect(buildNewWorkspaceProjectIconTargets([project], "host-b")).toEqual([
++      expect.objectContaining({ projectViewKey: "project-view", serverId: "host-a" }),
++    ]);
++  });
+ });
+diff --git a/packages/app/src/screens/new-workspace/project-icon-targets.ts b/packages/app/src/screens/new-workspace/project-icon-targets.ts
+index ff3fb1d5cf466993d66d9f05e4dd2f25aef8921c..c02fa47a9e90222163d47c47e2436cd8184cdb49 100644
+--- a/packages/app/src/screens/new-workspace/project-icon-targets.ts
++++ b/packages/app/src/screens/new-workspace/project-icon-targets.ts
+@@ -6,7 +6,9 @@ export function buildNewWorkspaceProjectIconTargets(
+   serverId: string,
+ ): ProjectIconTarget[] {
+   return projects.flatMap((project) => {
+-    const host = project.hosts.find((candidate) => candidate.serverId === serverId);
++    // A project the selected host lacks takes its icon from a host that has it.
++    const host =
++      project.hosts.find((candidate) => candidate.serverId === serverId) ?? project.hosts[0];
+     if (!host) return [];
+     const target = createProjectIconTarget({ projectViewKey: project.viewKey, placement: host });
+     return target ? [target] : [];
+diff --git a/packages/app/src/screens/new-workspace/project-picker.test.tsx b/packages/app/src/screens/new-workspace/project-picker.test.tsx
+index 5cf2ae691eb5da24ebf4d8ec2c4caf4bd104d6b8..1d169f5c8a3d25b61abeba102f3c3de0c92cd927 100644
+--- a/packages/app/src/screens/new-workspace/project-picker.test.tsx
++++ b/packages/app/src/screens/new-workspace/project-picker.test.tsx
+@@ -1,9 +1,9 @@
+ // @vitest-environment jsdom
+ 
+ import { act, renderHook } from "@testing-library/react";
+-import { describe, expect, it } from "vitest";
++import { describe, expect, it, vi } from "vitest";
+ import type { HostProjectListItem } from "@/projects/host-projects";
+-import { useNewWorkspaceProjectPicker } from "./project-picker";
++import { resolveHostForPickedProject, useNewWorkspaceProjectPicker } from "./project-picker";
+ 
+ function project(input: {
+   viewKey: string;
+@@ -79,4 +79,89 @@ describe("useNewWorkspaceProjectPicker", () => {
+ 
+     expect(result.current.selectedProject).toEqual(manualProject);
+   });
++
++  it("lists every host's projects and moves to a host that has the picked one", () => {
++    const here = project({
++      viewKey: "remote:github.com/acme/here",
++      projectKey: "remote:github.com/acme/here",
++      projectId: "here",
++      projectName: "Here",
++    });
++    const elsewhere: HostProjectListItem = {
++      ...project({
++        viewKey: "remote:github.com/acme/elsewhere",
++        projectKey: "remote:github.com/acme/elsewhere",
++        projectId: "elsewhere",
++        projectName: "Elsewhere",
++      }),
++      hosts: [
++        {
++          serverId: "other",
++          projectId: "elsewhere",
++          iconWorkingDir: "/work/elsewhere",
++          worktreeSupport: "supported",
++        },
++      ],
++    };
++    const projects = [here, elsewhere];
++    const onSelectHost = vi.fn();
++    const { result } = renderHook(() =>
++      useNewWorkspaceProjectPicker({
++        selectedServerId: "host",
++        projects,
++        routeProject: null,
++        routeProjectContextViewKey: null,
++        lastActiveProject: null,
++        allowAllProjects: true,
++        onSelectHost,
++      }),
++    );
++
++    const labels = result.current.projectPickerOptions.map((option) => option.label);
++    expect(labels).toEqual(["Here", "Elsewhere"]);
++    const elsewhereOption = result.current.projectPickerOptions[1]!;
++    act(() => result.current.handleSelectProjectOption(elsewhereOption.id));
++    expect(onSelectHost).toHaveBeenCalledWith("other");
++
++    onSelectHost.mockClear();
++    act(() => result.current.handleSelectProjectOption(result.current.projectPickerOptions[0]!.id));
++    expect(onSelectHost).not.toHaveBeenCalled();
++  });
++});
++
++describe("resolveHostForPickedProject", () => {
++  const twoHosts: HostProjectListItem = {
++    ...project({ viewKey: "p", projectKey: "p", projectId: "p", projectName: "P" }),
++    hosts: [
++      { serverId: "a", projectId: "p", iconWorkingDir: "/p", worktreeSupport: "unsupported" },
++      { serverId: "b", projectId: "p", iconWorkingDir: "/p", worktreeSupport: "supported" },
++    ],
++  };
++
++  it("keeps the selected host when it has the project", () => {
++    expect(
++      resolveHostForPickedProject({
++        project: twoHosts,
++        selectedServerId: "b",
++        allowAllProjects: false,
++      }),
++    ).toBeNull();
++  });
++
++  it("picks the first host that can create a workspace for it", () => {
++    expect(
++      resolveHostForPickedProject({
++        project: twoHosts,
++        selectedServerId: "c",
++        allowAllProjects: false,
++      }),
++    ).toBe("b");
++    expect(
++      resolveHostForPickedProject({
++        project: twoHosts,
++        selectedServerId: "c",
++        allowAllProjects: true,
++      }),
++    ).toBe("a");
++  });
+ });
+diff --git a/packages/app/src/screens/new-workspace/project-picker.ts b/packages/app/src/screens/new-workspace/project-picker.ts
+index 736b0d3d7f34c2d15e58ed7e4f474fd85281b046..0874056a0d2a163a6ed9808a22b90668c8dd10bf 100644
+--- a/packages/app/src/screens/new-workspace/project-picker.ts
++++ b/packages/app/src/screens/new-workspace/project-picker.ts
+@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
+ import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combobox";
+ import { isWorkspaceArchivePending } from "@/contexts/session-workspace-upserts";
+ import {
++  canCreateWorkspaceForHostProject,
+   filterWorkspaceProjectsForHost,
+   getHostProjectSourceDirectory,
+   resolveInitialWorkspaceProject,
+@@ -27,6 +28,8 @@ interface NewWorkspaceProjectPickerInput {
+   routeProjectContextViewKey: string | null;
+   lastActiveProject: HostProjectListItem | null;
+   allowAllProjects: boolean;
++  /** Moves the form to another host, for a picked project the selected host does not have. */
++  onSelectHost?: (serverId: string) => void;
+ }
+ 
+ interface NewWorkspaceProjectPickerState {
+@@ -53,6 +56,25 @@ function computeProjectOptionData(projects: readonly HostProjectListItem[]) {
+   return { options, projectByOptionId };
+ }
+ 
++/**
++ * The host to move to when `project` is picked: null while the selected host can create a
++ * workspace for it, else the first of the project's hosts that can.
++ */
++export function resolveHostForPickedProject(input: {
++  project: HostProjectListItem;
++  selectedServerId: string;
++  allowAllProjects: boolean;
++}): string | null {
++  const canCreateOn = (serverId: string) =>
++    canCreateWorkspaceForHostProject({
++      project: input.project,
++      serverId,
++      allowAllProjects: input.allowAllProjects,
++    });
++  if (canCreateOn(input.selectedServerId)) return null;
++  return input.project.hosts.find((host) => canCreateOn(host.serverId))?.serverId ?? null;
++}
++
+ function resolveWorkspaceIdFromProjectWorkspaceKey(input: {
+   selectedServerId: string;
+   workspaceKey: string;
+@@ -88,6 +110,7 @@ export function useNewWorkspaceProjectPicker({
+   routeProjectContextViewKey,
+   lastActiveProject,
+   allowAllProjects,
++  onSelectHost,
+ }: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
+   const selectableProjects = useMemo(
+     () =>
+@@ -159,9 +182,20 @@ export function useNewWorkspaceProjectPicker({
+ 
+   const activeSelection = reconcileProjectSelection(projectSelection, selectionContext);
+   const selectedProject = resolveProjectSelection(activeSelection, selectionContext);
++  // The picker lists every host's projects; picking one the selected host lacks moves to a host
++  // that has it.
++  const pickerProjects = useMemo(
++    () =>
++      projects.filter((project) =>
++        project.hosts.some((host) =>
++          canCreateWorkspaceForHostProject({ project, serverId: host.serverId, allowAllProjects }),
++        ),
++      ),
++    [allowAllProjects, projects],
++  );
+   const { options: projectPickerOptions, projectByOptionId } = useMemo(
+-    () => computeProjectOptionData(selectableProjects),
+-    [selectableProjects],
++    () => computeProjectOptionData(pickerProjects),
++    [pickerProjects],
+   );
+   const handleSelectProjectOption = useCallback(
+     (id: string) => {
+@@ -172,6 +206,12 @@ export function useNewWorkspaceProjectPicker({
+         !project.hosts.some((host) => host.worktreeSupport !== "unsupported")
+       )
+         return;
++      const nextServerId = resolveHostForPickedProject({
++        project,
++        selectedServerId,
++        allowAllProjects,
++      });
++      if (nextServerId) onSelectHost?.(nextServerId);
+       setProjectSelection({
+         contextKey: manualSelectionContextKey,
+         project,
+@@ -179,7 +219,13 @@ export function useNewWorkspaceProjectPicker({
+         source: "manual",
+       });
+     },
+-    [allowAllProjects, manualSelectionContextKey, projectByOptionId],
++    [
++      allowAllProjects,
++      manualSelectionContextKey,
++      onSelectHost,
++      projectByOptionId,
++      selectedServerId,
++    ],
+   );
+ 
+   return {

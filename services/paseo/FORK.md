@@ -283,6 +283,26 @@ patches refer to them in their `Fork-Change` trailer.
 - Config: Settings → Quick actions.
 - Drop when: upstream adds editable quick actions; drop together with F-10.
 
+### F-15: List every host's projects in New workspace
+
+- Status: active, ours only
+- Requested: 2026-11-10, "for the project list dropdown in \"new workspace\", merge the projects from all
+  the hosts, and on select, reset the host selection to the available one if the current host does not
+  have that project."
+- Why: the project picker listed only the selected host's projects, so a project on another host
+  meant switching host first. The picker is app UI, which no plugin hook reaches.
+- Patches: `feat(app): list every host's projects in New workspace`
+- Touches: app `screens/new-workspace/project-picker.ts` (`resolveHostForPickedProject`, the listed
+  projects, an optional `onSelectHost`) and its test; `project-icon-targets.ts` (icon from another host)
+  and its test; a one-line hook in `screens/new-workspace-screen.tsx`.
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. Projects are already merged
+  across hosts by project key (`useHostProjects`); the picker now lists each one that some connected host
+  can create a workspace for. Picking one the selected host lacks selects the first of its hosts that
+  can. Selection stays per host, so the rest of the form follows the new host. F-13's host picker still
+  marks hosts without the project. Checked: typecheck, lint and unit tests only; not checked in a
+  browser yet.
+- Drop when: upstream lists projects from every host in New workspace.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
