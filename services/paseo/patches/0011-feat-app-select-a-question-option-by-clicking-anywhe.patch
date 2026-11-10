@@ -1,0 +1,109 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Anthony Fu <github@antfu.me>
+Date: Tue, 10 Nov 2026 16:12:57 +0900
+Subject: [PATCH] feat(app): select a question option by clicking anywhere on
+ its row
+
+A click on an option's description did nothing, because the description
+claimed every touch so its text could be selected. On web the row now
+takes the click, so clicking anywhere on the option selects it. A link
+still opens without answering, and so does a drag that selected
+description text or the second click of a double-click. Native keeps the
+description's touches for text selection.
+
+Fork-Change: F-12
+---
+ .../question-form-card.browser.test.tsx       | 46 +++++++++++++++++++
+ .../app/src/components/question-form-card.tsx | 16 +++++--
+ 2 files changed, 58 insertions(+), 4 deletions(-)
+
+diff --git a/packages/app/src/components/question-form-card.browser.test.tsx b/packages/app/src/components/question-form-card.browser.test.tsx
+index 0b2a5df25d1c7dc9e3f9da794bec7987af250de6..86b3fc93a61a7e4f8301328e779b1e515765a066 100644
+--- a/packages/app/src/components/question-form-card.browser.test.tsx
++++ b/packages/app/src/components/question-form-card.browser.test.tsx
+@@ -154,3 +154,49 @@ describe("QuestionFormCard other answers", () => {
+     expect(card.submittedAnswers()).toEqual({ Provider: "Codex" });
+   });
+ });
++
++describe("QuestionFormCard option rows", () => {
++  const describedQuestion = {
++    question: "Which checks?",
++    header: "Checks",
++    options: [
++      { label: "Lint", description: "Runs the linter" },
++      { label: "Typecheck", description: "Runs the type checker" },
++    ],
++    multiSelect: true,
++  };
++
++  function descriptionOf(label: string): HTMLElement {
++    const row = within(document.body).getByRole("checkbox", { name: label });
++    const description = row.querySelector<HTMLElement>(
++      '[data-testid="question-form-option-description"]',
++    );
++    if (!description) throw new Error(`no description for ${label}`);
++    return description;
++  }
++
++  it("selects the option when its description is clicked", () => {
++    mountCard(describedQuestion);
++
++    act(() => descriptionOf("Lint").click());
++
++    const lint = within(document.body).getByRole("checkbox", { name: "Lint" });
++    expect(lint.getAttribute("aria-checked")).toBe("true");
++  });
++
++  it("leaves the option alone when the click ends a text selection in its description", () => {
++    mountCard(describedQuestion);
++    const description = descriptionOf("Typecheck");
++    const range = document.createRange();
++    range.selectNodeContents(description);
++    const selection = window.getSelection();
++    selection?.removeAllRanges();
++    selection?.addRange(range);
++
++    act(() => description.click());
++
++    const typecheck = within(document.body).getByRole("checkbox", { name: "Typecheck" });
++    expect(typecheck.getAttribute("aria-checked")).toBe("false");
++    selection?.removeAllRanges();
++  });
++});
+diff --git a/packages/app/src/components/question-form-card.tsx b/packages/app/src/components/question-form-card.tsx
+index 8ff81963d1ff2f162376acc415b7b488f5a6a0ae..5cd85c820b96a511c3876d944625fd5e3dc8113d 100644
+--- a/packages/app/src/components/question-form-card.tsx
++++ b/packages/app/src/components/question-form-card.tsx
+@@ -43,19 +43,27 @@ const IS_WEB = isWeb;
+ // drag to the preview's nested scroll, so lines past a cap would be unreachable.
+ const OPTION_PREVIEW_MAX_HEIGHT = IS_WEB ? 240 : undefined;
+ 
+-// Web clicks that must not answer: a link in the label, anything in the description, and the
++// Web clicks that must not answer: a link, a drag that selected description text, and the
+ // second click of a double-click, which would otherwise land on the next question's options.
++// A plain click anywhere else on the row, the description included, answers.
+ function isNonAnsweringClick(event: GestureResponderEvent, description: View | null): boolean {
+   if (!IS_WEB) return false;
+   const click = event.nativeEvent as unknown as MouseEvent;
+   if (click.detail > 1) return true;
+   const target = click.target as Element | null;
++  if (target?.closest("a")) return true;
+   const descriptionElement = description as unknown as Element | null;
+-  return Boolean(target?.closest("a") || descriptionElement?.contains(target));
++  return Boolean(descriptionElement?.contains(target) && hasTextSelection());
+ }
+ 
+-// The description is selectable text, so a touch on it belongs to the text, not the option.
+-const claimResponder = () => true;
++function hasTextSelection(): boolean {
++  const selection = globalThis.getSelection?.();
++  return Boolean(selection && !selection.isCollapsed && selection.toString().length > 0);
++}
++
++// On native the description is selectable text, so a touch on it belongs to the text, not the
++// option. On web the row takes the click and `isNonAnsweringClick` tells reading from answering.
++const claimResponder = IS_WEB ? undefined : () => true;
+ 
+ function getQuestionInputPlaceholder({
+   question,

@@ -221,6 +221,22 @@ patches refer to them in their `Fork-Change` trailer.
   in a browser yet.
 - Drop when: upstream adds cloning from another host.
 
+### F-12: Select a question option by clicking anywhere on its row
+
+- Status: active, ours only
+- Requested: 2026-11-10, "for the question tool, allow clicking on the entire item to select, not only
+  the raido button"
+- Why: a click on an option's description did nothing, because the description claimed every touch so
+  its text could be selected. The question card is app UI, which no plugin hook reaches.
+- Patches: `feat(app): select a question option by clicking anywhere on its row`
+- Touches: `packages/app/src/components/question-form-card.tsx` (`isNonAnsweringClick` and the
+  description's responder) and its browser test.
+- Compatibility: web UI only; no wire change. On web a plain click on the description now answers; a
+  link, a drag that selected description text, and the second click of a double-click still do not
+  (upstream's e2e `question-prompt-pagination.spec.ts` covers those). Native is unchanged. Checked:
+  typecheck and lint; the browser test is written but its run is still pending.
+- Drop when: upstream lets the whole option row answer.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
