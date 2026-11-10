@@ -5,17 +5,22 @@ Subject: [PATCH] feat(app): pick a host icon and show it in host pickers
 
 A host could only be told apart by its name and its color, and the color
 only showed in sidebar badges. Host appearance now has an icon too, picked
-next to the color in the host's settings. Badges draw it, and host pickers
-draw the host's icon in its color with the status dot on its corner. A host
-with no icon and no color keeps the bare status dot.
+next to the color in the host's settings. Badges draw it, and every host
+list (host pickers, the sidebar's host filter, the settings host switcher
+and Add project's host step) draws the host's icon in its color. The
+status dot sits on the icon's bottom-right corner only while the host is
+not connected.
 
 The icon is per-device, like the color, and optional in the stored
 registry, so registries saved before it still parse.
 
 Fork-Change: F-9
 ---
+ packages/app/e2e/support/helpers/hosts.ts     |  2 +-
+ .../app/src/components/add-project-flow.tsx   |  7 +-
  .../components/hosts/host-identity-icon.tsx   | 47 ++++++++++
  .../app/src/components/hosts/host-picker.tsx  |  4 +-
+ .../sidebar/display-preferences/menu.tsx      |  4 +-
  packages/app/src/hosts/appearance.test.ts     | 18 ++++
  packages/app/src/hosts/appearance.ts          |  6 ++
  packages/app/src/hosts/host-badge.tsx         | 11 +--
@@ -31,16 +36,76 @@ Fork-Change: F-9
  packages/app/src/i18n/resources/zh-CN.ts      |  1 +
  packages/app/src/runtime/host-runtime.ts      | 10 ++
  .../src/screens/new-workspace/form/index.tsx  |  4 +-
+ packages/app/src/screens/settings-screen.tsx  |  4 +-
  .../settings/host-appearance-section.tsx      | 22 ++++-
  .../src/screens/settings/host-icon-row.tsx    | 91 +++++++++++++++++++
- 19 files changed, 313 insertions(+), 12 deletions(-)
+ 23 files changed, 324 insertions(+), 18 deletions(-)
  create mode 100644 packages/app/src/components/hosts/host-identity-icon.tsx
  create mode 100644 packages/app/src/hosts/host-icons.ts
  create mode 100644 packages/app/src/screens/settings/host-icon-row.tsx
 
+diff --git a/packages/app/e2e/support/helpers/hosts.ts b/packages/app/e2e/support/helpers/hosts.ts
+index 95b1d17d5bba0393adcd40186baa29b71f7be062..08648ada09b79d0367fa37f92badad80769d8ea7 100644
+--- a/packages/app/e2e/support/helpers/hosts.ts
++++ b/packages/app/e2e/support/helpers/hosts.ts
+@@ -137,7 +137,7 @@ export async function openSidebarHostFilter(page: Page): Promise<void> {
+   await page.getByTestId("sidebar-display-host-filter").click();
+ }
+ 
+-// A host's filter row carries a status dot on the left next to its label.
++// A host's filter row carries the host's icon (with its status dot) on the left next to its label.
+ export async function expectHostFilterRow(page: Page, serverId: string): Promise<void> {
+   await expect(page.getByTestId(`sidebar-host-filter-${serverId}`)).toBeVisible();
+   await expect(page.getByTestId(`sidebar-host-filter-status-${serverId}`)).toBeVisible();
+diff --git a/packages/app/src/components/add-project-flow.tsx b/packages/app/src/components/add-project-flow.tsx
+index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be17b767b8 100644
+--- a/packages/app/src/components/add-project-flow.tsx
++++ b/packages/app/src/components/add-project-flow.tsx
+@@ -21,6 +21,7 @@ import {
+   useRef,
+   useState,
+   type ComponentType,
++  type ReactNode,
+   type RefObject,
+ } from "react";
+ import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
+@@ -30,6 +31,7 @@ import {
+ } from "@/components/ui/text-input";
+ import { StyleSheet, withUnistyles } from "react-native-unistyles";
+ import { GitHubIcon } from "@/components/icons/github-icon";
++import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+ import {
+   applyAvailableAddProjectHosts,
+   backAddProjectPage,
+@@ -110,6 +112,8 @@ interface FlowRowOption {
+   title: string;
+   subtitle: string | null;
+   icon: ComponentType<{ size?: number; color?: string }>;
++  /** Drawn instead of `icon`, for rows whose mark is more than a glyph (a host's identity). */
++  leading?: ReactNode;
+   disabled?: boolean;
+   testID: string;
+   select: () => void;
+@@ -303,7 +307,7 @@ function FlowRow({
+       testID={option.testID}
+     >
+       <View style={styles.iconSlot}>
+-        <MutedFlowIcon icon={option.icon} size={16} />
++        {option.leading ?? <MutedFlowIcon icon={option.icon} size={16} />}
+       </View>
+       <View style={styles.rowText}>
+         <Text style={styles.rowTitle} numberOfLines={1}>
+@@ -685,6 +689,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+           title: choice.label,
+           subtitle: choice.serverId,
+           icon: Server,
++          leading: <HostIdentityIcon serverId={choice.serverId} />,
+           testID: `add-project-flow-host-${choice.serverId}`,
+           select: () => setState((current) => chooseAddProjectHost(current, choice.serverId)),
+         }),
 diff --git a/packages/app/src/components/hosts/host-identity-icon.tsx b/packages/app/src/components/hosts/host-identity-icon.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..7f22dfff2ff48ffc0c4f74a5a3a6aeb208b727ca
+index 0000000000000000000000000000000000000000..0b100f841fce30a942dabea29570313b12004ff5
 --- /dev/null
 +++ b/packages/app/src/components/hosts/host-identity-icon.tsx
 @@ -0,0 +1,47 @@
@@ -50,31 +115,31 @@ index 0000000000000000000000000000000000000000..7f22dfff2ff48ffc0c4f74a5a3a6aeb2
 +import { HostStatusDot } from "@/components/host-status-dot";
 +import { HOST_ICON_MAPPINGS } from "@/hosts/host-badge";
 +import { themedHostIcon } from "@/hosts/host-icons";
-+import { useHosts } from "@/runtime/host-runtime";
++import { useHostRuntimeConnectionStatus, useHosts } from "@/runtime/host-runtime";
 +import { ICON_SIZE } from "@/styles/theme";
 +
 +/**
-+ * A host as host lists draw it: its icon in its color, with the connection status dot on the
-+ * icon's corner. A host the user has not given an icon or a color keeps the bare status dot.
++ * A host as host lists draw it: its icon in its color (the server glyph, muted, until the user
++ * picks them). While the host is not connected, its status dot sits on the icon's bottom-right
++ * corner; a connected host shows the icon alone.
 + */
 +export function HostIdentityIcon({ serverId }: { serverId: string }): ReactElement {
 +  const hosts = useHosts();
++  const status = useHostRuntimeConnectionStatus(serverId);
 +  const appearance = useMemo(
 +    () => hosts.find((host) => host.serverId === serverId)?.appearance ?? null,
 +    [hosts, serverId],
 +  );
 +
-+  if (!appearance || (appearance.color === "none" && !appearance.icon)) {
-+    return <HostStatusDot serverId={serverId} />;
-+  }
-+
-+  const ThemedIcon = themedHostIcon(appearance.icon);
++  const ThemedIcon = themedHostIcon(appearance?.icon);
 +  return (
-+    <View style={styles.container}>
-+      <ThemedIcon size={ICON_SIZE.sm} uniProps={HOST_ICON_MAPPINGS[appearance.color]} />
-+      <View style={styles.status}>
-+        <HostStatusDot serverId={serverId} />
-+      </View>
++    <View style={styles.container} testID={`host-identity-icon-${serverId}`}>
++      <ThemedIcon size={ICON_SIZE.sm} uniProps={HOST_ICON_MAPPINGS[appearance?.color ?? "none"]} />
++      {status === "online" ? null : (
++        <View style={styles.status}>
++          <HostStatusDot serverId={serverId} />
++        </View>
++      )}
 +    </View>
 +  );
 +}
@@ -113,6 +178,28 @@ index ced0be3d55d58c0242e1d70566a2aa563d6afcfa..7bd6d48a462a56d92dee0305bace207c
      </View>
    );
  }
+diff --git a/packages/app/src/components/sidebar/display-preferences/menu.tsx b/packages/app/src/components/sidebar/display-preferences/menu.tsx
+index d6483a551907b88c4130253b423c2132c35bfc9b..a6398c94b65763c9c232c5ce89c114d387723af6 100644
+--- a/packages/app/src/components/sidebar/display-preferences/menu.tsx
++++ b/packages/app/src/components/sidebar/display-preferences/menu.tsx
+@@ -35,7 +35,7 @@ import {
+   MenuTrigger,
+   type MenuPageDefinition,
+ } from "@/components/ui/menu";
+-import { HostStatusDot } from "@/components/host-status-dot";
++import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+ import { isWeb } from "@/constants/platform";
+ import { useHosts } from "@/runtime/host-runtime";
+ import { useSidebarModel } from "@/components/sidebar/sidebar-model";
+@@ -801,7 +801,7 @@ function HostFilterItem({
+   const leading = useMemo(
+     () => (
+       <View testID={`sidebar-host-filter-status-${serverId}`}>
+-        <HostStatusDot serverId={serverId} />
++        <HostIdentityIcon serverId={serverId} />
+       </View>
+     ),
+     [serverId],
 diff --git a/packages/app/src/hosts/appearance.test.ts b/packages/app/src/hosts/appearance.test.ts
 index da7d47e1f725dcc3ca2e3bcea21c4e1aa03064c8..8299517081814ab5666528cd7dd94d82399f9e83 100644
 --- a/packages/app/src/hosts/appearance.test.ts
@@ -328,10 +415,10 @@ index 0000000000000000000000000000000000000000..8296a5276e2aa73ece40a43f7eb98139
 +  return THEMED_HOST_ICONS[name ?? DEFAULT_HOST_ICON];
 +}
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 2720f2b22830f628f478c008ce49ae5822142040..c63083061206c0f9707f148ef46c825cc1a7c64a 100644
+index a30cdb3977571ca770bef9dad2fc4cf10582b0aa..94165cf1343a26a99d4d81efb86e9189e4611af2 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -2682,6 +2682,7 @@ export const ar: TranslationResources = {
+@@ -2749,6 +2749,7 @@ export const ar: TranslationResources = {
              blue: "أزرق",
            },
          },
@@ -340,10 +427,10 @@ index 2720f2b22830f628f478c008ce49ae5822142040..c63083061206c0f9707f148ef46c825c
            label: "شارة الشريط الجانبي",
            accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index be298be2474a5f78bfdc5668c7872887a0bb19c8..b9704d1ea58f443a1ae2875ec05bdcd74a21c238 100644
+index c1d01ba0216d065c7356fc5545530f2af98faa16..f11f28052d3b0f5b17a5be2afff671348b8c92ff 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -2770,6 +2770,28 @@ export const en = {
+@@ -2838,6 +2838,28 @@ export const en = {
              blue: "Blue",
            },
          },
@@ -373,10 +460,10 @@ index be298be2474a5f78bfdc5668c7872887a0bb19c8..b9704d1ea58f443a1ae2875ec05bdcd7
            label: "Sidebar badge",
            accessibilityLabel: "Sidebar badge, {{value}}",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index bfb574d8d6c1cf6a15bc5155a61be7bf75d4198f..01cbad27411e2dee509926392447030bf25d088b 100644
+index 70220438995bda74f140b7c2a470b4cad06690ab..293fdfec8e5187aa7d5cec39d64ebd38f8143a32 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -2702,6 +2702,7 @@ export const es: TranslationResources = {
+@@ -2771,6 +2771,7 @@ export const es: TranslationResources = {
              blue: "Azul",
            },
          },
@@ -385,10 +472,10 @@ index bfb574d8d6c1cf6a15bc5155a61be7bf75d4198f..01cbad27411e2dee509926392447030b
            label: "Insignia de la barra lateral",
            accessibilityLabel: "Insignia de la barra lateral, {{value}}",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 730bc1ccd7a142229123ff4d84129857ab927874..f860762523350473146683823a55b8bb0dcb149a 100644
+index 91287cee016947e562f8a2067ea1ed847b96cc2a..39967bc20db422ccccc045fd15c9255f8feac6b7 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -2705,6 +2705,7 @@ export const fr: TranslationResources = {
+@@ -2775,6 +2775,7 @@ export const fr: TranslationResources = {
              blue: "Bleu",
            },
          },
@@ -397,10 +484,10 @@ index 730bc1ccd7a142229123ff4d84129857ab927874..f860762523350473146683823a55b8bb
            label: "Badge de la barre latérale",
            accessibilityLabel: "Badge de la barre latérale, {{value}}",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 1a22bea4bbfcc8f191e98cc8e473cb1647b9bd2d..085635d859ab2015ed028cd8437a1175b660856b 100644
+index b114634b86c62efb5b81efece0d45ce73290d73c..21affde2f9da37bb7e7f1b34a0b539746f6b7c4b 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -2669,6 +2669,7 @@ export const ja: TranslationResources = {
+@@ -2739,6 +2739,7 @@ export const ja: TranslationResources = {
              blue: "ブルー",
            },
          },
@@ -409,10 +496,10 @@ index 1a22bea4bbfcc8f191e98cc8e473cb1647b9bd2d..085635d859ab2015ed028cd8437a1175
            label: "サイドバーのバッジ",
            accessibilityLabel: "サイドバーのバッジ、{{value}}",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index 0c4da74d22dab6b181f01e1d2e884af6e7b15e85..5473cc151d6fbbfc0b37bd690a04eb4608e67b07 100644
+index 350a648ad2f32cba2d666cd5e754573cfb24393f..ad1ba29e67b3938549d90d963f48a8e045141b27 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -2658,6 +2658,7 @@ export const ko: TranslationResources = {
+@@ -2726,6 +2726,7 @@ export const ko: TranslationResources = {
              blue: "파란색",
            },
          },
@@ -421,10 +508,10 @@ index 0c4da74d22dab6b181f01e1d2e884af6e7b15e85..5473cc151d6fbbfc0b37bd690a04eb46
            label: "사이드바 배지",
            accessibilityLabel: "사이드바 배지, {{value}}",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index df25fc0ac149f172e56cec300051778ec3abd377..2da112ee864573f8d438b7f69aac9edda3026b1a 100644
+index db550ce10bb2f1be92f7385ae90b9c8fc3ef4a19..52d8a2dff18b06abf2309d25750e35bbd3c378be 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -2684,6 +2684,7 @@ export const ptBR: TranslationResources = {
+@@ -2752,6 +2752,7 @@ export const ptBR: TranslationResources = {
              blue: "Azul",
            },
          },
@@ -433,10 +520,10 @@ index df25fc0ac149f172e56cec300051778ec3abd377..2da112ee864573f8d438b7f69aac9edd
            label: "Selo da barra lateral",
            accessibilityLabel: "Selo da barra lateral, {{value}}",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 40360bc33ee07749b2e5a9b5dd4b7612157aa5a2..c95d1d8b02b82dc62c61d774960f52158c673e4d 100644
+index 9d82aefc8e390c838ffc94ae64564ca7a27897bd..b3fff6403cee5313fa0af7b05e68b5bfa1c045ad 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -2691,6 +2691,7 @@ export const ru: TranslationResources = {
+@@ -2760,6 +2760,7 @@ export const ru: TranslationResources = {
              blue: "Синий",
            },
          },
@@ -445,10 +532,10 @@ index 40360bc33ee07749b2e5a9b5dd4b7612157aa5a2..c95d1d8b02b82dc62c61d774960f5215
            label: "Значок на боковой панели",
            accessibilityLabel: "Значок на боковой панели, {{value}}",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index 88f466755040a0d62a4a6692d4f607ef4cce5fbf..8f5d9bc23b754554ea27cf9ca0ab258041b951c9 100644
+index b61fad78c00f75ce758c85e7a0b4705738457979..29b50c945f2eaabaca8cfd142ed94e45ae1c76b3 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -2617,6 +2617,7 @@ export const zhCN: TranslationResources = {
+@@ -2683,6 +2683,7 @@ export const zhCN: TranslationResources = {
              blue: "蓝色",
            },
          },
@@ -457,10 +544,10 @@ index 88f466755040a0d62a4a6692d4f607ef4cce5fbf..8f5d9bc23b754554ea27cf9ca0ab2580
            label: "侧边栏徽章",
            accessibilityLabel: "侧边栏徽章，{{value}}",
 diff --git a/packages/app/src/runtime/host-runtime.ts b/packages/app/src/runtime/host-runtime.ts
-index bb953220cb3dd73090b0be7c719143f48ab4620a..3f562442f1da6f75150f55cb39d659f553765355 100644
+index 0c7c9f466037b9c2f98c056faf957b483e327a44..d2be8ccae484f5aefceb8d0bb7954fa807103d14 100644
 --- a/packages/app/src/runtime/host-runtime.ts
 +++ b/packages/app/src/runtime/host-runtime.ts
-@@ -25,6 +25,7 @@ import {
+@@ -26,6 +26,7 @@ import {
    type HostProfile,
  } from "@/types/host-connection";
  import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
@@ -468,7 +555,7 @@ index bb953220cb3dd73090b0be7c719143f48ab4620a..3f562442f1da6f75150f55cb39d659f5
  import {
    buildDaemonWebSocketUrl,
    buildRelayWebSocketUrl,
-@@ -2217,6 +2218,13 @@ export class HostRuntimeStore {
+@@ -2221,6 +2222,13 @@ export class HostRuntimeStore {
      }));
    }
  
@@ -482,7 +569,7 @@ index bb953220cb3dd73090b0be7c719143f48ab4620a..3f562442f1da6f75150f55cb39d659f5
    async setHostBadgeDisplay(serverId: string, badgeDisplay: HostBadgeDisplay): Promise<void> {
      await this.updateHostAppearance(serverId, (host) => ({
        ...host,
-@@ -3030,6 +3038,7 @@ export interface HostMutations {
+@@ -3034,6 +3042,7 @@ export interface HostMutations {
    beginLinkPairing: () => LinkPairing;
    renameHost: (serverId: string, label: string) => Promise<void>;
    setHostColor: (serverId: string, color: HostColor) => Promise<void>;
@@ -490,7 +577,7 @@ index bb953220cb3dd73090b0be7c719143f48ab4620a..3f562442f1da6f75150f55cb39d659f5
    setHostBadgeDisplay: (serverId: string, badgeDisplay: HostBadgeDisplay) => Promise<void>;
    removeHost: (serverId: string) => Promise<void>;
    removeConnection: (serverId: string, connectionId: string) => Promise<void>;
-@@ -3045,6 +3054,7 @@ export function useHostMutations(): HostMutations {
+@@ -3049,6 +3058,7 @@ export function useHostMutations(): HostMutations {
        beginLinkPairing: () => store.beginLinkPairing(),
        renameHost: (serverId, label) => store.renameHost(serverId, label),
        setHostColor: (serverId, color) => store.setHostColor(serverId, color),
@@ -520,6 +607,28 @@ index c1cf1e2482705408fe7b0f672faf7a32a8bda3b6..9baccb02a156bdf73f33ed0242117f6d
      [host.selectedServerId],
    );
    const isWorktree = isolation.effectiveIsolation === "worktree";
+diff --git a/packages/app/src/screens/settings-screen.tsx b/packages/app/src/screens/settings-screen.tsx
+index fa87c28cfa479d705bd9d9bcd291d8b64c9736d2..c8ff9c3311116fee1e0f295d6e7a4c08ef46cdc5 100644
+--- a/packages/app/src/screens/settings-screen.tsx
++++ b/packages/app/src/screens/settings-screen.tsx
+@@ -48,7 +48,7 @@ import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
+ import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
+ import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
+ import { HostPicker as SharedHostPicker } from "@/components/hosts/host-picker";
+-import { HostStatusDot } from "@/components/host-status-dot";
++import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+ import { SettingsSection } from "@/components/settings/headings/settings-section";
+ import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
+ import { OpenLocationSection } from "@/screens/settings/open-location/open-location-section";
+@@ -919,7 +919,7 @@ function HostPicker({
+       >
+         {activeHost ? (
+           <View style={sidebarStyles.pickerTriggerDot}>
+-            <HostStatusDot serverId={activeHost.serverId} />
++            <HostIdentityIcon serverId={activeHost.serverId} />
+           </View>
+         ) : null}
+         <Text style={sidebarStyles.pickerTriggerLabel} numberOfLines={1}>
 diff --git a/packages/app/src/screens/settings/host-appearance-section.tsx b/packages/app/src/screens/settings/host-appearance-section.tsx
 index 585be1cfda815859326ac224f60580ddf0047dc3..069de4ffb797cebe5f9d80ae9b74b4ff57ac4968 100644
 --- a/packages/app/src/screens/settings/host-appearance-section.tsx
