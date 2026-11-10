@@ -185,7 +185,9 @@ patches refer to them in their `Fork-Change` trailer.
   clicking on the diffs open the diffs tab."; then, the same day, "instead, for the diff pill above the
   prompt input, add new pills for pr, and if the pr has conflicts, add a \"resolve conflicts\" button
   that for quick action of sending prompts, and for failed prs \"fix ci\". for finished task that has
-  local diffs but no prs, add \"create pr\" button."
+  local diffs but no prs, add \"create pr\" button."; extended 2026-11-10, "for the on top of prompt
+  input, add a icon (light-bulb or zap?) for the quick actions" and "for the pr status indiactor, show
+  the conflicts icon when conflicts are detected"
 - Why: the composer's pill row showed the diff stat but not the change request, and acting on a
   conflicted or failing one meant typing the same prompt each time. The composer is app UI; plugin
   composer pills cannot read the workspace's change request state or send a prompt to the agent.
@@ -193,14 +195,19 @@ patches refer to them in their `Fork-Change` trailer.
 - Touches: app new `composer/pull-request-actions.ts` (which follow-ups apply) and its test,
   `composer/pull-request-pills.tsx`; a small hook in `panels/agent-tracks.tsx` (renders the pills after
   the diff stat pill, and counts them when deciding whether the row shows); `en.ts` strings
-  (`workspace.git.pr.quickActions`) and one line per other locale.
+  (`workspace.git.pr.quickActions`) and one line per other locale. The conflict glyph: `git/pr-hint.ts`
+  (`hasConflicts`) and its test, `git/pull-request-state-icon.tsx` (optional `hasConflicts`), and a one-prop
+  edit at its call sites in `composer/pull-request-pills.tsx`, `components/sidebar-workspace-list.tsx` and
+  `components/sidebar/workspace-meta-row/index.tsx`.
 - Compatibility: web UI only; no wire or daemon change, so no feature flag. It reads the workspace's
   existing `githubRuntime.pullRequest` (state, `mergeable`, checks, `baseRefName`) and `diffStat`. A
   follow-up sends an ordinary agent message, the same call the composer makes. Follow-ups only show while
   the agent is idle, so they never interrupt a turn: "Resolve conflicts" when an open change request is
   `CONFLICTING`, "Fix CI" when one of its checks failed, "Create PR" for local changes with no change
-  request. The prompt texts are in `en.ts`. Checked: typecheck, lint and the new unit test only; not
-  checked in a browser yet.
+  request. Each follow-up pill leads with a Zap icon. An open change request whose `mergeable` is
+  `CONFLICTING` shows an amber warning triangle in place of its state glyph, in the composer pill and in
+  the sidebar rows. The prompt texts are in `en.ts`; F-14 lets you replace them. Checked: typecheck, lint
+  and the unit tests only; not checked in a browser yet.
 - Drop when: upstream shows the change request and its follow-ups in the composer.
 
 ### F-11: Clone a project from another connected host

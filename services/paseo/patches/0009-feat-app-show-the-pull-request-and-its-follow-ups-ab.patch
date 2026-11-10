@@ -15,9 +15,14 @@ request.
 
 Fork-Change: F-10
 ---
+ .../src/components/sidebar-workspace-list.tsx |   2 +-
+ .../sidebar/workspace-meta-row/index.tsx      |   6 +-
  .../src/composer/pull-request-actions.test.ts |  77 +++++++
  .../app/src/composer/pull-request-actions.ts  |  33 +++
- .../app/src/composer/pull-request-pills.tsx   | 209 ++++++++++++++++++
+ .../app/src/composer/pull-request-pills.tsx   | 217 ++++++++++++++++++
+ packages/app/src/git/pr-hint.test.ts          |  13 ++
+ packages/app/src/git/pr-hint.ts               |   4 +
+ .../app/src/git/pull-request-state-icon.tsx   |  14 +-
  packages/app/src/i18n/resources/ar.ts         |   1 +
  packages/app/src/i18n/resources/en.ts         |  16 ++
  packages/app/src/i18n/resources/es.ts         |   1 +
@@ -28,11 +33,41 @@ Fork-Change: F-10
  packages/app/src/i18n/resources/ru.ts         |   1 +
  packages/app/src/i18n/resources/zh-CN.ts      |   1 +
  packages/app/src/panels/agent-tracks.tsx      |   7 +
- 13 files changed, 350 insertions(+)
+ 18 files changed, 393 insertions(+), 4 deletions(-)
  create mode 100644 packages/app/src/composer/pull-request-actions.test.ts
  create mode 100644 packages/app/src/composer/pull-request-actions.ts
  create mode 100644 packages/app/src/composer/pull-request-pills.tsx
 
+diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
+index c7fb4c97439f265afbca3c5d25068df6d0e377a1..0399aab5761d4bcfbe67da08824454edf5534c43 100644
+--- a/packages/app/src/components/sidebar-workspace-list.tsx
++++ b/packages/app/src/components/sidebar-workspace-list.tsx
+@@ -346,7 +346,7 @@ export function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewS
+       {isHovered ? (
+         <ThemedExternalLink size={12} uniProps={foregroundColorMapping} />
+       ) : (
+-        <PullRequestStateIcon state={hint.state} size={12} />
++        <PullRequestStateIcon state={hint.state} size={12} hasConflicts={hint.hasConflicts} />
+       )}
+       <Text style={textStyle} numberOfLines={1}>
+         {hint.number}
+diff --git a/packages/app/src/components/sidebar/workspace-meta-row/index.tsx b/packages/app/src/components/sidebar/workspace-meta-row/index.tsx
+index d539fcf0648d5de7db2e15b5245ff6d2f1987601..f833896d546500ce2da5cc4b0a3d948776e13c96 100644
+--- a/packages/app/src/components/sidebar/workspace-meta-row/index.tsx
++++ b/packages/app/src/components/sidebar/workspace-meta-row/index.tsx
+@@ -218,7 +218,11 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
+       {isHovered ? (
+         <ThemedExternalLink size={META_ICON_SIZE} uniProps={foregroundMapping} />
+       ) : (
+-        <PullRequestStateIcon state={hint.state} size={META_ICON_SIZE} />
++        <PullRequestStateIcon
++          state={hint.state}
++          size={META_ICON_SIZE}
++          hasConflicts={hint.hasConflicts}
++        />
+       )}
+       <Text style={isHovered ? styles.prTextHovered : styles.prText} numberOfLines={1}>
+         {hint.number}
 diff --git a/packages/app/src/composer/pull-request-actions.test.ts b/packages/app/src/composer/pull-request-actions.test.ts
 new file mode 100644
 index 0000000000000000000000000000000000000000..ab7a51e58b84760351e66320cc3124d324af01a7
@@ -157,13 +192,15 @@ index 0000000000000000000000000000000000000000..6b0413069fcd7072cc97c13586e01bc8
 +}
 diff --git a/packages/app/src/composer/pull-request-pills.tsx b/packages/app/src/composer/pull-request-pills.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..9bd4d1017c851a381cb5b322060e960be8c84e2b
+index 0000000000000000000000000000000000000000..2038e852ddcb8886160316f91a4dc47392fa0f49
 --- /dev/null
 +++ b/packages/app/src/composer/pull-request-pills.tsx
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,217 @@
 +import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 +import { useTranslation } from "react-i18next";
 +import { Text } from "react-native";
++import { Zap } from "lucide-react-native";
++import { withUnistyles } from "react-native-unistyles";
 +import { CheckIndicator } from "@/components/sidebar/workspace-meta-row/check-indicator";
 +import { selectCheckSummary } from "@/components/sidebar/workspace-meta-row/check-summary";
 +import { PressHighlight } from "@/components/ui/press-highlight";
@@ -181,9 +218,14 @@ index 0000000000000000000000000000000000000000..9bd4d1017c851a381cb5b322060e960b
 +import { useHostRuntimeClient } from "@/runtime/host-runtime";
 +import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 +import { useWorkspaceFields } from "@/stores/session-store-hooks";
++import type { Theme } from "@/styles/theme";
 +import { openExternalUrl } from "@/utils/open-external-url";
 +
 +const ICON_SIZE = 14;
++
++const ThemedZap = withUnistyles(Zap);
++const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
++const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 +
 +interface WorkspacePullRequestState {
 +  prHint: PrHint | null;
@@ -317,7 +359,7 @@ index 0000000000000000000000000000000000000000..9bd4d1017c851a381cb5b322060e960b
 +      onHoverOut={handleHoverOut}
 +      style={bodyStyle}
 +    >
-+      <PullRequestStateIcon state={hint.state} size={ICON_SIZE} />
++      <PullRequestStateIcon state={hint.state} size={ICON_SIZE} hasConflicts={hint.hasConflicts} />
 +      <Text
 +        style={[composerPillStyles.label, isHovered && composerPillStyles.labelActive]}
 +        numberOfLines={1}
@@ -361,6 +403,7 @@ index 0000000000000000000000000000000000000000..9bd4d1017c851a381cb5b322060e960b
 +      disabled={isSending}
 +      style={bodyStyle}
 +    >
++      <ThemedZap size={ICON_SIZE} uniProps={isHovered ? foregroundMapping : mutedMapping} />
 +      <Text
 +        style={[composerPillStyles.label, isHovered && composerPillStyles.labelActive]}
 +        numberOfLines={1}
@@ -370,6 +413,105 @@ index 0000000000000000000000000000000000000000..9bd4d1017c851a381cb5b322060e960b
 +    </PressHighlight>
 +  );
 +}
+diff --git a/packages/app/src/git/pr-hint.test.ts b/packages/app/src/git/pr-hint.test.ts
+index 96e4a0e974fd69abd29a2635529c4452604a8e95..ed871303f2053c44b02cdbc62e1802a019b9c483 100644
+--- a/packages/app/src/git/pr-hint.test.ts
++++ b/packages/app/src/git/pr-hint.test.ts
+@@ -40,4 +40,17 @@ describe("selectPrHintFromStatus", () => {
+       selectPrHintFromStatus({ url: "https://example.com/x", state: "open", isMerged: false }),
+     ).toBeNull();
+   });
++
++  it("flags merge conflicts on an open change request only", () => {
++    expect(
++      selectPrHintFromStatus({ ...githubStatus, mergeable: "CONFLICTING" })?.hasConflicts,
++    ).toBe(true);
++    expect(selectPrHintFromStatus({ ...githubStatus, mergeable: "MERGEABLE" })?.hasConflicts).toBe(
++      undefined,
++    );
++    expect(
++      selectPrHintFromStatus({ ...githubStatus, state: "closed", mergeable: "CONFLICTING" })
++        ?.hasConflicts,
++    ).toBe(undefined);
++  });
+ });
+diff --git a/packages/app/src/git/pr-hint.ts b/packages/app/src/git/pr-hint.ts
+index 7e47ccde43b430c802d5a03232095a62c4cc2504..d6eec828c7a64be73f4a0619a648d53cf1f58450 100644
+--- a/packages/app/src/git/pr-hint.ts
++++ b/packages/app/src/git/pr-hint.ts
+@@ -10,6 +10,8 @@ export interface PrHint {
+   checks?: PrHintCheck[];
+   checksStatus?: "none" | "pending" | "success" | "failure";
+   reviewDecision?: "approved" | "changes_requested" | "pending" | null;
++  /** Set when an open change request cannot merge because of conflicts with its base. */
++  hasConflicts?: boolean;
+ }
+ 
+ export interface PrHintCheck extends PresentableCheck {
+@@ -25,6 +27,7 @@ interface PrStatusLike {
+   checksStatus?: string;
+   reviewDecision?: string | null;
+   forge?: string;
++  mergeable?: string | null;
+ }
+ 
+ function parsePullRequestNumber(url: string): number | null {
+@@ -70,5 +73,6 @@ export function selectPrHintFromStatus(
+     checks: status.checks,
+     checksStatus: status.checksStatus as PrHint["checksStatus"],
+     reviewDecision: status.reviewDecision as PrHint["reviewDecision"],
++    ...(state === "open" && status.mergeable === "CONFLICTING" ? { hasConflicts: true } : {}),
+   };
+ }
+diff --git a/packages/app/src/git/pull-request-state-icon.tsx b/packages/app/src/git/pull-request-state-icon.tsx
+index 4de297f26cf0b85d66c9c13001c091f1819665d6..b66e57085914395df3bce9bdea7992c809b324e5 100644
+--- a/packages/app/src/git/pull-request-state-icon.tsx
++++ b/packages/app/src/git/pull-request-state-icon.tsx
+@@ -1,4 +1,4 @@
+-import { GitMerge, GitPullRequest, GitPullRequestClosed } from "lucide-react-native";
++import { AlertTriangle, GitMerge, GitPullRequest, GitPullRequestClosed } from "lucide-react-native";
+ import { withUnistyles } from "react-native-unistyles";
+ import type { Theme } from "@/styles/theme";
+ import type { PrHint } from "@/git/pr-hint";
+@@ -6,10 +6,12 @@ import type { PrHint } from "@/git/pr-hint";
+ const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+ const ThemedGitMerge = withUnistyles(GitMerge);
+ const ThemedGitPullRequestClosed = withUnistyles(GitPullRequestClosed);
++const ThemedAlertTriangle = withUnistyles(AlertTriangle);
+ 
+ const successMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
+ const mergedMapping = (theme: Theme) => ({ color: theme.colors.statusMerged });
+ const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
++const warningMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
+ 
+ const PRESENTATION = {
+   open: { Icon: ThemedGitPullRequest, color: successMapping },
+@@ -17,16 +19,24 @@ const PRESENTATION = {
+   closed: { Icon: ThemedGitPullRequestClosed, color: dangerMapping },
+ } as const;
+ 
+-/** The canonical state glyph and color shared by every pull-request badge. */
++/**
++ * The canonical state glyph and color shared by every pull-request badge. An open change request
++ * with merge conflicts shows a warning glyph instead, so a badge says it needs work before merging.
++ */
+ export function PullRequestStateIcon({
+   state,
+   size,
+   strokeWidth,
++  hasConflicts,
+ }: {
+   state: PrHint["state"];
+   size: number;
+   strokeWidth?: number;
++  hasConflicts?: boolean;
+ }) {
++  if (hasConflicts && state === "open") {
++    return <ThemedAlertTriangle size={size} strokeWidth={strokeWidth} uniProps={warningMapping} />;
++  }
+   const { Icon, color } = PRESENTATION[state];
+   return <Icon size={size} strokeWidth={strokeWidth} uniProps={color} />;
+ }
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
 index 94165cf1343a26a99d4d81efb86e9189e4611af2..a72c4b29e58f38b7d943bb70efbdb4ea1944200a 100644
 --- a/packages/app/src/i18n/resources/ar.ts
