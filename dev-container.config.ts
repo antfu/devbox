@@ -68,15 +68,11 @@ function paseo({ name, port, githubToken, identity, client = false }: { name: st
       // The sidecar terminates TLS and sends X-Forwarded-Proto. Without trusting it, the web UI
       // takes its daemon connection as ws://<host>:80 instead of wss://<host>:443.
       PASEO_TRUSTED_PROXIES: 'loopback,uniquelocal',
-      // The web UI's websocket comes from the tailnet origin, which the daemon rejects unless listed. The
-      // servers also list paseo's origin, because the UI served there connects to them from the browser.
+      // The web UI's websocket comes from a tailnet origin, which the daemon rejects unless listed. Any node
+      // on the tailnet is allowed, so the client of every laptop (see TAILNET_PREFIX) can add these servers.
+      // The `*.` wildcard comes from our paseo patches (F-8).
       ...process.env.TAILNET_DOMAIN && {
-        PASEO_CORS_ORIGINS: [
-          ...new Set([
-            hostname,
-            node('paseo'),
-          ]),
-        ].map(host => `https://${host}.${process.env.TAILNET_DOMAIN}`).join(','),
+        PASEO_CORS_ORIGINS: `https://*.${process.env.TAILNET_DOMAIN}`,
       },
     },
     ...githubToken && {

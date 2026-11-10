@@ -61,7 +61,7 @@ The image bundles Claude Code, Codex and Chrome, so think about their licenses b
 
 ## Several laptops
 
-Give each laptop its own `.env`, `.env.secret` and signing keys. Set `TAILNET_PREFIX` in `.env` (for example `mbp-`) so its nodes are `mbp-paseo`, `mbp-paseo-bot`, `mbp-paseo-main` and `mbp-monitor`. Each laptop has its own dashboard. A single page for all laptops is not built yet.
+Give each laptop its own `.env`, `.env.secret` and signing keys. Set `TAILNET_PREFIX` in `.env` (for example `mbp-`) so its nodes are `mbp-paseo`, `mbp-paseo-bot`, `mbp-paseo-main` and `mbp-monitor`. Any laptop's web UI can add the servers of the others, since the daemons accept every origin on the tailnet. Each laptop has its own dashboard. A single page for all laptops is not built yet.
 
 ## Commit signing
 

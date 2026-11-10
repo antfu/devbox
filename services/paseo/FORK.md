@@ -129,6 +129,24 @@ patches refer to them in their `Fork-Change` trailer.
 - Patches: none of its own; see F-1.
 - Drop when: see F-1.
 
+### F-8: Subdomain wildcards in the CORS origin allowlist
+
+- Status: active, ours only
+- Requested: 2026-11-10, "I couldn't connect mbp-paseo-main.kudu-cardassian.ts.net's server from
+  paseo.kudu-cardassian.ts.net, maybe some origin check? fix this", then "can we make it support any
+  *.TAILNET_DOMAIN?" and "let's patch paseo to support wildcard"
+- Why: with several laptops on one tailnet, each laptop's web UI has its own origin, and a daemon only accepted
+  the origins listed in `PASEO_CORS_ORIGINS`, matched exactly. The other choice, `*`, lets any website reach
+  the daemon from the browser. The check lives in the daemon, which no plugin hook reaches.
+- Patches: `feat(server): accept subdomain wildcards in CORS allowed origins`
+- Touches: server new `server/cors-origins.ts` and its test; one-line hooks in `websocket-server.ts`
+  `verifyWsUpgrade` and in the CORS middleware in `bootstrap.ts`
+- Compatibility: daemon-only; no wire or client change, no feature flag. Exact entries and `*` behave as
+  before. `https://*.<domain>` matches any subdomain of `<domain>` on that scheme and port, not the domain
+  itself. Config: `PASEO_CORS_ORIGINS=https://*.<tailnet>` in `dev-container.config.ts`.
+  Checked: unit tests only; the rebuilt image and an upstream client are not checked yet.
+- Drop when: upstream supports wildcard origins.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.

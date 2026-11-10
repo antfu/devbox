@@ -1,0 +1,146 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Anthony Fu <github@antfu.me>
+Date: Tue, 10 Nov 2026 13:25:26 +0900
+Subject: [PATCH] feat(server): accept subdomain wildcards in CORS allowed
+ origins
+
+The origin allowlist only took exact origins or `*`. With several web UIs
+on one private domain (e.g. a Tailscale tailnet), each has its own origin,
+so every daemon had to list each one, and `*` lets any website reach the
+daemon from the browser. An entry like `https://*.example.com` now accepts
+any subdomain of example.com on that scheme and port, for both the
+websocket upgrade and the HTTP CORS headers.
+
+Fork-Change: F-8
+---
+ packages/server/src/server/bootstrap.ts       |  3 +-
+ .../server/src/server/cors-origins.test.ts    | 37 +++++++++++++++++++
+ packages/server/src/server/cors-origins.ts    | 32 ++++++++++++++++
+ .../server/src/server/websocket-server.ts     |  3 +-
+ 4 files changed, 73 insertions(+), 2 deletions(-)
+ create mode 100644 packages/server/src/server/cors-origins.test.ts
+ create mode 100644 packages/server/src/server/cors-origins.ts
+
+diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
+index 1a3a289f65500dd0ec4e0ec08ce9a8885d5bf213..7558179fc92eb8cc80ea97d6eaa37c2107ea9408 100644
+--- a/packages/server/src/server/bootstrap.ts
++++ b/packages/server/src/server/bootstrap.ts
+@@ -217,6 +217,7 @@ import {
+ import { terminateWithTreeKill } from "../utils/tree-kill.js";
+ import { withTimeout } from "../utils/promise-timeout.js";
+ import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
++import { isOriginAllowed } from "./cors-origins.js";
+ import {
+   createRequireBearerMiddleware,
+   isAgentMcpRequestAuthorized,
+@@ -804,7 +805,7 @@ export async function createPaseoDaemon(
+ 
+   app.use((req, res, next) => {
+     const origin = req.headers.origin;
+-    if (origin && (allowedOrigins.has("*") || allowedOrigins.has(origin))) {
++    if (origin && isOriginAllowed(origin, allowedOrigins)) {
+       res.setHeader("Access-Control-Allow-Origin", origin);
+       res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+diff --git a/packages/server/src/server/cors-origins.test.ts b/packages/server/src/server/cors-origins.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..17914a2d71cfd7a88f2fc5621384db8843218d89
+--- /dev/null
++++ b/packages/server/src/server/cors-origins.test.ts
+@@ -0,0 +1,37 @@
++import { describe, expect, test } from "vitest";
++
++import { isOriginAllowed } from "./cors-origins.js";
++
++describe("isOriginAllowed", () => {
++  test("accepts exact origins and the any-origin entry", () => {
++    expect(isOriginAllowed("https://app.paseo.sh", new Set(["https://app.paseo.sh"]))).toBe(true);
++    expect(isOriginAllowed("https://evil.example", new Set(["*"]))).toBe(true);
++    expect(isOriginAllowed("https://evil.example", new Set(["https://app.paseo.sh"]))).toBe(false);
++  });
++
++  test("accepts subdomains of a wildcard entry", () => {
++    const allowed = new Set(["https://*.tailnet.ts.net"]);
++    expect(isOriginAllowed("https://paseo.tailnet.ts.net", allowed)).toBe(true);
++    expect(isOriginAllowed("https://a.b.tailnet.ts.net", allowed)).toBe(true);
++    expect(isOriginAllowed("https://PASEO.Tailnet.ts.net", allowed)).toBe(true);
++  });
++
++  test("rejects the bare domain, look-alike domains, other schemes and other ports", () => {
++    const allowed = new Set(["https://*.tailnet.ts.net"]);
++    expect(isOriginAllowed("https://tailnet.ts.net", allowed)).toBe(false);
++    expect(isOriginAllowed("https://eviltailnet.ts.net", allowed)).toBe(false);
++    expect(isOriginAllowed("https://paseo.tailnet.ts.net.evil.example", allowed)).toBe(false);
++    expect(isOriginAllowed("http://paseo.tailnet.ts.net", allowed)).toBe(false);
++    expect(isOriginAllowed("https://paseo.tailnet.ts.net:8443", allowed)).toBe(false);
++  });
++
++  test("matches the port of a wildcard entry", () => {
++    const allowed = new Set(["http://*.example.com:8080"]);
++    expect(isOriginAllowed("http://a.example.com:8080", allowed)).toBe(true);
++    expect(isOriginAllowed("http://a.example.com", allowed)).toBe(false);
++  });
++
++  test("rejects origins that are not URLs", () => {
++    expect(isOriginAllowed("null", new Set(["https://*.example.com"]))).toBe(false);
++  });
++});
+diff --git a/packages/server/src/server/cors-origins.ts b/packages/server/src/server/cors-origins.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f93da8403665acf7c56d690d30503cf9cf1574d
+--- /dev/null
++++ b/packages/server/src/server/cors-origins.ts
+@@ -0,0 +1,32 @@
++const WILDCARD_SEPARATOR = "://*.";
++
++function matchesWildcardOrigin(origin: URL, pattern: string): boolean {
++  const separator = pattern.indexOf(WILDCARD_SEPARATOR);
++  if (separator === -1) return false;
++  const protocol = `${pattern.slice(0, separator).toLowerCase()}:`;
++  const base = pattern.slice(separator + WILDCARD_SEPARATOR.length).toLowerCase();
++  if (!base) return false;
++  return origin.protocol === protocol && origin.host.endsWith(`.${base}`);
++}
++
++/**
++ * Checks a request's Origin against the CORS allowlist.
++ *
++ * Entries are exact origins (`https://app.paseo.sh`), `*` for any origin, or a subdomain wildcard
++ * (`https://*.example.com`), which matches any subdomain of `example.com` on that scheme and port, but not
++ * `example.com` itself.
++ */
++export function isOriginAllowed(origin: string, allowedOrigins: ReadonlySet<string>): boolean {
++  if (allowedOrigins.has("*") || allowedOrigins.has(origin)) return true;
++
++  let parsed: URL;
++  try {
++    parsed = new URL(origin);
++  } catch {
++    return false;
++  }
++  for (const pattern of allowedOrigins) {
++    if (matchesWildcardOrigin(parsed, pattern)) return true;
++  }
++  return false;
++}
+diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
+index a6f492502ce1a09dffc902681e5c12f7b944eceb..52a95d950c0642140f66e77cd88fcb4e05ead899 100644
+--- a/packages/server/src/server/websocket-server.ts
++++ b/packages/server/src/server/websocket-server.ts
+@@ -48,6 +48,7 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
+ import { MAX_WEBSOCKET_MESSAGE_BYTES } from "@getpaseo/protocol/websocket-message-limit";
+ import type { HostnamesConfig } from "./hostnames.js";
+ import { isHostnameAllowed } from "./hostnames.js";
++import { isOriginAllowed } from "./cors-origins.js";
+ import {
+   Session,
+   type SessionLifecycleIntent,
+@@ -958,7 +959,7 @@ export class VoiceAssistantWebSocketServer {
+     }
+     const sameOrigin = isWebSocketSameOrigin(origin, requestHost);
+ 
+-    if (!origin || allowedOrigins.has("*") || allowedOrigins.has(origin) || sameOrigin) {
++    if (!origin || isOriginAllowed(origin, allowedOrigins) || sameOrigin) {
+       callback(true);
+     } else {
+       this.incrementRuntimeCounter("originRejected");
