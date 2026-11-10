@@ -1,0 +1,681 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Anthony Fu <github@antfu.me>
+Date: Tue, 10 Nov 2026 13:30:10 +0900
+Subject: [PATCH] feat(app): pick a host icon and show it in host pickers
+
+A host could only be told apart by its name and its color, and the color
+only showed in sidebar badges. Host appearance now has an icon too, picked
+next to the color in the host's settings. Badges draw it, and host pickers
+draw the host's icon in its color with the status dot on its corner. A host
+with no icon and no color keeps the bare status dot.
+
+The icon is per-device, like the color, and optional in the stored
+registry, so registries saved before it still parse.
+
+Fork-Change: F-9
+---
+ .../components/hosts/host-identity-icon.tsx   | 47 ++++++++++
+ .../app/src/components/hosts/host-picker.tsx  |  4 +-
+ packages/app/src/hosts/appearance.test.ts     | 18 ++++
+ packages/app/src/hosts/appearance.ts          |  6 ++
+ packages/app/src/hosts/host-badge.tsx         | 11 +--
+ packages/app/src/hosts/host-icons.ts          | 82 +++++++++++++++++
+ packages/app/src/i18n/resources/ar.ts         |  1 +
+ packages/app/src/i18n/resources/en.ts         | 22 +++++
+ packages/app/src/i18n/resources/es.ts         |  1 +
+ packages/app/src/i18n/resources/fr.ts         |  1 +
+ packages/app/src/i18n/resources/ja.ts         |  1 +
+ packages/app/src/i18n/resources/ko.ts         |  1 +
+ packages/app/src/i18n/resources/pt-BR.ts      |  1 +
+ packages/app/src/i18n/resources/ru.ts         |  1 +
+ packages/app/src/i18n/resources/zh-CN.ts      |  1 +
+ packages/app/src/runtime/host-runtime.ts      | 10 ++
+ .../src/screens/new-workspace/form/index.tsx  |  4 +-
+ .../settings/host-appearance-section.tsx      | 22 ++++-
+ .../src/screens/settings/host-icon-row.tsx    | 91 +++++++++++++++++++
+ 19 files changed, 313 insertions(+), 12 deletions(-)
+ create mode 100644 packages/app/src/components/hosts/host-identity-icon.tsx
+ create mode 100644 packages/app/src/hosts/host-icons.ts
+ create mode 100644 packages/app/src/screens/settings/host-icon-row.tsx
+
+diff --git a/packages/app/src/components/hosts/host-identity-icon.tsx b/packages/app/src/components/hosts/host-identity-icon.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..7f22dfff2ff48ffc0c4f74a5a3a6aeb208b727ca
+--- /dev/null
++++ b/packages/app/src/components/hosts/host-identity-icon.tsx
+@@ -0,0 +1,47 @@
++import { useMemo, type ReactElement } from "react";
++import { View } from "react-native";
++import { StyleSheet } from "react-native-unistyles";
++import { HostStatusDot } from "@/components/host-status-dot";
++import { HOST_ICON_MAPPINGS } from "@/hosts/host-badge";
++import { themedHostIcon } from "@/hosts/host-icons";
++import { useHosts } from "@/runtime/host-runtime";
++import { ICON_SIZE } from "@/styles/theme";
++
++/**
++ * A host as host lists draw it: its icon in its color, with the connection status dot on the
++ * icon's corner. A host the user has not given an icon or a color keeps the bare status dot.
++ */
++export function HostIdentityIcon({ serverId }: { serverId: string }): ReactElement {
++  const hosts = useHosts();
++  const appearance = useMemo(
++    () => hosts.find((host) => host.serverId === serverId)?.appearance ?? null,
++    [hosts, serverId],
++  );
++
++  if (!appearance || (appearance.color === "none" && !appearance.icon)) {
++    return <HostStatusDot serverId={serverId} />;
++  }
++
++  const ThemedIcon = themedHostIcon(appearance.icon);
++  return (
++    <View style={styles.container}>
++      <ThemedIcon size={ICON_SIZE.sm} uniProps={HOST_ICON_MAPPINGS[appearance.color]} />
++      <View style={styles.status}>
++        <HostStatusDot serverId={serverId} />
++      </View>
++    </View>
++  );
++}
++
++const styles = StyleSheet.create({
++  container: {
++    width: ICON_SIZE.sm,
++    height: ICON_SIZE.sm,
++  },
++  status: {
++    position: "absolute",
++    right: -3,
++    bottom: -3,
++    transform: [{ scale: 0.75 }],
++  },
++});
+diff --git a/packages/app/src/components/hosts/host-picker.tsx b/packages/app/src/components/hosts/host-picker.tsx
+index ced0be3d55d58c0242e1d70566a2aa563d6afcfa..7bd6d48a462a56d92dee0305bace207c8325de94 100644
+--- a/packages/app/src/components/hosts/host-picker.tsx
++++ b/packages/app/src/components/hosts/host-picker.tsx
+@@ -3,7 +3,7 @@ import { Pressable, View } from "react-native";
+ import type { GestureResponderEvent } from "react-native";
+ import { Plus, Server, Settings } from "lucide-react-native";
+ import { StyleSheet, useUnistyles } from "react-native-unistyles";
+-import { HostStatusDot } from "@/components/host-status-dot";
++import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+ import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
+ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+ import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
+@@ -32,7 +32,7 @@ export interface HostPickerHost {
+ export function HostStatusDotSlot({ serverId }: { serverId: string }): ReactElement {
+   return (
+     <View style={styles.statusDotSlot}>
+-      <HostStatusDot serverId={serverId} />
++      <HostIdentityIcon serverId={serverId} />
+     </View>
+   );
+ }
+diff --git a/packages/app/src/hosts/appearance.test.ts b/packages/app/src/hosts/appearance.test.ts
+index da7d47e1f725dcc3ca2e3bcea21c4e1aa03064c8..8299517081814ab5666528cd7dd94d82399f9e83 100644
+--- a/packages/app/src/hosts/appearance.test.ts
++++ b/packages/app/src/hosts/appearance.test.ts
+@@ -26,6 +26,15 @@ describe("normalizeStoredHostAppearance", () => {
+     expect(normalizeStoredHostAppearance({ badgeDisplay: "loud" })).toEqual(expected);
+   });
+ 
++  it("keeps a chosen icon and drops an unknown one", () => {
++    expect(
++      normalizeStoredHostAppearance({ color: "teal", badgeDisplay: null, icon: "laptop" }),
++    ).toEqual({ color: "teal", badgeDisplay: null, icon: "laptop" });
++    expect(
++      normalizeStoredHostAppearance({ color: "teal", badgeDisplay: null, icon: "toaster" }),
++    ).toEqual({ color: "none", badgeDisplay: null });
++  });
++
+   it("round-trips a value the user actually chose", () => {
+     expect(normalizeStoredHostAppearance({ color: "teal", badgeDisplay: "icon" })).toEqual({
+       color: "teal",
+@@ -122,6 +131,15 @@ describe("selectHostBadges", () => {
+     });
+   });
+ 
++  it("carries the host's icon onto its badge", () => {
++    const badges = selectHostBadges({
++      hosts: [host("alpha", "Alpha", { color: "teal", badgeDisplay: "icon", icon: "cloud" })],
++      localServerId: null,
++      enabled: true,
++    });
++    expect(badges.get("alpha")?.icon).toBe("cloud");
++  });
++
+   it("falls back to the server id when the label is blank", () => {
+     const badges = selectHostBadges({
+       hosts: [host("alpha", "   ")],
+diff --git a/packages/app/src/hosts/appearance.ts b/packages/app/src/hosts/appearance.ts
+index e51f4410dcf8babc4ba4c4dfe249780a30f9e64a..3752f0e51942b34fab3afc57f0b8f28c5fee1862 100644
+--- a/packages/app/src/hosts/appearance.ts
++++ b/packages/app/src/hosts/appearance.ts
+@@ -1,5 +1,6 @@
+ import { IDENTITY_COLOR_NAMES, type IdentityColorName } from "@/styles/identity-colors";
+ import type { HostProfile } from "@/types/host-connection";
++import { HOST_ICON_NAMES, type HostIconName } from "@/hosts/host-icons";
+ import { z } from "zod";
+ 
+ export type HostColor = "none" | IdentityColorName;
+@@ -18,11 +19,14 @@ export const HOST_BADGE_DISPLAYS: readonly HostBadgeDisplay[] = ["name", "icon",
+ export interface HostAppearance {
+   color: HostColor;
+   badgeDisplay: HostBadgeDisplay | null;
++  /** Absent until the user picks one, so registries saved before the field still parse. */
++  icon?: HostIconName;
+ }
+ 
+ export const HostAppearanceSchema: z.ZodType<HostAppearance> = z.strictObject({
+   color: z.enum(["none", ...IDENTITY_COLOR_NAMES]),
+   badgeDisplay: z.enum(["name", "icon", "hidden"]).nullable(),
++  icon: z.enum(HOST_ICON_NAMES).optional(),
+ });
+ 
+ export function defaultHostAppearance(): HostAppearance {
+@@ -53,6 +57,7 @@ export interface HostBadgeModel {
+   label: string;
+   color: HostColor;
+   showLabel: boolean;
++  icon?: HostIconName;
+ }
+ 
+ export type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "appearance">;
+@@ -86,6 +91,7 @@ export function selectHostBadges(input: {
+       label: host.label.trim() || host.serverId,
+       color: host.appearance.color,
+       showLabel: display === "name",
++      icon: host.appearance.icon,
+     });
+   }
+   return badges;
+diff --git a/packages/app/src/hosts/host-badge.tsx b/packages/app/src/hosts/host-badge.tsx
+index d35a4324f5cffe297cf567d1affb052100cc57b8..aa63c5531b17be7a31a868eb89c48103ff519b49 100644
+--- a/packages/app/src/hosts/host-badge.tsx
++++ b/packages/app/src/hosts/host-badge.tsx
+@@ -1,7 +1,7 @@
+ import { Text, View } from "react-native";
+-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+-import { Server } from "lucide-react-native";
++import { StyleSheet } from "react-native-unistyles";
+ import { HOST_COLORS, type HostBadgeModel, type HostColor } from "@/hosts/appearance";
++import { themedHostIcon } from "@/hosts/host-icons";
+ import { identityForeground } from "@/styles/identity-colors";
+ import type { Theme } from "@/styles/theme";
+ 
+@@ -11,8 +11,6 @@ import type { Theme } from "@/styles/theme";
+  */
+ export const HOST_BADGE_ICON_SIZE = 12;
+ 
+-const ThemedServer = withUnistyles(Server);
+-
+ const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+ 
+ // One stable mapping per host color for the life of the module — a fresh `uniProps` identity
+@@ -21,7 +19,7 @@ const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted })
+ //
+ // Glyph and label share one color, so a badge reads as one object rather than a colored icon
+ // with an unrelated grey word beside it.
+-const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }> = (() => {
++export const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }> = (() => {
+   const byColor = {} as Record<HostColor, (theme: Theme) => { color: string }>;
+   for (const color of HOST_COLORS) {
+     byColor[color] =
+@@ -41,13 +39,14 @@ const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }>
+  * them — see `flexShrink` below.
+  */
+ export function HostBadge({ badge }: { badge: HostBadgeModel }) {
++  const ThemedIcon = themedHostIcon(badge.icon);
+   return (
+     <View
+       style={styles.badge}
+       testID={`host-badge-${badge.serverId}`}
+       accessibilityLabel={badge.label}
+     >
+-      <ThemedServer
++      <ThemedIcon
+         size={HOST_BADGE_ICON_SIZE}
+         style={styles.icon}
+         uniProps={HOST_ICON_MAPPINGS[badge.color]}
+diff --git a/packages/app/src/hosts/host-icons.ts b/packages/app/src/hosts/host-icons.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8296a5276e2aa73ece40a43f7eb9813989cc60b9
+--- /dev/null
++++ b/packages/app/src/hosts/host-icons.ts
+@@ -0,0 +1,82 @@
++import {
++  Bot,
++  Box,
++  Briefcase,
++  Building2,
++  Cloud,
++  Cpu,
++  Database,
++  FlaskConical,
++  Gamepad2,
++  HardDrive,
++  House,
++  Laptop,
++  Monitor,
++  Rocket,
++  Server,
++  SquareTerminal,
++  type LucideIcon,
++} from "lucide-react-native";
++import { withUnistyles } from "react-native-unistyles";
++
++/**
++ * The glyphs a host can wear. Order is the picker's order; `server` comes first because it is
++ * what a host shows until the user picks another one.
++ */
++export const HOST_ICON_NAMES = [
++  "server",
++  "laptop",
++  "monitor",
++  "cloud",
++  "cpu",
++  "hard-drive",
++  "terminal",
++  "box",
++  "database",
++  "house",
++  "building",
++  "briefcase",
++  "bot",
++  "rocket",
++  "flask",
++  "gamepad",
++] as const;
++
++export type HostIconName = (typeof HOST_ICON_NAMES)[number];
++
++export const DEFAULT_HOST_ICON: HostIconName = "server";
++
++export const HOST_ICON_COMPONENTS: Record<HostIconName, LucideIcon> = {
++  server: Server,
++  laptop: Laptop,
++  monitor: Monitor,
++  cloud: Cloud,
++  cpu: Cpu,
++  "hard-drive": HardDrive,
++  terminal: SquareTerminal,
++  box: Box,
++  database: Database,
++  house: House,
++  building: Building2,
++  briefcase: Briefcase,
++  bot: Bot,
++  rocket: Rocket,
++  flask: FlaskConical,
++  gamepad: Gamepad2,
++};
++
++// One themed component per glyph for the life of the module, so a badge's `uniProps` mapping
++// subscribes once instead of on every render.
++function themeIcon(icon: LucideIcon) {
++  return withUnistyles(icon);
++}
++
++type ThemedHostIcon = ReturnType<typeof themeIcon>;
++
++const THEMED_HOST_ICONS = Object.fromEntries(
++  HOST_ICON_NAMES.map((name) => [name, themeIcon(HOST_ICON_COMPONENTS[name])]),
++) as Record<HostIconName, ThemedHostIcon>;
++
++export function themedHostIcon(name: HostIconName | undefined): ThemedHostIcon {
++  return THEMED_HOST_ICONS[name ?? DEFAULT_HOST_ICON];
++}
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index 2720f2b22830f628f478c008ce49ae5822142040..c63083061206c0f9707f148ef46c825cc1a7c64a 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -2682,6 +2682,7 @@ export const ar: TranslationResources = {
+             blue: "أزرق",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "شارة الشريط الجانبي",
+           accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index be298be2474a5f78bfdc5668c7872887a0bb19c8..b9704d1ea58f443a1ae2875ec05bdcd74a21c238 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -2770,6 +2770,28 @@ export const en = {
+             blue: "Blue",
+           },
+         },
++        icon: {
++          label: "Icon",
++          accessibilityLabel: "Icon, {{value}}",
++          options: {
++            server: "Server",
++            laptop: "Laptop",
++            monitor: "Monitor",
++            cloud: "Cloud",
++            cpu: "Chip",
++            "hard-drive": "Drive",
++            terminal: "Terminal",
++            box: "Box",
++            database: "Database",
++            house: "House",
++            building: "Building",
++            briefcase: "Briefcase",
++            bot: "Bot",
++            rocket: "Rocket",
++            flask: "Flask",
++            gamepad: "Gamepad",
++          },
++        },
+         badge: {
+           label: "Sidebar badge",
+           accessibilityLabel: "Sidebar badge, {{value}}",
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index bfb574d8d6c1cf6a15bc5155a61be7bf75d4198f..01cbad27411e2dee509926392447030bf25d088b 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -2702,6 +2702,7 @@ export const es: TranslationResources = {
+             blue: "Azul",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "Insignia de la barra lateral",
+           accessibilityLabel: "Insignia de la barra lateral, {{value}}",
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index 730bc1ccd7a142229123ff4d84129857ab927874..f860762523350473146683823a55b8bb0dcb149a 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -2705,6 +2705,7 @@ export const fr: TranslationResources = {
+             blue: "Bleu",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "Badge de la barre latérale",
+           accessibilityLabel: "Badge de la barre latérale, {{value}}",
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index 1a22bea4bbfcc8f191e98cc8e473cb1647b9bd2d..085635d859ab2015ed028cd8437a1175b660856b 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -2669,6 +2669,7 @@ export const ja: TranslationResources = {
+             blue: "ブルー",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "サイドバーのバッジ",
+           accessibilityLabel: "サイドバーのバッジ、{{value}}",
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index 0c4da74d22dab6b181f01e1d2e884af6e7b15e85..5473cc151d6fbbfc0b37bd690a04eb4608e67b07 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -2658,6 +2658,7 @@ export const ko: TranslationResources = {
+             blue: "파란색",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "사이드바 배지",
+           accessibilityLabel: "사이드바 배지, {{value}}",
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index df25fc0ac149f172e56cec300051778ec3abd377..2da112ee864573f8d438b7f69aac9edda3026b1a 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -2684,6 +2684,7 @@ export const ptBR: TranslationResources = {
+             blue: "Azul",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "Selo da barra lateral",
+           accessibilityLabel: "Selo da barra lateral, {{value}}",
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index 40360bc33ee07749b2e5a9b5dd4b7612157aa5a2..c95d1d8b02b82dc62c61d774960f52158c673e4d 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -2691,6 +2691,7 @@ export const ru: TranslationResources = {
+             blue: "Синий",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "Значок на боковой панели",
+           accessibilityLabel: "Значок на боковой панели, {{value}}",
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index 88f466755040a0d62a4a6692d4f607ef4cce5fbf..8f5d9bc23b754554ea27cf9ca0ab258041b951c9 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -2617,6 +2617,7 @@ export const zhCN: TranslationResources = {
+             blue: "蓝色",
+           },
+         },
++        icon: en.settings.host.appearance.icon,
+         badge: {
+           label: "侧边栏徽章",
+           accessibilityLabel: "侧边栏徽章，{{value}}",
+diff --git a/packages/app/src/runtime/host-runtime.ts b/packages/app/src/runtime/host-runtime.ts
+index bb953220cb3dd73090b0be7c719143f48ab4620a..3f562442f1da6f75150f55cb39d659f553765355 100644
+--- a/packages/app/src/runtime/host-runtime.ts
++++ b/packages/app/src/runtime/host-runtime.ts
+@@ -25,6 +25,7 @@ import {
+   type HostProfile,
+ } from "@/types/host-connection";
+ import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
++import type { HostIconName } from "@/hosts/host-icons";
+ import {
+   buildDaemonWebSocketUrl,
+   buildRelayWebSocketUrl,
+@@ -2217,6 +2218,13 @@ export class HostRuntimeStore {
+     }));
+   }
+ 
++  async setHostIcon(serverId: string, icon: HostIconName): Promise<void> {
++    await this.updateHostAppearance(serverId, (host) => ({
++      ...host,
++      appearance: { ...host.appearance, icon },
++    }));
++  }
++
+   async setHostBadgeDisplay(serverId: string, badgeDisplay: HostBadgeDisplay): Promise<void> {
+     await this.updateHostAppearance(serverId, (host) => ({
+       ...host,
+@@ -3030,6 +3038,7 @@ export interface HostMutations {
+   beginLinkPairing: () => LinkPairing;
+   renameHost: (serverId: string, label: string) => Promise<void>;
+   setHostColor: (serverId: string, color: HostColor) => Promise<void>;
++  setHostIcon: (serverId: string, icon: HostIconName) => Promise<void>;
+   setHostBadgeDisplay: (serverId: string, badgeDisplay: HostBadgeDisplay) => Promise<void>;
+   removeHost: (serverId: string) => Promise<void>;
+   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
+@@ -3045,6 +3054,7 @@ export function useHostMutations(): HostMutations {
+       beginLinkPairing: () => store.beginLinkPairing(),
+       renameHost: (serverId, label) => store.renameHost(serverId, label),
+       setHostColor: (serverId, color) => store.setHostColor(serverId, color),
++      setHostIcon: (serverId, icon) => store.setHostIcon(serverId, icon),
+       setHostBadgeDisplay: (serverId, badgeDisplay) =>
+         store.setHostBadgeDisplay(serverId, badgeDisplay),
+       removeHost: (serverId) => store.removeHost(serverId),
+diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
+index c1cf1e2482705408fe7b0f672faf7a32a8bda3b6..9baccb02a156bdf73f33ed0242117f6d3b01d0bf 100644
+--- a/packages/app/src/screens/new-workspace/form/index.tsx
++++ b/packages/app/src/screens/new-workspace/form/index.tsx
+@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
+ import { StyleSheet } from "react-native-unistyles";
+ import type { TerminalProfile } from "@getpaseo/protocol/messages";
+ import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
+-import { HostStatusDot } from "@/components/host-status-dot";
++import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+ import { HostPicker } from "@/components/hosts/host-picker";
+ import type { LaunchTarget } from "@/new-workspace-launch/target";
+ import type { HostProjectListItem } from "@/projects/host-projects";
+@@ -191,7 +191,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+     [selectedProject, selectedProjectIconUri],
+   );
+   const hostIcon = useMemo(
+-    () => <HostStatusDot serverId={host.selectedServerId} />,
++    () => <HostIdentityIcon serverId={host.selectedServerId} />,
+     [host.selectedServerId],
+   );
+   const isWorktree = isolation.effectiveIsolation === "worktree";
+diff --git a/packages/app/src/screens/settings/host-appearance-section.tsx b/packages/app/src/screens/settings/host-appearance-section.tsx
+index 585be1cfda815859326ac224f60580ddf0047dc3..069de4ffb797cebe5f9d80ae9b74b4ff57ac4968 100644
+--- a/packages/app/src/screens/settings/host-appearance-section.tsx
++++ b/packages/app/src/screens/settings/host-appearance-section.tsx
+@@ -19,6 +19,8 @@ import {
+ } from "@/hosts/appearance";
+ import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
+ import { useHostMutations } from "@/runtime/host-runtime";
++import { HostIconRow } from "@/screens/settings/host-icon-row";
++import type { HostIconName } from "@/hosts/host-icons";
+ import { identityColor } from "@/styles/identity-colors";
+ import { settingsStyles } from "@/styles/settings";
+ import { ICON_SIZE, type Theme } from "@/styles/theme";
+@@ -220,8 +222,9 @@ function BadgePreview({
+             label: host.label,
+             color: host.appearance.color,
+             showLabel: badgeDisplay === "name",
++            icon: host.appearance.icon,
+           },
+-    [badgeDisplay, host.serverId, host.label, host.appearance.color],
++    [badgeDisplay, host.serverId, host.label, host.appearance.color, host.appearance.icon],
+   );
+   // The real sidebar row, so the preview can't drift from what the setting actually does.
+   return (
+@@ -243,7 +246,7 @@ function BadgePreview({
+ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+   const { t } = useTranslation();
+   const toast = useToast();
+-  const { setHostColor, setHostBadgeDisplay } = useHostMutations();
++  const { setHostColor, setHostIcon, setHostBadgeDisplay } = useHostMutations();
+   const localDaemon = useLocalDaemonServerIdState();
+   const isLocalHost = localDaemon.status === "resolved" && localDaemon.serverId === host.serverId;
+   const badgeDisplay = resolveHostBadgeDisplay({
+@@ -262,6 +265,16 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+     },
+     [host.serverId, setHostColor, t, toast],
+   );
++  const handleIconChange = useCallback(
++    async (icon: HostIconName) => {
++      try {
++        await setHostIcon(host.serverId, icon);
++      } catch {
++        toast.error(t("errors.unableToSave"));
++      }
++    },
++    [host.serverId, setHostIcon, t, toast],
++  );
+   const handleBadgeDisplayChange = useCallback(
+     async (next: HostBadgeDisplay) => {
+       try {
+@@ -288,6 +301,11 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+           </View>
+         </View>
+         <ColorRow color={host.appearance.color} onChange={handleColorChange} />
++        <HostIconRow
++          icon={host.appearance.icon}
++          color={host.appearance.color}
++          onChange={handleIconChange}
++        />
+         {badgeDisplay === null ? null : (
+           <>
+             <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
+diff --git a/packages/app/src/screens/settings/host-icon-row.tsx b/packages/app/src/screens/settings/host-icon-row.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..adf09b601e0ae9aab487715be3cb484b55129fd4
+--- /dev/null
++++ b/packages/app/src/screens/settings/host-icon-row.tsx
+@@ -0,0 +1,91 @@
++import { useCallback, useMemo } from "react";
++import type { TFunction } from "i18next";
++import { useTranslation } from "react-i18next";
++import { Text, View } from "react-native";
++import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
++import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
++import type { HostColor } from "@/hosts/appearance";
++import { HOST_ICON_MAPPINGS } from "@/hosts/host-badge";
++import {
++  DEFAULT_HOST_ICON,
++  HOST_ICON_NAMES,
++  themedHostIcon,
++  type HostIconName,
++} from "@/hosts/host-icons";
++import { settingsStyles } from "@/styles/settings";
++import { ICON_SIZE } from "@/styles/theme";
++
++function iconLabel(t: TFunction, icon: HostIconName): string {
++  return t(`settings.host.appearance.icon.options.${icon}`);
++}
++
++function IconGlyph({ icon, color }: { icon: HostIconName; color: HostColor }) {
++  const ThemedIcon = themedHostIcon(icon);
++  return <ThemedIcon size={ICON_SIZE.md} uniProps={HOST_ICON_MAPPINGS[color]} />;
++}
++
++function IconMenuItem({
++  icon,
++  color,
++  selected,
++  onChange,
++}: {
++  icon: HostIconName;
++  color: HostColor;
++  selected: boolean;
++  onChange: (icon: HostIconName) => void;
++}) {
++  const { t } = useTranslation();
++  const handleSelect = useCallback(() => onChange(icon), [icon, onChange]);
++  const leading = useMemo(() => <IconGlyph icon={icon} color={color} />, [icon, color]);
++  return (
++    <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
++      {iconLabel(t, icon)}
++    </DropdownMenuItem>
++  );
++}
++
++/** Picks the glyph host lists and badges draw for this host, previewed in its color. */
++export function HostIconRow({
++  icon = DEFAULT_HOST_ICON,
++  color,
++  onChange,
++}: {
++  icon?: HostIconName;
++  color: HostColor;
++  onChange: (icon: HostIconName) => void;
++}) {
++  const { t } = useTranslation();
++  const selectedLabel = iconLabel(t, icon);
++  const leading = useMemo(() => <IconGlyph icon={icon} color={color} />, [icon, color]);
++  return (
++    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
++      <View style={settingsStyles.rowContent}>
++        <Text style={settingsStyles.rowTitle}>{t("settings.host.appearance.icon.label")}</Text>
++      </View>
++      <DropdownMenu>
++        <DropdownTrigger
++          testID="host-appearance-icon"
++          accessibilityRole="button"
++          accessibilityLabel={t("settings.host.appearance.icon.accessibilityLabel", {
++            value: selectedLabel,
++          })}
++          leading={leading}
++        >
++          {selectedLabel}
++        </DropdownTrigger>
++        <DropdownMenuContent side="bottom" align="end" width={200}>
++          {HOST_ICON_NAMES.map((option) => (
++            <IconMenuItem
++              key={option}
++              icon={option}
++              color={color}
++              selected={option === icon}
++              onChange={onChange}
++            />
++          ))}
++        </DropdownMenuContent>
++      </DropdownMenu>
++    </View>
++  );
++}

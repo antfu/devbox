@@ -147,6 +147,28 @@ patches refer to them in their `Fork-Change` trailer.
   Checked: unit tests only; the rebuilt image and an upstream client are not checked yet.
 - Drop when: upstream supports wildcard origins.
 
+### F-9: Host icon, shown with the host's color in host pickers
+
+- Status: active, ours only
+- Requested: 2026-11-10, "patch paseo to support changing host icon as well in the config. in the host
+  dropdown, it should render with host's icon and color."
+- Why: a host's appearance had only a name and a color, and host pickers showed only a status dot, so
+  hosts with similar names (one per laptop) were hard to tell apart. Host appearance lives in the app,
+  which no plugin hook reaches.
+- Patches: `feat(app): pick a host icon and show it in host pickers`
+- Touches: app new `hosts/host-icons.ts` (the icon set), `components/hosts/host-identity-icon.tsx`,
+  `screens/settings/host-icon-row.tsx`; small hooks in `hosts/appearance.ts` (optional `icon`) and its
+  test, `hosts/host-badge.tsx`, `runtime/host-runtime.ts` (`setHostIcon`),
+  `components/hosts/host-picker.tsx` (`HostStatusDotSlot`), `screens/new-workspace/form/index.tsx`,
+  `screens/settings/host-appearance-section.tsx`; `en.ts` strings and one line per other locale.
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. The icon is per-device, next
+  to the color, and optional in the stored host registry, so registries saved before it still parse.
+  `HostStatusDotSlot` draws the identity icon, so every host list that uses it (new workspace, host
+  filter, host chooser, schedules) gets it. A host with no icon and no color looks as it did before.
+  Checked: typecheck and unit tests only; not checked in a browser yet.
+- Config: Settings → host → Appearance → Icon.
+- Drop when: upstream ships host icons.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
