@@ -1,0 +1,201 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Wed, 11 Nov 2026 01:51:49 +0000
+Subject: [PATCH] feat(app): switch between queue and steer next to the send
+ button
+
+Choosing whether a message sent during a running turn queues or steers
+meant a trip to Settings. A small button left of the send button now
+shows the current default send behavior and flips it between queue and
+steer. It writes the same app setting as Settings, so both stay in sync;
+interrupt can still be picked in Settings and the switch shows it.
+
+Fork-Change: F-16
+---
+ packages/app/src/composer/index.tsx           |  11 +-
+ .../composer/send-behavior-switch-model.ts    |   6 +
+ .../src/composer/send-behavior-switch.test.ts |  13 +++
+ .../app/src/composer/send-behavior-switch.tsx | 110 ++++++++++++++++++
+ 4 files changed, 138 insertions(+), 2 deletions(-)
+ create mode 100644 packages/app/src/composer/send-behavior-switch-model.ts
+ create mode 100644 packages/app/src/composer/send-behavior-switch.test.ts
+ create mode 100644 packages/app/src/composer/send-behavior-switch.tsx
+
+diff --git a/packages/app/src/composer/index.tsx b/packages/app/src/composer/index.tsx
+index d6b4bae63fb0296e539023795e23bbb994fdd6bc..567f4e8c5e5793a2ce93456b56fb3cfd91505717 100644
+--- a/packages/app/src/composer/index.tsx
++++ b/packages/app/src/composer/index.tsx
+@@ -118,6 +118,7 @@ import {
+ import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
+ import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
+ import { resolveActiveSendBehavior } from "./input/state";
++import { SendBehaviorSwitch } from "./send-behavior-switch";
+ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
+ import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
+ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
+@@ -1161,10 +1162,16 @@ function ComposerRightControlsSlot({
+   const hideVoiceForCompactInput = isCompact && hasSendableContent;
+   const showVoiceModeButton =
+     showVoice && !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
+-  if (!showVoiceModeButton) return null;
++  if (!showVoiceModeButton && !hasAgent) return null;
+   return (
+     <View style={styles.rightControls}>
+-      <ComposerVoiceModeButton {...voiceProps} />
++      {showVoiceModeButton ? <ComposerVoiceModeButton {...voiceProps} /> : null}
++      {hasAgent ? (
++        <SendBehaviorSwitch
++          iconSize={voiceProps.buttonIconSize}
++          disabled={!voiceProps.isConnected}
++        />
++      ) : null}
+     </View>
+   );
+ }
+diff --git a/packages/app/src/composer/send-behavior-switch-model.ts b/packages/app/src/composer/send-behavior-switch-model.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6f5fd1928aea70a4306204c77207ca75ab64560
+--- /dev/null
++++ b/packages/app/src/composer/send-behavior-switch-model.ts
+@@ -0,0 +1,6 @@
++import type { SendBehavior } from "@/hooks/use-settings/storage";
++
++/** The composer switch flips between queue and steer; interrupt is only set from Settings. */
++export function nextSendBehavior(current: SendBehavior): SendBehavior {
++  return current === "queue" ? "steer" : "queue";
++}
+diff --git a/packages/app/src/composer/send-behavior-switch.test.ts b/packages/app/src/composer/send-behavior-switch.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..01d52854ad4bbd9e4776852cf8f3fd9893179978
+--- /dev/null
++++ b/packages/app/src/composer/send-behavior-switch.test.ts
+@@ -0,0 +1,13 @@
++import { describe, expect, it } from "vitest";
++import { nextSendBehavior } from "./send-behavior-switch-model";
++
++describe("nextSendBehavior", () => {
++  it("switches queue to steer", () => {
++    expect(nextSendBehavior("queue")).toBe("steer");
++  });
++
++  it("switches steer and interrupt to queue", () => {
++    expect(nextSendBehavior("steer")).toBe("queue");
++    expect(nextSendBehavior("interrupt")).toBe("queue");
++  });
++});
+diff --git a/packages/app/src/composer/send-behavior-switch.tsx b/packages/app/src/composer/send-behavior-switch.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..6445e298bcfb5fdc66af611bef20baca39944fe4
+--- /dev/null
++++ b/packages/app/src/composer/send-behavior-switch.tsx
+@@ -0,0 +1,110 @@
++import { useCallback } from "react";
++import { Text, View, type PressableStateCallbackType } from "react-native";
++import { useTranslation } from "react-i18next";
++import { StyleSheet, withUnistyles } from "react-native-unistyles";
++import { ListEnd, Navigation, Zap } from "lucide-react-native";
++import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
++import { useAppSettings } from "@/hooks/use-settings";
++import { nextSendBehavior } from "./send-behavior-switch-model";
++import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
++import { getShortcutOs } from "@/utils/shortcut-platform";
++import type { Theme } from "@/styles/theme";
++
++const ThemedListEnd = withUnistyles(ListEnd);
++const ThemedNavigation = withUnistyles(Navigation);
++const ThemedZap = withUnistyles(Zap);
++const ICONS = { queue: ThemedListEnd, steer: ThemedNavigation, interrupt: ThemedZap } as const;
++const foreground = (theme: Theme) => ({ color: theme.colors.foreground });
++const foregroundMuted = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
++
++/** Shows the default send behavior next to the send button and switches it between queue and steer. */
++export function SendBehaviorSwitch({
++  iconSize,
++  disabled,
++}: {
++  iconSize: number;
++  disabled: boolean;
++}) {
++  const { t } = useTranslation();
++  const { settings, updateSettings } = useAppSettings();
++  const shortcutsAvailable = useKeyboardShortcutsAvailable();
++  const modifier = getShortcutOs() === "mac" ? "⌘" : "Ctrl";
++  const behavior = settings.sendBehavior;
++  const toggle = useCallback(
++    () => void updateSettings({ sendBehavior: nextSendBehavior(behavior) }),
++    [behavior, updateSettings],
++  );
++  const triggerStyle = useCallback(
++    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
++      styles.button,
++      hovered ? styles.buttonHovered : undefined,
++      disabled ? styles.buttonDisabled : undefined,
++    ],
++    [disabled],
++  );
++  const Icon = ICONS[behavior];
++  const renderContent = useCallback(
++    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
++      <Icon size={iconSize} uniProps={hovered ? foreground : foregroundMuted} />
++    ),
++    [Icon, iconSize],
++  );
++  const label = `${t("settings.general.defaultSend.label")}: ${t(
++    `settings.general.defaultSend.options.${behavior}`,
++  )}`;
++  const description = t(
++    shortcutsAvailable && settings.sendShortcut === "mod-enter"
++      ? `settings.general.defaultSend.commandEnterDescriptions.${behavior}`
++      : `settings.general.defaultSend.descriptions.${behavior}`,
++    { modifier },
++  );
++  return (
++    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
++      <TooltipTrigger
++        onPress={toggle}
++        disabled={disabled}
++        accessibilityLabel={label}
++        accessibilityRole="button"
++        testID="composer-send-behavior-switch"
++        style={triggerStyle}
++      >
++        {renderContent}
++      </TooltipTrigger>
++      <TooltipContent side="top" align="center" offset={8}>
++        <View style={styles.tooltip}>
++          <Text style={styles.tooltipTitle}>{label}</Text>
++          <Text style={styles.tooltipText}>{description}</Text>
++        </View>
++      </TooltipContent>
++    </Tooltip>
++  );
++}
++
++const styles = StyleSheet.create((theme: Theme) => ({
++  button: {
++    width: 28,
++    height: 28,
++    borderRadius: theme.borderRadius.full,
++    alignItems: "center",
++    justifyContent: "center",
++  },
++  buttonHovered: {
++    backgroundColor: theme.colors.surface2,
++  },
++  buttonDisabled: {
++    opacity: 0.5,
++  },
++  tooltip: {
++    maxWidth: 260,
++    gap: theme.spacing[1],
++  },
++  tooltipTitle: {
++    fontSize: theme.fontSize.base,
++    fontWeight: theme.fontWeight.medium,
++    color: theme.colors.popoverForeground,
++  },
++  tooltipText: {
++    fontSize: theme.fontSize.sm,
++    color: theme.colors.popoverForeground,
++  },
++}));

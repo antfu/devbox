@@ -303,6 +303,25 @@ patches refer to them in their `Fork-Change` trailer.
   browser yet.
 - Drop when: upstream lists projects from every host in New workspace.
 
+### F-16: Queue/steer switch next to the send button
+
+- Status: active, ours only
+- Requested: 2026-11-11, "patch paseo, to have the queue/steer switch next to the send button in the
+  prompt composer"
+- Why: the default send behavior (queue, steer or interrupt while a turn runs) was only in Settings →
+  General. The composer toolbar is app UI; plugin composer pills sit above the input, not next to the
+  send button.
+- Patches: `feat(app): switch between queue and steer next to the send button`
+- Touches: app new `composer/send-behavior-switch.tsx` (the button) and
+  `composer/send-behavior-switch-model.ts` (`nextSendBehavior`) with its test; a hook in
+  `composer/index.tsx` (`ComposerRightControlsSlot` renders it when there is an agent).
+- Compatibility: web UI only; no wire or daemon change, so no feature flag, and no new strings (it reuses
+  the `settings.general.defaultSend` labels and descriptions). It writes the existing `sendBehavior` app
+  setting, so Settings and the switch stay in sync. It flips queue ↔ steer; interrupt still comes from
+  Settings, shows a zap icon, and goes to queue on press. Checked: typecheck, lint and unit tests only;
+  not checked in a browser yet.
+- Drop when: upstream puts a send behavior control in the composer.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
