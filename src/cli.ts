@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { resolveAgentCliArgs } from './agent-clis'
 import { buildImages } from './build'
 import { IDENTITIES, isIdentityId, setupGpgKey } from './keys'
 import { exportPatches, prepareBuildTree, startEditing } from './paseo-patches'
@@ -54,6 +55,10 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
     }
     buildImages(Boolean(process.env.IMAGE_REGISTRY))
     break
+  case 'images agent-cli-args':
+    // One build arg per line, the shape docker/build-push-action's `build-args` takes.
+    console.log(resolveAgentCliArgs().join('\n'))
+    break
   case 'keys setup': {
     const ids = rest.filter(arg => !arg.startsWith('--'))
     const unknown = ids.filter(id => !isIdentityId(id))
@@ -71,6 +76,6 @@ switch (`${command} ${subcommand ?? ''}`.trim()) {
     break
   }
   default:
-    console.error('usage: cli.ts build | vendor setup|upgrade [dev-container|paseo] | paseo prepare|edit [--force]|export | keys setup [bot|main] [--force]')
+    console.error('usage: cli.ts build | images agent-cli-args | vendor setup|upgrade [dev-container|paseo] | paseo prepare|edit [--force]|export | keys setup [bot|main] [--force]')
     process.exit(1)
 }

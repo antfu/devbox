@@ -4,8 +4,11 @@
 # depends on paseo, so changing the patches or moving to a new release never rebuilds these layers. Keep it
 # so: no paseo user (paseo's Dockerfile renames the image's uid 1000 user, `node`, to `paseo`, so folders
 # are owned by the number 1000), and no tools that move fast, which belong in services/dev-base.
-# Keep NODE_IMAGE as upstream's default in vendor/paseo/docker/base/Dockerfile.
-ARG NODE_IMAGE=node:22-bookworm-slim
+# Keep NODE_IMAGE on the tag of upstream's default in vendor/paseo/docker/base/Dockerfile, pinned to a digest:
+# the tag moves with every node and Debian release, and a new base rebuilds every layer of every image, about
+# 2 GB to download. Bump the digest on purpose, e.g. when moving to a new paseo release:
+# `docker buildx imagetools inspect node:22-bookworm-slim` prints the current one.
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
 FROM ${NODE_IMAGE}
 
 # Layers run from the least to the most often changed, so an edit near the bottom keeps the heavy layers
