@@ -4,9 +4,9 @@
 # Built as `dev-base` by `pnpm build:dev-base`, before the services that start FROM it.
 # It starts from paseo-base, built by `pnpm build:paseo`: the upstream release vendor/paseo pins, with the
 # patches in services/paseo/patches applied, built with upstream's own docker/base/Dockerfile on top of
-# paseo-toolchain (services/toolchain), which holds the system packages, jup, uv, Rust and Chromium. That image
-# supplies the `paseo` user (uid 1000), tini, gosu, /workspace and an entrypoint that runs any command it is
-# given as that user; paseo's daemon only starts when no command is given. See AGENTS.md.
+# paseo-toolchain (services/toolchain), which holds the system packages, git-lfs, jup, uv, fnm, Rust and
+# Chromium. That image supplies the `paseo` user (uid 1000), tini, gosu, /workspace and an entrypoint that
+# runs any command it is given as that user; paseo's daemon only starts when no command is given. See AGENTS.md.
 
 # The agent CLIs are about 1 GB, and paseo-base changes with every patch. Each CLI is installed in its own
 # stage on paseo-toolchain, which paseo-base is built on, so the same node runs them, and copied in with
@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/root/.npm npm install -g ${PI_PACKAGES}
 
 # The small tools share one layer.
 FROM agent-cli AS tools
-ARG TOOLS_PACKAGES="agent-browser skills taze @antfu/ni"
+ARG TOOLS_PACKAGES="agent-browser skills taze @antfu/ni vercel"
 RUN --mount=type=cache,target=/root/.npm npm install -g ${TOOLS_PACKAGES}
 
 FROM paseo-base
