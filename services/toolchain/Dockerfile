@@ -19,19 +19,24 @@ FROM ${NODE_IMAGE}
 # gnupg signs the agents' commits; the entrypoint imports the key on start.
 # Python for the agents: pip is blocked system-wide (PEP 668), so projects use venv or uv.
 # build-essential supplies the C compiler and linker that Rust and native npm modules need.
+# git-lfs is turned on in the system git config, since the home is a host mount; unzip is for fnm's installer.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update && apt-get install -y --no-install-recommends gh build-essential python3 python3-pip python3-venv python-is-python3 \
+  && apt-get update && apt-get install -y --no-install-recommends gh build-essential python3 python3-pip python3-venv python-is-python3 git-lfs unzip \
+  && git lfs install --system \
   && rm -rf /var/lib/apt/lists/*
 
 # Tools that have to live outside /home/paseo, which is a host mount and hides anything installed there.
 # jup manages package manager and runtime versions; its store is writable by the daemon's user.
-# uv sits next to the jup shims in /usr/local/bin.
-ENV JUP_HOME=/opt/jup
+# uv and fnm sit next to the jup shims in /usr/local/bin. fnm keeps its Node versions in /opt/fnm, writable by
+# the daemon's user; a shell needs `eval "$(fnm env)"` to use them.
+ENV JUP_HOME=/opt/jup FNM_DIR=/opt/fnm
 RUN curl -fsSL https://jup.unjs.io/install.sh | JUP_SHIM_DIRECTORY=/usr/local/bin sh \
   && mkdir -p /opt/jup && chown -R 1000:1000 /opt/jup \
-  && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+  && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh \
+  && curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /usr/local/bin --skip-shell \
+  && mkdir -p /opt/fnm && chown -R 1000:1000 /opt/fnm
 
 # The Rust toolchain, outside /home/paseo for the same reason. The minimal profile keeps the layer small;
 # clippy and rustfmt are added back. The daemon's user owns both folders, so cargo can fetch crates
