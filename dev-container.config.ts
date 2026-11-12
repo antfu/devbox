@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
 import process from 'node:process'
+import { parseEnv } from 'node:util'
 import { defineConfig } from '@antfu/dev-container'
 
 try {
@@ -8,6 +10,13 @@ try {
 catch {
   // .env is optional, the defaults below apply.
 }
+
+// Optional tokens that live in .env.secret, which dev-container reads itself: only their presence is
+// checked here, and the values never enter this process's environment.
+const secretFile = existsSync('.env.secret')
+  ? parseEnv(readFileSync('.env.secret', 'utf8'))
+  : {}
+const hasSecret = (name: string) => Boolean(process.env[name] || secretFile[name])
 
 // With IMAGE_REGISTRY set (e.g. ghcr.io/<owner>/devbox), the paseo services pull the image that
 // .github/workflows/images.yml builds, instead of building the toolchain, paseo and dev-base here.
@@ -47,10 +56,12 @@ const agentEnv = {
 /**
  * A paseo daemon on the shared toolchain. Each one needs its own port, since the relay publishes it on the
  * host, and its own tailnet node. `githubToken` names the .env.secret variable that replaces the stack's
- * GITHUB_TOKEN_BOT for this daemon. `identity` picks the commit identity and signing key. A `client` only serves
- * the web UI: it gets no model keys, signing key, git identity or skills, since no agent runs there.
+ * GITHUB_TOKEN_BOT for this daemon. `npmToken` names the one this daemon alone gets as NPM_TOKEN, when set.
+ * `identity` picks the commit identity and signing key. A `client` only serves the web UI: it gets no model
+ * keys, signing key, git identity or skills, since no agent runs there.
  */
-function paseo({ name, port, githubToken, identity, client = false }: { name: string, port: number, githubToken?: string, identity?: keyof typeof identities, client?: boolean }) {
+function paseo({ name, port, githubToken, npmToken, identity, client = false }: { name: string, port: number, githubToken?: string, npmToken?: string, identity?: keyof typeof identities, client?: boolean }) {
+  const npm = npmToken && hasSecret(npmToken)
   const hostname = node(name)
   return {
     ...paseoImage
@@ -75,9 +86,13 @@ function paseo({ name, port, githubToken, identity, client = false }: { name: st
         PASEO_CORS_ORIGINS: `https://*.${process.env.TAILNET_DOMAIN}`,
       },
     },
-    ...githubToken && {
-      secrets: {
+    secrets: {
+      ...githubToken && {
         GITHUB_TOKEN: { env: githubToken },
+      },
+      // dev-base's entrypoint points ~/.npmrc at it, so npm and pnpm use it for registry.npmjs.org.
+      ...npm && {
+        NPM_TOKEN: { env: npmToken },
       },
     },
     ports: [
@@ -97,12 +112,13 @@ function paseo({ name, port, githubToken, identity, client = false }: { name: st
 export default defineConfig({
   name: 'devbox',
   // The bot's GITHUB_TOKEN_BOT in .env.secret is brokered for git and gh, and the cage sees it as GITHUB_TOKEN
-  // and GH_TOKEN, which the tools read; no service here uses npm.
+  // and GH_TOKEN, which the tools read. npm has no stack-wide token: only paseo-main gets one, from
+  // NPM_TOKEN_MAIN, so the builtin stays off without it.
   builtins: {
     github: {
       from: { env: 'GITHUB_TOKEN_BOT' },
     },
-    npm: false,
+    ...!hasSecret('NPM_TOKEN_MAIN') && { npm: false },
   },
   // The dashboard's bearer token is the same CLIENT_ACCESS_PASSWORD as paseo's; unset, dev-container makes a random one.
   // The daemon (pnpm daemon:install) serves the dashboard, whose Upgrade button pulls, rebuilds and restarts.
@@ -135,12 +151,14 @@ export default defineConfig({
       identity: 'bot',
     }),
     // The server for the main GitHub account, a separate node with its own home. GITHUB_TOKEN_MAIN in
-    // .env.secret is swapped in for it only; the other services keep GITHUB_TOKEN_BOT.
+    // .env.secret is swapped in for it only; the other services keep GITHUB_TOKEN_BOT. NPM_TOKEN_MAIN, if
+    // set, is its NPM_TOKEN; no other service gets one.
     'paseo-main': paseo({
       name: 'paseo-main',
       port: 6768,
       identity: 'main',
       githubToken: 'GITHUB_TOKEN_MAIN',
+      npmToken: 'NPM_TOKEN_MAIN',
     }),
   },
 })

@@ -25,6 +25,22 @@ import_key() {
 
 import_key
 
+# npm and pnpm read NPM_TOKEN only through an .npmrc line that names it. With NPM_TOKEN set (a broker
+# placeholder, fresh on every start), the user's ~/.npmrc gets that line; without it, the line goes, since
+# npm fails on a variable it cannot replace. Other lines are kept.
+NPM_AUTH_LINE='//registry.npmjs.org/:_authToken=${NPM_TOKEN}'
+sync_npmrc() {
+  local npmrc="$RUN_HOME/.npmrc"
+  if [[ -n "${NPM_TOKEN:-}" ]]; then
+    grep -qxF "$NPM_AUTH_LINE" "$npmrc" 2>/dev/null \
+      || gosu "$RUN_USER" sh -c 'printf "%s\n" "$1" >> "$2"' sh "$NPM_AUTH_LINE" "$npmrc"
+  elif [[ -f "$npmrc" ]]; then
+    gosu "$RUN_USER" sed -i "\\|^//registry\\.npmjs\\.org/:_authToken=\\\${NPM_TOKEN}\$|d" "$npmrc"
+  fi
+}
+
+sync_npmrc
+
 # Claude Code adds no co-author trailer or PR line unless the user's settings say otherwise.
 gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/seed-claude-settings.mjs
 
