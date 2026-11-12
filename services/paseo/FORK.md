@@ -322,6 +322,35 @@ patches refer to them in their `Fork-Change` trailer.
   not checked in a browser yet.
 - Drop when: upstream puts a send behavior control in the composer.
 
+### F-17: CPU and memory of each host in the host dropdowns
+
+- Status: active, ours only
+- Requested: 2026-11-12, "patch in paseo: in the sidebar's bottom, the hosts dropdown, for each host, show
+  their CPU and Mem status. same for the \"new workspace\" host dropdown. If there is no api for that,
+  improve the container/orbstack/monitor to expose such information"
+- Why: upstream has no API for a host's CPU or memory (only free-text diagnostics). The daemon reads them
+  itself, so no change to dev-container's monitor was needed: inside a container it reads its own cgroup,
+  which gives the numbers `docker stats` shows, and every host already has a daemon connection the app can
+  ask. The RPC is in the daemon and the rows are app UI, which no plugin hook reaches.
+- Patches: `feat: show each host's CPU and memory in the host pickers`
+- Touches: protocol `messages.ts` (`daemon.get_host_stats` request and response, the feature flag); server
+  new `server/host-stats.ts` and its test, one case in `session.ts`, two lines in
+  `authorization/operation-permissions.ts`, the flag in `websocket-server.ts`; client `getHostStats` in
+  `daemon-client.ts`; app new `hosts/host-stats-format.ts` and its test, `hosts/use-host-stats.ts`,
+  `components/hosts/host-stats-label.tsx`, a `showHostStats` prop in `components/hosts/host-picker.tsx`,
+  and one-line hooks (the prop and a wider menu) in `components/left-sidebar.tsx` and
+  `screens/new-workspace/form/index.tsx`.
+- Compatibility: flag `server_info.features.hostStats`. A new dotted RPC, `daemon.get_host_stats`, with
+  `daemon.read` permission; no existing message changes. Upstream apps never send it. Our app polls it every
+  3 s, only while a host dropdown is open and only for connected hosts that advertise the flag; other hosts
+  show no stats. CPU is the busy share of the CPUs the host can use (the cgroup's `cpu.max` limit, or all
+  cores), averaged since the previous read, or over 250 ms when there is none or it is over a minute old.
+  Memory in a container is `memory.current` minus `inactive_file`, out of `memory.max` or the VM's memory.
+  The cgroup is used only when the daemon is at its cgroup namespace root (`/proc/self/cgroup` is `0::/`);
+  elsewhere (macOS, a bare Linux host) the OS totals apply, and macOS counts cache as used.
+  Checked: typecheck, lint and unit tests only; not checked in a browser yet.
+- Drop when: upstream reports host resource use.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
