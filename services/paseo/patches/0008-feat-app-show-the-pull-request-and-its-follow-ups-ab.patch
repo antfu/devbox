@@ -13,30 +13,44 @@ conflicts" when the change request conflicts with its base, "Fix CI"
 when a check failed, and "Create PR" for local changes with no change
 request.
 
+The prompts are editable, since a team with its own way to resolve
+conflicts or open a pull request would otherwise type it each time. A
+Quick actions settings page edits each prompt, saved on this device;
+{{url}} and {{base}} are filled in when it is sent, and an empty prompt
+goes back to the default.
+
 Fork-Change: F-10
 ---
  .../src/components/sidebar-workspace-list.tsx |   2 +-
  .../sidebar/workspace-meta-row/index.tsx      |   6 +-
- .../src/composer/pull-request-actions.test.ts |  77 +++++++
+ .../src/composer/pull-request-actions.test.ts |  77 ++++++
  .../app/src/composer/pull-request-actions.ts  |  33 +++
- .../app/src/composer/pull-request-pills.tsx   | 217 ++++++++++++++++++
+ .../app/src/composer/pull-request-pills.tsx   | 220 ++++++++++++++++++
+ .../src/composer/quick-action-prompts.test.ts |  31 +++
+ .../app/src/composer/quick-action-prompts.ts  |  68 ++++++
  packages/app/src/git/pr-hint.test.ts          |  13 ++
  packages/app/src/git/pr-hint.ts               |   4 +
  .../app/src/git/pull-request-state-icon.tsx   |  14 +-
- packages/app/src/i18n/resources/ar.ts         |   1 +
- packages/app/src/i18n/resources/en.ts         |  16 ++
- packages/app/src/i18n/resources/es.ts         |   1 +
- packages/app/src/i18n/resources/fr.ts         |   1 +
- packages/app/src/i18n/resources/ja.ts         |   1 +
- packages/app/src/i18n/resources/ko.ts         |   1 +
- packages/app/src/i18n/resources/pt-BR.ts      |   1 +
- packages/app/src/i18n/resources/ru.ts         |   1 +
- packages/app/src/i18n/resources/zh-CN.ts      |   1 +
+ packages/app/src/i18n/resources/ar.ts         |   3 +
+ packages/app/src/i18n/resources/en.ts         |  23 ++
+ packages/app/src/i18n/resources/es.ts         |   3 +
+ packages/app/src/i18n/resources/fr.ts         |   3 +
+ packages/app/src/i18n/resources/ja.ts         |   3 +
+ packages/app/src/i18n/resources/ko.ts         |   3 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   3 +
+ packages/app/src/i18n/resources/ru.ts         |   3 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   3 +
  packages/app/src/panels/agent-tracks.tsx      |   7 +
- 18 files changed, 393 insertions(+), 4 deletions(-)
+ packages/app/src/screens/settings-screen.tsx  |   8 +
+ .../settings/quick-actions-section.tsx        |  88 +++++++
+ packages/app/src/utils/host-routes.ts         |   1 +
+ 23 files changed, 615 insertions(+), 4 deletions(-)
  create mode 100644 packages/app/src/composer/pull-request-actions.test.ts
  create mode 100644 packages/app/src/composer/pull-request-actions.ts
  create mode 100644 packages/app/src/composer/pull-request-pills.tsx
+ create mode 100644 packages/app/src/composer/quick-action-prompts.test.ts
+ create mode 100644 packages/app/src/composer/quick-action-prompts.ts
+ create mode 100644 packages/app/src/screens/settings/quick-actions-section.tsx
 
 diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
 index c7fb4c97439f265afbca3c5d25068df6d0e377a1..0399aab5761d4bcfbe67da08824454edf5534c43 100644
@@ -192,10 +206,10 @@ index 0000000000000000000000000000000000000000..6b0413069fcd7072cc97c13586e01bc8
 +}
 diff --git a/packages/app/src/composer/pull-request-pills.tsx b/packages/app/src/composer/pull-request-pills.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..2038e852ddcb8886160316f91a4dc47392fa0f49
+index 0000000000000000000000000000000000000000..41620b467922157036f4cd2b5cd4de45db25004e
 --- /dev/null
 +++ b/packages/app/src/composer/pull-request-pills.tsx
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,220 @@
 +import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 +import { useTranslation } from "react-i18next";
 +import { Text } from "react-native";
@@ -210,6 +224,7 @@ index 0000000000000000000000000000000000000000..2038e852ddcb8886160316f91a4dc473
 +  selectPullRequestQuickActions,
 +  type PullRequestQuickAction,
 +} from "@/composer/pull-request-actions";
++import { fillQuickActionPrompt, useQuickActionPromptsStore } from "@/composer/quick-action-prompts";
 +import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 +import { useToast } from "@/contexts/toast-context";
 +import { getForgePresentation, normalizeForge } from "@/git/forge";
@@ -302,10 +317,12 @@ index 0000000000000000000000000000000000000000..2038e852ddcb8886160316f91a4dc473
 +        toast.error(t("workspace.terminal.hostDisconnected"));
 +        return;
 +      }
-+      const text = t(`workspace.git.pr.quickActions.${action}.prompt`, {
-+        url: state?.prHint?.url ?? "",
-+        base: state?.baseRefName ?? "",
-+      });
++      const values = { url: state?.prHint?.url ?? "", base: state?.baseRefName ?? "" };
++      // A prompt set in Settings → Quick actions wins over the default.
++      const customPrompt = useQuickActionPromptsStore.getState().prompts[action];
++      const text = customPrompt
++        ? fillQuickActionPrompt(customPrompt, values)
++        : t(`workspace.git.pr.quickActions.${action}.prompt`, values);
 +      try {
 +        await dispatchComposerAgentMessage({
 +          client,
@@ -413,6 +430,117 @@ index 0000000000000000000000000000000000000000..2038e852ddcb8886160316f91a4dc473
 +    </PressHighlight>
 +  );
 +}
+diff --git a/packages/app/src/composer/quick-action-prompts.test.ts b/packages/app/src/composer/quick-action-prompts.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..3434924e88e6348b3e3adf37de3633e931831d02
+--- /dev/null
++++ b/packages/app/src/composer/quick-action-prompts.test.ts
+@@ -0,0 +1,31 @@
++import { beforeEach, describe, expect, it } from "vitest";
++import { fillQuickActionPrompt, useQuickActionPromptsStore } from "./quick-action-prompts";
++
++describe("fillQuickActionPrompt", () => {
++  it("fills every url and base placeholder", () => {
++    expect(
++      fillQuickActionPrompt("Merge {{base}} into {{ url }}, then check {{url}}.", {
++        url: "https://github.com/acme/repo/pull/1",
++        base: "main",
++      }),
++    ).toBe(
++      "Merge main into https://github.com/acme/repo/pull/1, then check https://github.com/acme/repo/pull/1.",
++    );
++  });
++
++  it("leaves other placeholders as they are", () => {
++    expect(fillQuickActionPrompt("{{other}}", { url: "u", base: "b" })).toBe("{{other}}");
++  });
++});
++
++describe("useQuickActionPromptsStore", () => {
++  beforeEach(() => useQuickActionPromptsStore.setState({ prompts: {} }));
++
++  it("keeps a custom prompt and drops a blank one", () => {
++    const { setPrompt } = useQuickActionPromptsStore.getState();
++    setPrompt("fixCi", "Fix {{url}}");
++    expect(useQuickActionPromptsStore.getState().prompts).toEqual({ fixCi: "Fix {{url}}" });
++    setPrompt("fixCi", "  ");
++    expect(useQuickActionPromptsStore.getState().prompts).toEqual({});
++  });
++});
+diff --git a/packages/app/src/composer/quick-action-prompts.ts b/packages/app/src/composer/quick-action-prompts.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..06f4b8336bf2c923d7b6526888c16ce058d32f09
+--- /dev/null
++++ b/packages/app/src/composer/quick-action-prompts.ts
+@@ -0,0 +1,68 @@
++import AsyncStorage from "@react-native-async-storage/async-storage";
++import { create } from "zustand";
++import { persist } from "zustand/middleware";
++import { z } from "zod";
++import type { PullRequestQuickAction } from "@/composer/pull-request-actions";
++import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
++
++export const PULL_REQUEST_QUICK_ACTIONS: readonly PullRequestQuickAction[] = [
++  "resolveConflicts",
++  "fixCi",
++  "createPr",
++];
++
++/** The values a quick action prompt can name as `{{url}}` and `{{base}}`. */
++export interface QuickActionPromptValues {
++  url: string;
++  base: string;
++}
++
++/** Placeholder values that make `t()` return a default prompt with its placeholders intact. */
++export const QUICK_ACTION_PROMPT_PLACEHOLDERS = {
++  url: "{{url}}",
++  base: "{{base}}",
++} satisfies QuickActionPromptValues;
++
++const PromptsSchema = z.object({
++  resolveConflicts: z.string().optional(),
++  fixCi: z.string().optional(),
++  createPr: z.string().optional(),
++});
++
++type QuickActionPrompts = z.infer<typeof PromptsSchema>;
++
++interface QuickActionPromptsState {
++  /** Prompts set on this device; an action without one sends its default prompt. */
++  prompts: QuickActionPrompts;
++  /** Sets an action's prompt; a blank one goes back to the default. */
++  setPrompt: (action: PullRequestQuickAction, prompt: string) => void;
++}
++
++export const useQuickActionPromptsStore = create<QuickActionPromptsState>()(
++  persist(
++    (set) => ({
++      prompts: {},
++      setPrompt: (action, prompt) =>
++        set((state) => {
++          const prompts = { ...state.prompts };
++          if (prompt.trim().length > 0) prompts[action] = prompt;
++          else delete prompts[action];
++          return { prompts };
++        }),
++    }),
++    {
++      name: "composer-quick-action-prompts",
++      storage: createValidatedPersistStorage(AsyncStorage, z.object({ prompts: PromptsSchema })),
++      partialize: (state) => ({ prompts: state.prompts }),
++      version: 1,
++    },
++  ),
++);
++
++/** Fills a prompt's `{{url}}` and `{{base}}` placeholders. */
++export function fillQuickActionPrompt(template: string, values: QuickActionPromptValues): string {
++  return template.replace(
++    /\{\{\s*(url|base)\s*\}\}/g,
++    (_match, name: keyof QuickActionPromptValues) => values[name],
++  );
++}
 diff --git a/packages/app/src/git/pr-hint.test.ts b/packages/app/src/git/pr-hint.test.ts
 index 96e4a0e974fd69abd29a2635529c4452604a8e95..ed871303f2053c44b02cdbc62e1802a019b9c483 100644
 --- a/packages/app/src/git/pr-hint.test.ts
@@ -513,7 +641,7 @@ index 4de297f26cf0b85d66c9c13001c091f1819665d6..b66e57085914395df3bce9bdea7992c8
    return <Icon size={size} strokeWidth={strokeWidth} uniProps={color} />;
  }
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 94165cf1343a26a99d4d81efb86e9189e4611af2..a72c4b29e58f38b7d943bb70efbdb4ea1944200a 100644
+index 94165cf1343a26a99d4d81efb86e9189e4611af2..2d7e363bf21d3c987cfdb8d41050e4e7e97f8b5f 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
 @@ -990,6 +990,7 @@ export const ar: TranslationResources = {
@@ -524,8 +652,18 @@ index 94165cf1343a26a99d4d81efb86e9189e4611af2..a72c4b29e58f38b7d943bb70efbdb4ea
          actions: {
            viewPullRequest: "عرض",
            openOn: "فتح على {{brand}}",
+@@ -2277,7 +2278,9 @@ export const ar: TranslationResources = {
+       editProject: "تحرير{{projectName}}",
+     },
+     groupInfo: "حول{{title}}",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "عام",
+       chat: "الدردشة",
+       appearance: "مظهر",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index f11f28052d3b0f5b17a5be2afff671348b8c92ff..2a6680c0e6cd84c9493ee2c08fc74eadd40b39e4 100644
+index f11f28052d3b0f5b17a5be2afff671348b8c92ff..e63c774d3f33ec6c7b5f426914043b08a60e7fdd 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
 @@ -998,6 +998,22 @@ export const en = {
@@ -551,8 +689,23 @@ index f11f28052d3b0f5b17a5be2afff671348b8c92ff..2a6680c0e6cd84c9493ee2c08fc74ead
          actions: {
            viewPullRequest: "View",
            openOn: "Open on {{brand}}",
+@@ -2267,7 +2283,14 @@ export const en = {
+       editProject: "Edit {{projectName}}",
+     },
+     groupInfo: "About {{title}}",
++    quickActions: {
++      description:
++        "The prompts the quick actions above the composer send to the agent. {{url}} is the pull request's link and {{base}} its base branch. Saved on this device.",
++      promptLabel: "{{action}} prompt",
++      reset: "Reset to default",
++    },
+     sections: {
++      quickActions: "Quick actions",
+       general: "General",
+       chat: "Chat",
+       appearance: "Appearance",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..8c0dee2de377f5d27e9a82de6870734ba537f0d8 100644
+index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..e85d7a97de3c41b6ae14a3b481191e3ba3a734c3 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
 @@ -1023,6 +1023,7 @@ export const es: TranslationResources = {
@@ -563,8 +716,18 @@ index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..8c0dee2de377f5d27e9a82de6870734b
          actions: {
            viewPullRequest: "Ver",
            openOn: "Abrir en {{brand}}",
+@@ -2290,7 +2291,9 @@ export const es: TranslationResources = {
+       editProject: "Editar{{projectName}}",
+     },
+     groupInfo: "Acerca de{{title}}",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "General",
+       chat: "Chat",
+       appearance: "Apariencia",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 39967bc20db422ccccc045fd15c9255f8feac6b7..4f9b4dcd0bcfb2e05a8ba2546f83cbd68fc2b9b3 100644
+index 39967bc20db422ccccc045fd15c9255f8feac6b7..45633d647773b7fd48ed752fda9ae056668cbaf7 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
 @@ -1016,6 +1016,7 @@ export const fr: TranslationResources = {
@@ -575,8 +738,18 @@ index 39967bc20db422ccccc045fd15c9255f8feac6b7..4f9b4dcd0bcfb2e05a8ba2546f83cbd6
          actions: {
            viewPullRequest: "Voir",
            openOn: "Ouvrir sur {{brand}}",
+@@ -2291,7 +2292,9 @@ export const fr: TranslationResources = {
+       editProject: "Modifier {{projectName}}",
+     },
+     groupInfo: "À propos de {{title}}",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "Général",
+       chat: "Discussion",
+       appearance: "Apparence",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..64fafeb3c7bf8b057c698285805b1e0ed90e4337 100644
+index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..51c89a765726bbee44e059e11107debcc0af8909 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
 @@ -1003,6 +1003,7 @@ export const ja: TranslationResources = {
@@ -587,8 +760,18 @@ index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..64fafeb3c7bf8b057c698285805b1e0e
          actions: {
            viewPullRequest: "表示",
            openOn: "{{brand}}で開く",
+@@ -2264,7 +2265,9 @@ export const ja: TranslationResources = {
+       editProject: "{{projectName}}を編集",
+     },
+     groupInfo: "{{title}}について",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "一般",
+       chat: "チャット",
+       appearance: "外観",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index ad1ba29e67b3938549d90d963f48a8e045141b27..24d5f3b6d8100a3e476966b383354da18a9afa8b 100644
+index ad1ba29e67b3938549d90d963f48a8e045141b27..4167eb463b440e361189ae4207ed5c267fca2c70 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
 @@ -997,6 +997,7 @@ export const ko: TranslationResources = {
@@ -599,8 +782,18 @@ index ad1ba29e67b3938549d90d963f48a8e045141b27..24d5f3b6d8100a3e476966b383354da1
          actions: {
            viewPullRequest: "보기",
            openOn: "{{brand}}에서 열기",
+@@ -2252,7 +2253,9 @@ export const ko: TranslationResources = {
+       editProject: "{{projectName}} 편집",
+     },
+     groupInfo: "{{title}} 정보",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "일반",
+       chat: "채팅",
+       appearance: "모양",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 52d8a2dff18b06abf2309d25750e35bbd3c378be..4e889dfe984d2c4b7c687b6ddc23b3abc6794297 100644
+index 52d8a2dff18b06abf2309d25750e35bbd3c378be..148ba56bda6ac960ff5bd8dd55c22d7c2e35da12 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
 @@ -1013,6 +1013,7 @@ export const ptBR: TranslationResources = {
@@ -611,8 +804,18 @@ index 52d8a2dff18b06abf2309d25750e35bbd3c378be..4e889dfe984d2c4b7c687b6ddc23b3ab
          actions: {
            viewPullRequest: "Ver",
            openOn: "Abrir no {{brand}}",
+@@ -2275,7 +2276,9 @@ export const ptBR: TranslationResources = {
+       editProject: "Editar {{projectName}}",
+     },
+     groupInfo: "Sobre {{title}}",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "Geral",
+       chat: "Chat",
+       appearance: "Aparência",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..f7f26f67af9795027cfbd44c42ecf857c3a67a90 100644
+index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..cfda58db8b78dae20d60b4c025cc6b9421210c4f 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
 @@ -1007,6 +1007,7 @@ export const ru: TranslationResources = {
@@ -623,8 +826,18 @@ index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..f7f26f67af9795027cfbd44c42ecf857
          actions: {
            viewPullRequest: "Просмотреть",
            openOn: "Открыть на {{brand}}",
+@@ -2276,7 +2277,9 @@ export const ru: TranslationResources = {
+       editProject: "Изменить {{projectName}}",
+     },
+     groupInfo: "О разделе «{{title}}»",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "Основные",
+       chat: "Чат",
+       appearance: "Оформление",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..61d46056376b466e37196a20bed05bc99111f369 100644
+index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..1378206d1543f0145194d5a860e2baae0f1f4896 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
 @@ -982,6 +982,7 @@ export const zhCN: TranslationResources = {
@@ -635,6 +848,16 @@ index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..61d46056376b466e37196a20bed05bc9
          actions: {
            viewPullRequest: "查看",
            openOn: "在 {{brand}} 上打开",
+@@ -2218,7 +2219,9 @@ export const zhCN: TranslationResources = {
+       editProject: "编辑 {{projectName}}",
+     },
+     groupInfo: "关于 {{title}}",
++    quickActions: en.settings.quickActions,
+     sections: {
++      quickActions: en.settings.sections.quickActions,
+       general: "通用",
+       chat: "聊天",
+       appearance: "外观",
 diff --git a/packages/app/src/panels/agent-tracks.tsx b/packages/app/src/panels/agent-tracks.tsx
 index 6984633bcc02e4c2871db7fdb1c8f31a2fc82dc8..d1e0c3748698fdc8c993bbef182800a632f12f8f 100644
 --- a/packages/app/src/panels/agent-tracks.tsx
@@ -674,3 +897,142 @@ index 6984633bcc02e4c2871db7fdb1c8f31a2fc82dc8..d1e0c3748698fdc8c993bbef182800a6
      </ComposerTrackBar>
    );
  });
+diff --git a/packages/app/src/screens/settings-screen.tsx b/packages/app/src/screens/settings-screen.tsx
+index c8ff9c3311116fee1e0f295d6e7a4c08ef46cdc5..5b793933a0ff75ac25539f3e8473e8a5cc914d13 100644
+--- a/packages/app/src/screens/settings-screen.tsx
++++ b/packages/app/src/screens/settings-screen.tsx
+@@ -42,6 +42,7 @@ import {
+   Globe,
+   PanelLeft,
+   MessageSquare,
++  Zap,
+   ChevronRight,
+ } from "lucide-react-native";
+ import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
+@@ -54,6 +55,7 @@ import { AppearanceSection } from "@/screens/settings/appearance/appearance-sect
+ import { OpenLocationSection } from "@/screens/settings/open-location/open-location-section";
+ import { TerminalSection } from "@/screens/settings/terminal/terminal-section";
+ import { ChatSection } from "@/screens/settings/chat/chat-section";
++import { QuickActionsSection } from "@/screens/settings/quick-actions-section";
+ import { SidebarNavSection } from "@/screens/settings/sidebar/sidebar-nav-section";
+ import { SendingSection } from "@/screens/settings/general/sending-section";
+ import {
+@@ -177,6 +179,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
+     Content: SidebarNavSection,
+   },
+   { id: "chat", labelKey: "settings.sections.chat", icon: MessageSquare, Content: ChatSection },
++  {
++    id: "quick-actions",
++    labelKey: "settings.sections.quickActions",
++    icon: Zap,
++    Content: QuickActionsSection,
++  },
+   {
+     id: "terminal",
+     labelKey: "settings.sections.terminal",
+diff --git a/packages/app/src/screens/settings/quick-actions-section.tsx b/packages/app/src/screens/settings/quick-actions-section.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..261f8ee839ddbb521f0bac1814b3aabab8c12834
+--- /dev/null
++++ b/packages/app/src/screens/settings/quick-actions-section.tsx
+@@ -0,0 +1,88 @@
++import { useCallback, useState } from "react";
++import { Text, View } from "react-native";
++import { useTranslation } from "react-i18next";
++import { StyleSheet } from "react-native-unistyles";
++import { SettingsSection } from "@/components/settings";
++import { SettingsTextAreaCard } from "@/components/settings-textarea";
++import { Button } from "@/components/ui/button";
++import type { PullRequestQuickAction } from "@/composer/pull-request-actions";
++import {
++  PULL_REQUEST_QUICK_ACTIONS,
++  QUICK_ACTION_PROMPT_PLACEHOLDERS,
++  useQuickActionPromptsStore,
++} from "@/composer/quick-action-prompts";
++import { settingsStyles } from "@/styles/settings";
++
++/** The prompts the pull request quick actions above the composer send, saved on this device. */
++export function QuickActionsSection() {
++  const { t } = useTranslation();
++  return (
++    <View>
++      <Text style={[settingsStyles.rowHint, styles.intro]}>
++        {t("settings.quickActions.description", QUICK_ACTION_PROMPT_PLACEHOLDERS)}
++      </Text>
++      {PULL_REQUEST_QUICK_ACTIONS.map((action) => (
++        <SettingsSection key={action} title={t(`workspace.git.pr.quickActions.${action}.label`)}>
++          <QuickActionPromptCard action={action} />
++        </SettingsSection>
++      ))}
++    </View>
++  );
++}
++
++function QuickActionPromptCard({ action }: { action: PullRequestQuickAction }) {
++  const { t } = useTranslation();
++  const customPrompt = useQuickActionPromptsStore((state) => state.prompts[action]);
++  const setPrompt = useQuickActionPromptsStore((state) => state.setPrompt);
++  const defaultPrompt = t(
++    `workspace.git.pr.quickActions.${action}.prompt`,
++    QUICK_ACTION_PROMPT_PLACEHOLDERS,
++  );
++  // The input keeps its own text; a new key puts the default back after a reset.
++  const [inputKey, setInputKey] = useState(0);
++  const handleChange = useCallback((text: string) => setPrompt(action, text), [action, setPrompt]);
++  const handleReset = useCallback(() => {
++    setPrompt(action, "");
++    setInputKey((key) => key + 1);
++  }, [action, setPrompt]);
++
++  return (
++    <View style={styles.card}>
++      <SettingsTextAreaCard
++        key={inputKey}
++        testID={`settings-quick-action-prompt-${action}`}
++        accessibilityLabel={t("settings.quickActions.promptLabel", {
++          action: t(`workspace.git.pr.quickActions.${action}.label`),
++        })}
++        value={customPrompt ?? defaultPrompt}
++        onChangeText={handleChange}
++        placeholder={defaultPrompt}
++      />
++      {customPrompt ? (
++        <View style={styles.actions}>
++          <Button
++            variant="outline"
++            size="sm"
++            onPress={handleReset}
++            testID={`settings-quick-action-reset-${action}`}
++          >
++            {t("settings.quickActions.reset")}
++          </Button>
++        </View>
++      ) : null}
++    </View>
++  );
++}
++
++const styles = StyleSheet.create((theme) => ({
++  intro: {
++    marginBottom: theme.spacing[4],
++  },
++  card: {
++    gap: theme.spacing[2],
++  },
++  actions: {
++    flexDirection: "row",
++    justifyContent: "flex-end",
++  },
++}));
+diff --git a/packages/app/src/utils/host-routes.ts b/packages/app/src/utils/host-routes.ts
+index c5913366d228b3682eb917d879f224350c0e58c2..401acf6b7f54bcc8a4962302e6cd7db6c485e3c1 100644
+--- a/packages/app/src/utils/host-routes.ts
++++ b/packages/app/src/utils/host-routes.ts
+@@ -494,6 +494,7 @@ export const SETTINGS_SECTION_SLUGS = [
+   "appearance",
+   "sidebar",
+   "chat",
++  "quick-actions",
+   "terminal",
+   "browser",
+   "editor",

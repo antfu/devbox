@@ -16,8 +16,8 @@ Squashed from upstream PR https://github.com/getpaseo/paseo/pull/8529
 On top of the PR: when no icon file is found and the project's origin is on
 GitHub, the daemon uses the owner's avatar (github.com/<owner>.png, so
 nuxt/devtools gets github.com/nuxt.png). A custom icon and any local icon
-still win. Avatars are fetched with a 3 s timeout and cached per owner in
-memory: a day for a found or missing owner, ten minutes after a failure.
+still win. Avatars are fetched with a 10 s timeout and cached per owner in
+memory: a day for a found or missing owner, one minute after a failure.
 Offline daemons keep the initial.
 
 Fork-Change: F-1

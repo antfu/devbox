@@ -57,9 +57,10 @@ patches refer to them in their `Fork-Change` trailer.
 - Why: Paseo only remembers the last mode picked, per device, and each provider's default is fixed (Claude
   `auto`, Codex `auto-review`). The container is the isolation here, so we want new agents in bypass mode
   everywhere without picking it on every device.
-- Patches: `feat: add a host default permission mode per provider`
+- Patches: `feat: add host defaults for new agents and worktrees` (also carries F-4, from the same request)
 - Touches: protocol `provider-config.ts` (`defaultModeId` on the provider override), `messages.ts`,
-  `agent-types.ts`; server new `agent/host-default-mode.ts`, small hooks in `provider-snapshot-manager.ts`;
+  `agent-types.ts`; server new `agent/host-default-mode.ts`, small hooks in `provider-snapshot-manager.ts`
+  and `agent-sdk-types.ts`, the flag in `websocket-server.ts`, `daemon-config-store.test.ts`;
   app new `provider-selection/host-default-mode.ts` and `screens/settings/provider-default-mode-card.tsx`,
   hooks in `use-agent-form-state.ts` and `host-page.tsx`; one line per non-English locale pointing at the
   English strings (the locale types require every key); regenerated
@@ -70,18 +71,19 @@ patches refer to them in their `Fork-Change` trailer.
   nothing, and applies it to top-level, attended creates that send no mode (CLI, MCP). Subagent inheritance and
   unattended creates are unchanged. A mode the provider no longer offers is ignored.
 - Config: Settings → host → Agents → Default mode, saved as `agents.providers.<id>.defaultModeId`.
-- Drop when: upstream ships a default mode setting.
+- Drop when: upstream ships a default mode setting. If upstream ships only one of this and F-4, drop that
+  part of the patch on rebase and keep the other.
 
 ### F-4: Host default worktree setup script
 
-- Status: active, ours only
+- Status: active, merged into F-3's patch on 2026-11-12 (same request, seven shared files)
 - Requested: 2026-11-02, same request as F-3 ("default project setup script")
 - Why: Paseo reads `worktree.setup` only from each repo's committed `paseo.json`. A host default covers every
   project without one (e.g. `pnpm install`).
-- Patches: `feat: add a host default worktree setup script`
+- Patches: none of its own; F-3's `feat: add host defaults for new agents and worktrees` carries it.
 - Touches: protocol `messages.ts`; server new `utils/worktree-default-setup.ts`, one-line hook in
-  `utils/worktree.ts` `getWorktreeSetupCommands`, plus `bootstrap.ts`, `config.ts`, `daemon-config-store.ts`,
-  `persisted-config.ts` (`worktrees.defaultSetup`); app new `screens/settings/worktree-default-setup.tsx`,
+  `utils/worktree.ts` `getWorktreeSetupCommands`, plus `bootstrap.ts`, `config.ts`, `daemon-config-store.ts`
+  and its test, `persisted-config.ts` (`worktrees.defaultSetup`), the flag in `websocket-server.ts`; app new `screens/settings/worktree-default-setup.tsx`,
   hooks in `host-page.tsx` and `project-settings-screen.tsx`; one line per non-English locale; the regenerated
   config JSON schema.
 - Compatibility: flag `server_info.features.worktreeDefaultSetup`; optional `worktreeDefaultSetup` (null
@@ -111,11 +113,11 @@ patches refer to them in their `Fork-Change` trailer.
   nuxt/devtools" (confirmed: for a clone the name sets the folder and the project name)
 - Why: a clone always lands in `<parent>/<repo name>`, so two repos with the same name collide in one parent.
 - Patches: `feat: name a project while adding it`
-- Touches: protocol `messages.ts`; client `daemon-client.ts` (`cloneGithubProject` takes `directoryName`);
-  server new `project-clone-directory.ts`, small hook in `session.ts`; app new
-  `add-project-flow/project-name.ts`, edits in `add-project-flow/model.ts`, `components/add-project-flow.tsx`
-  (the largest edit: a likely conflict spot), `hooks/use-open-project.ts`; e2e specs and helpers for the extra
-  step.
+- Touches: protocol `messages.ts` and two of its tests; client `daemon-client.ts` (`cloneGithubProject` takes
+  `directoryName`) and its test; server new `project-clone-directory.ts`, small hook in `session.ts`, the flag
+  in `websocket-server.ts`; app new `add-project-flow/project-name.ts`, edits in `add-project-flow/model.ts`,
+  `components/add-project-flow.tsx` (the largest edit: a likely conflict spot), `hooks/open-project.ts` and
+  `hooks/use-open-project.ts`; e2e specs and helpers for the extra step.
 - Compatibility: flag `server_info.features.projectGithubCloneDirectoryName`; optional `directoryName` on
   `project.github.clone.request`, validated as one folder name. Without the flag the clone flow is unchanged.
   For an existing folder the step uses the existing `project.rename.request`, so it works on any host. The
@@ -191,7 +193,7 @@ patches refer to them in their `Fork-Change` trailer.
 - Why: the composer's pill row showed the diff stat but not the change request, and acting on a
   conflicted or failing one meant typing the same prompt each time. The composer is app UI; plugin
   composer pills cannot read the workspace's change request state or send a prompt to the agent.
-- Patches: `feat(app): show the pull request and its follow-ups above the composer`
+- Patches: `feat(app): show the pull request and its follow-ups above the composer` (also carries F-14)
 - Touches: app new `composer/pull-request-actions.ts` (which follow-ups apply) and its test,
   `composer/pull-request-pills.tsx`; a small hook in `panels/agent-tracks.tsx` (renders the pills after
   the diff stat pill, and counts them when deciding whether the row shows); `en.ts` strings
@@ -208,7 +210,7 @@ patches refer to them in their `Fork-Change` trailer.
   `CONFLICTING` shows an amber warning triangle in place of its state glyph, in the composer pill and in
   the sidebar rows. The prompt texts are in `en.ts`; F-14 lets you replace them. Checked: typecheck, lint
   and the unit tests only; not checked in a browser yet.
-- Drop when: upstream shows the change request and its follow-ups in the composer.
+- Drop when: upstream shows the change request and its follow-ups in the composer. F-14 goes with it.
 
 ### F-11: Clone a project from another connected host
 
@@ -217,7 +219,7 @@ patches refer to them in their `Fork-Change` trailer.
   support \"Clone from other host\", that get the project info and clone."
 - Why: moving a project to another machine meant finding its remote URL on the first host and pasting it
   into "Clone from GitHub" on the second. The Add project flow is app UI, which no plugin hook reaches.
-- Patches: `feat(app): clone a project from another connected host`
+- Patches: `feat(app): clone a project from another connected host` (also carries F-13)
 - Touches: app new `add-project-flow/other-host-projects.ts` and its test; `add-project-flow/model.ts`
   (an `other-host-projects` page and its opener); `components/add-project-flow.tsx` (the method row,
   the page's title, placeholder, empty text and rows; a hot spot shared with F-6).
@@ -228,7 +230,8 @@ patches refer to them in their `Fork-Change` trailer.
   clone steps, so it needs the target host's `projectGithubClone` feature, like "Clone from GitHub".
   Shown only when another host is connected. Checked: typecheck, lint and unit tests only; not checked
   in a browser yet.
-- Drop when: upstream adds cloning from another host.
+  It needs F-9's `HostIdentityIcon` and the `leading` row slot of `add-project-flow.tsx`.
+- Drop when: upstream adds cloning from another host. F-13 goes with it.
 
 ### F-12: Select a question option by clicking anywhere on its row
 
@@ -248,12 +251,12 @@ patches refer to them in their `Fork-Change` trailer.
 
 ### F-13: Set up the selected project on a host that lacks it, from New workspace
 
-- Status: active, ours only
+- Status: active, merged into F-11's patch on 2026-11-12 (it builds on F-11)
 - Requested: 2026-11-10, "in \"new workspace\" panel, in the host select dropdown, add (project not
   exists), with a button on the right for \"Setup\"."
 - Why: a host without the selected project looked like any other host in New workspace's host picker.
   The picker and Add project are app UI, which no plugin hook reaches.
-- Patches: `feat(app): offer to set up the project on a host that lacks it`
+- Patches: none of its own; F-11's `feat(app): clone a project from another connected host` carries it.
 - Touches: app `components/hosts/host-picker.tsx` (optional `hostOptionExtras`: a per-host note and an
   action button); `screens/new-workspace/form/index.tsx` (supplies them);
   `stores/add-project-flow-store.ts` and `add-project-flow/model.ts` (open on "Clone from other host"
@@ -261,16 +264,19 @@ patches refer to them in their `Fork-Change` trailer.
   and one line per other locale.
 - Compatibility: web UI only; no wire or daemon change, so no feature flag. Builds on F-11: Setup opens
   Add project on that host at "Clone from other host", searching for the project's name, and Back goes
-  to the host's methods. Checked: typecheck, lint and unit tests only; not checked in a browser yet.
+  to the host's methods. Setup shows only for online hosts, since Add project lists only those; an
+  offline host still says the project is missing. Checked: typecheck, lint and unit tests only; not
+  checked in a browser yet.
 - Drop when: upstream offers to set up a project on another host; drop together with F-11.
 
 ### F-14: Customize the pull request quick action prompts
 
-- Status: active, ours only
+- Status: active, merged into F-10's patch on 2026-11-12 (it only extends F-10)
 - Requested: 2026-11-10, "add settings page for customize the quick actions prompts."
 - Why: F-10's follow-ups always sent the built-in prompt. Settings pages are app UI; a plugin settings
   page could store prompts, but the composer pills (a patch) could not read them.
-- Patches: `feat(app): customize the pull request quick action prompts`
+- Patches: none of its own; F-10's `feat(app): show the pull request and its follow-ups above the composer`
+  carries it.
 - Touches: app new `composer/quick-action-prompts.ts` (a persisted store, and the `{{url}}`/`{{base}}`
   filler) and its test, `screens/settings/quick-actions-section.tsx`; hooks in
   `composer/pull-request-pills.tsx` (F-10's file), `screens/settings-screen.tsx` (a sidebar item) and
@@ -313,7 +319,8 @@ patches refer to them in their `Fork-Change` trailer.
   send button.
 - Patches: `feat(app): switch between queue and steer next to the send button`
 - Touches: app new `composer/send-behavior-switch.tsx` (the button) and
-  `composer/send-behavior-switch-model.ts` (`nextSendBehavior`) with its test; a hook in
+  `composer/send-behavior-switch-model.ts` (`nextSendBehavior`) with its test,
+  `send-behavior-switch.test.ts`; a hook in
   `composer/index.tsx` (`ComposerRightControlsSlot` renders it when there is an agent).
 - Compatibility: web UI only; no wire or daemon change, so no feature flag, and no new strings (it reuses
   the `settings.general.defaultSend` labels and descriptions). It writes the existing `sendBehavior` app
@@ -355,6 +362,9 @@ patches refer to them in their `Fork-Change` trailer.
 
 One line per rebase onto a new upstream base, newest first.
 
+- 2026-11-12: no base change; merged F-4 into F-3, F-13 into F-11 and F-14 into F-10, which took the series
+  from 16 patches to 13. Two fixes came with it: F-13's Setup shows only for online hosts, and F-17 no longer
+  renames `trailingSlot` in `host-picker.tsx`.
 - 2026-11-10: moved to `v0.15.4`; all 12 patches (F-1 to F-6, F-8 to F-13) applied with `git am --3way`
   and no conflicts, and none is upstreamed yet ([#8529](https://github.com/getpaseo/paseo/pull/8529) is still open).
   F-4's config fields moved into `worktreeDefaultSetupField`, because upstream's new fields pushed two

@@ -15,7 +15,7 @@ app polls it every 3 s, only while a picker is open.
 
 Fork-Change: F-17
 ---
- .../app/src/components/hosts/host-picker.tsx  |  24 ++-
+ .../app/src/components/hosts/host-picker.tsx  |  25 ++-
  .../src/components/hosts/host-stats-label.tsx |  45 +++++
  packages/app/src/components/left-sidebar.tsx  |   3 +-
  .../app/src/hosts/host-stats-format.test.ts   |  32 +++
@@ -29,7 +29,7 @@ Fork-Change: F-17
  packages/server/src/server/host-stats.ts      | 182 ++++++++++++++++++
  packages/server/src/server/session.ts         |   8 +
  .../server/src/server/websocket-server.ts     |   2 +
- 14 files changed, 493 insertions(+), 3 deletions(-)
+ 14 files changed, 494 insertions(+), 3 deletions(-)
  create mode 100644 packages/app/src/components/hosts/host-stats-label.tsx
  create mode 100644 packages/app/src/hosts/host-stats-format.test.ts
  create mode 100644 packages/app/src/hosts/host-stats-format.ts
@@ -38,7 +38,7 @@ Fork-Change: F-17
  create mode 100644 packages/server/src/server/host-stats.ts
 
 diff --git a/packages/app/src/components/hosts/host-picker.tsx b/packages/app/src/components/hosts/host-picker.tsx
-index 4a0fbfcd52ece098dc347200922253fabbd1a228..e4edfd954f65ed315a29fcff4463798b6db051e5 100644
+index 4a0fbfcd52ece098dc347200922253fabbd1a228..5c54a536e3d89e603e60663c99d311e4226d1cf1 100644
 --- a/packages/app/src/components/hosts/host-picker.tsx
 +++ b/packages/app/src/components/hosts/host-picker.tsx
 @@ -4,6 +4,7 @@ import type { GestureResponderEvent } from "react-native";
@@ -65,32 +65,32 @@ index 4a0fbfcd52ece098dc347200922253fabbd1a228..e4edfd954f65ed315a29fcff4463798b
    selected,
    active,
    onPress,
-@@ -104,7 +107,7 @@ export function HostPickerOption({
-     },
-     [extraAction],
-   );
--  const trailingSlot = useMemo(() => {
-+  const actionSlot = useMemo(() => {
-     if (extraAction) {
-       return (
-         <Button
-@@ -137,6 +140,15 @@ export function HostPickerOption({
+@@ -137,13 +140,23 @@ export function HostPickerOption({
      theme.colors.foregroundMuted,
      theme.iconSize.sm,
    ]);
-+  const trailingSlot = useMemo(() => {
-+    if (!showHostStats) return actionSlot;
-+    return (
-+      <View style={styles.trailingRow}>
-+        <HostStatsLabel serverId={serverId} />
-+        {actionSlot}
-+      </View>
-+    );
-+  }, [actionSlot, serverId, showHostStats]);
++  const statsTrailingSlot = useMemo(
++    () =>
++      showHostStats ? (
++        <View style={styles.trailingRow}>
++          <HostStatsLabel serverId={serverId} />
++          {trailingSlot}
++        </View>
++      ) : null,
++    [serverId, showHostStats, trailingSlot],
++  );
  
    return (
      <ComboboxItem
-@@ -204,6 +216,8 @@ export interface HostPickerProps {
+       label={label}
+       description={extras?.description ?? connectionLabel}
+       leadingSlot={leadingSlot}
+-      trailingSlot={trailingSlot}
++      trailingSlot={statsTrailingSlot ?? trailingSlot}
+       selected={selected}
+       active={active}
+       onPress={onPress}
+@@ -204,6 +217,8 @@ export interface HostPickerProps {
    includeEnableBuiltInDaemon?: boolean;
    onEnableBuiltInDaemon?: () => void;
    showActiveConnection?: boolean;
@@ -99,7 +99,7 @@ index 4a0fbfcd52ece098dc347200922253fabbd1a228..e4edfd954f65ed315a29fcff4463798b
    onOpenHostSettings?: (serverId: string) => void;
    searchable?: boolean;
    title?: string;
-@@ -228,6 +242,7 @@ export function HostPicker({
+@@ -228,6 +243,7 @@ export function HostPicker({
    includeEnableBuiltInDaemon,
    onEnableBuiltInDaemon,
    showActiveConnection,
@@ -107,7 +107,7 @@ index 4a0fbfcd52ece098dc347200922253fabbd1a228..e4edfd954f65ed315a29fcff4463798b
    onOpenHostSettings,
    searchable,
    title,
-@@ -314,6 +329,7 @@ export function HostPicker({
+@@ -314,6 +330,7 @@ export function HostPicker({
            label={option.label}
            extras={hostOptionExtras?.(option.id) ?? null}
            showActiveConnection={showActiveConnection === true}
@@ -115,7 +115,7 @@ index 4a0fbfcd52ece098dc347200922253fabbd1a228..e4edfd954f65ed315a29fcff4463798b
            selected={selected}
            active={active}
            onPress={onPress}
-@@ -328,6 +344,7 @@ export function HostPicker({
+@@ -328,6 +345,7 @@ export function HostPicker({
        hostOptionTestID,
        onOpenHostSettings,
        showActiveConnection,
@@ -123,7 +123,7 @@ index 4a0fbfcd52ece098dc347200922253fabbd1a228..e4edfd954f65ed315a29fcff4463798b
        handleOpenHostSettings,
      ],
    );
-@@ -360,4 +377,9 @@ const styles = StyleSheet.create((theme) => ({
+@@ -360,4 +378,9 @@ const styles = StyleSheet.create((theme) => ({
      alignItems: "center",
      justifyContent: "center",
    },
@@ -306,10 +306,10 @@ index 0000000000000000000000000000000000000000..b635ebd13e606c79f8310ef3ecc0eb4b
 +  return isConnected ? (query.data ?? null) : null;
 +}
 diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
-index 0683beef5ea268b6daed815b12567bee180186c8..4c14db913b299fe3cb8c154f02a48f1490897128 100644
+index 0a0049f6cd1c44d7e672d2a4430d08a5892acbf4..0017a0923e576c4ad818ea57f6f31990091ae8d0 100644
 --- a/packages/app/src/screens/new-workspace/form/index.tsx
 +++ b/packages/app/src/screens/new-workspace/form/index.tsx
-@@ -249,9 +249,10 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+@@ -254,9 +254,10 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
        onAddHost={host.onAddHost}
        addHostTestID="new-workspace-host-picker-add-host"
        searchable={false}
