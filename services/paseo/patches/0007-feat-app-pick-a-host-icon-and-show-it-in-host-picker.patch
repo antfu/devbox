@@ -11,20 +11,25 @@ and Add project's host step) draws the host's icon in its color. The
 status dot sits on the icon's bottom-right corner only while the host is
 not connected.
 
-The icon is per-device, like the color, and optional in the stored
-registry, so registries saved before it still parse.
+The icon is per-device, like the color, and saved under its own storage
+key (@paseo:host-icons), not in the host registry. The registry schema is
+strict and a registry that fails it is deleted whole, so an icon field
+there would cost every saved host on a build without it. Registries that
+an earlier version of this change wrote an icon into still parse, and
+their icons move to the new key when the registry loads.
 
 Fork-Change: F-9
 ---
  packages/app/e2e/support/helpers/hosts.ts     |  2 +-
  .../app/src/components/add-project-flow.tsx   |  7 +-
- .../components/hosts/host-identity-icon.tsx   | 47 ++++++++++
+ .../components/hosts/host-identity-icon.tsx   | 48 ++++++++++
  .../app/src/components/hosts/host-picker.tsx  |  4 +-
  .../sidebar/display-preferences/menu.tsx      |  4 +-
- packages/app/src/hosts/appearance.test.ts     | 18 ++++
- packages/app/src/hosts/appearance.ts          |  6 ++
- packages/app/src/hosts/host-badge.tsx         | 11 +--
- packages/app/src/hosts/host-icons.ts          | 82 +++++++++++++++++
+ packages/app/src/hosts/appearance.ts          |  4 +
+ packages/app/src/hosts/host-badge.tsx         | 12 +--
+ .../app/src/hosts/host-icon-store.test.ts     | 74 +++++++++++++++
+ packages/app/src/hosts/host-icon-store.ts     | 95 +++++++++++++++++++
+ packages/app/src/hosts/host-icons.ts          | 82 ++++++++++++++++
  packages/app/src/i18n/resources/ar.ts         |  1 +
  packages/app/src/i18n/resources/en.ts         | 22 +++++
  packages/app/src/i18n/resources/es.ts         |  1 +
@@ -34,13 +39,15 @@ Fork-Change: F-9
  packages/app/src/i18n/resources/pt-BR.ts      |  1 +
  packages/app/src/i18n/resources/ru.ts         |  1 +
  packages/app/src/i18n/resources/zh-CN.ts      |  1 +
- packages/app/src/runtime/host-runtime.ts      | 10 ++
+ packages/app/src/runtime/host-runtime.ts      |  2 +
  .../src/screens/new-workspace/form/index.tsx  |  4 +-
  packages/app/src/screens/settings-screen.tsx  |  4 +-
- .../settings/host-appearance-section.tsx      | 22 ++++-
- .../src/screens/settings/host-icon-row.tsx    | 91 +++++++++++++++++++
- 23 files changed, 324 insertions(+), 18 deletions(-)
+ .../settings/host-appearance-section.tsx      | 15 +++
+ .../src/screens/settings/host-icon-row.tsx    | 91 ++++++++++++++++++
+ 24 files changed, 462 insertions(+), 16 deletions(-)
  create mode 100644 packages/app/src/components/hosts/host-identity-icon.tsx
+ create mode 100644 packages/app/src/hosts/host-icon-store.test.ts
+ create mode 100644 packages/app/src/hosts/host-icon-store.ts
  create mode 100644 packages/app/src/hosts/host-icons.ts
  create mode 100644 packages/app/src/screens/settings/host-icon-row.tsx
 
@@ -105,15 +112,16 @@ index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be
          }),
 diff --git a/packages/app/src/components/hosts/host-identity-icon.tsx b/packages/app/src/components/hosts/host-identity-icon.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..0b100f841fce30a942dabea29570313b12004ff5
+index 0000000000000000000000000000000000000000..0495734c43e4654f1e65db3850447a57014cfd10
 --- /dev/null
 +++ b/packages/app/src/components/hosts/host-identity-icon.tsx
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,48 @@
 +import { useMemo, type ReactElement } from "react";
 +import { View } from "react-native";
 +import { StyleSheet } from "react-native-unistyles";
 +import { HostStatusDot } from "@/components/host-status-dot";
 +import { HOST_ICON_MAPPINGS } from "@/hosts/host-badge";
++import { useHostIcon } from "@/hosts/host-icon-store";
 +import { themedHostIcon } from "@/hosts/host-icons";
 +import { useHostRuntimeConnectionStatus, useHosts } from "@/runtime/host-runtime";
 +import { ICON_SIZE } from "@/styles/theme";
@@ -131,7 +139,7 @@ index 0000000000000000000000000000000000000000..0b100f841fce30a942dabea29570313b
 +    [hosts, serverId],
 +  );
 +
-+  const ThemedIcon = themedHostIcon(appearance?.icon);
++  const ThemedIcon = themedHostIcon(useHostIcon(serverId));
 +  return (
 +    <View style={styles.container} testID={`host-identity-icon-${serverId}`}>
 +      <ThemedIcon size={ICON_SIZE.sm} uniProps={HOST_ICON_MAPPINGS[appearance?.color ?? "none"]} />
@@ -200,99 +208,42 @@ index d6483a551907b88c4130253b423c2132c35bfc9b..a6398c94b65763c9c232c5ce89c114d3
        </View>
      ),
      [serverId],
-diff --git a/packages/app/src/hosts/appearance.test.ts b/packages/app/src/hosts/appearance.test.ts
-index da7d47e1f725dcc3ca2e3bcea21c4e1aa03064c8..8299517081814ab5666528cd7dd94d82399f9e83 100644
---- a/packages/app/src/hosts/appearance.test.ts
-+++ b/packages/app/src/hosts/appearance.test.ts
-@@ -26,6 +26,15 @@ describe("normalizeStoredHostAppearance", () => {
-     expect(normalizeStoredHostAppearance({ badgeDisplay: "loud" })).toEqual(expected);
-   });
- 
-+  it("keeps a chosen icon and drops an unknown one", () => {
-+    expect(
-+      normalizeStoredHostAppearance({ color: "teal", badgeDisplay: null, icon: "laptop" }),
-+    ).toEqual({ color: "teal", badgeDisplay: null, icon: "laptop" });
-+    expect(
-+      normalizeStoredHostAppearance({ color: "teal", badgeDisplay: null, icon: "toaster" }),
-+    ).toEqual({ color: "none", badgeDisplay: null });
-+  });
-+
-   it("round-trips a value the user actually chose", () => {
-     expect(normalizeStoredHostAppearance({ color: "teal", badgeDisplay: "icon" })).toEqual({
-       color: "teal",
-@@ -122,6 +131,15 @@ describe("selectHostBadges", () => {
-     });
-   });
- 
-+  it("carries the host's icon onto its badge", () => {
-+    const badges = selectHostBadges({
-+      hosts: [host("alpha", "Alpha", { color: "teal", badgeDisplay: "icon", icon: "cloud" })],
-+      localServerId: null,
-+      enabled: true,
-+    });
-+    expect(badges.get("alpha")?.icon).toBe("cloud");
-+  });
-+
-   it("falls back to the server id when the label is blank", () => {
-     const badges = selectHostBadges({
-       hosts: [host("alpha", "   ")],
 diff --git a/packages/app/src/hosts/appearance.ts b/packages/app/src/hosts/appearance.ts
-index e51f4410dcf8babc4ba4c4dfe249780a30f9e64a..3752f0e51942b34fab3afc57f0b8f28c5fee1862 100644
+index e51f4410dcf8babc4ba4c4dfe249780a30f9e64a..c7e56b838baadb6314c301f50c067c1629cde920 100644
 --- a/packages/app/src/hosts/appearance.ts
 +++ b/packages/app/src/hosts/appearance.ts
-@@ -1,5 +1,6 @@
- import { IDENTITY_COLOR_NAMES, type IdentityColorName } from "@/styles/identity-colors";
- import type { HostProfile } from "@/types/host-connection";
-+import { HOST_ICON_NAMES, type HostIconName } from "@/hosts/host-icons";
- import { z } from "zod";
- 
- export type HostColor = "none" | IdentityColorName;
-@@ -18,11 +19,14 @@ export const HOST_BADGE_DISPLAYS: readonly HostBadgeDisplay[] = ["name", "icon",
+@@ -18,11 +18,15 @@ export const HOST_BADGE_DISPLAYS: readonly HostBadgeDisplay[] = ["name", "icon",
  export interface HostAppearance {
    color: HostColor;
    badgeDisplay: HostBadgeDisplay | null;
-+  /** Absent until the user picks one, so registries saved before the field still parse. */
-+  icon?: HostIconName;
++  /** Only in registries saved before icons moved to their own key; see `hosts/host-icon-store.ts`. */
++  icon?: string;
  }
  
  export const HostAppearanceSchema: z.ZodType<HostAppearance> = z.strictObject({
    color: z.enum(["none", ...IDENTITY_COLOR_NAMES]),
    badgeDisplay: z.enum(["name", "icon", "hidden"]).nullable(),
-+  icon: z.enum(HOST_ICON_NAMES).optional(),
++  // COMPAT(hostIconRegistry): F-9 kept icons here until 2026-11-12, remove after 2027-05-12.
++  icon: z.string().optional(),
  });
  
  export function defaultHostAppearance(): HostAppearance {
-@@ -53,6 +57,7 @@ export interface HostBadgeModel {
-   label: string;
-   color: HostColor;
-   showLabel: boolean;
-+  icon?: HostIconName;
- }
- 
- export type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "appearance">;
-@@ -86,6 +91,7 @@ export function selectHostBadges(input: {
-       label: host.label.trim() || host.serverId,
-       color: host.appearance.color,
-       showLabel: display === "name",
-+      icon: host.appearance.icon,
-     });
-   }
-   return badges;
 diff --git a/packages/app/src/hosts/host-badge.tsx b/packages/app/src/hosts/host-badge.tsx
-index d35a4324f5cffe297cf567d1affb052100cc57b8..aa63c5531b17be7a31a868eb89c48103ff519b49 100644
+index d35a4324f5cffe297cf567d1affb052100cc57b8..a6d8f53ed9a8907a1cfd2f64fbf9e2297968ac50 100644
 --- a/packages/app/src/hosts/host-badge.tsx
 +++ b/packages/app/src/hosts/host-badge.tsx
-@@ -1,7 +1,7 @@
+@@ -1,7 +1,8 @@
  import { Text, View } from "react-native";
 -import { StyleSheet, withUnistyles } from "react-native-unistyles";
 -import { Server } from "lucide-react-native";
 +import { StyleSheet } from "react-native-unistyles";
  import { HOST_COLORS, type HostBadgeModel, type HostColor } from "@/hosts/appearance";
++import { useHostIcon } from "@/hosts/host-icon-store";
 +import { themedHostIcon } from "@/hosts/host-icons";
  import { identityForeground } from "@/styles/identity-colors";
  import type { Theme } from "@/styles/theme";
  
-@@ -11,8 +11,6 @@ import type { Theme } from "@/styles/theme";
+@@ -11,8 +12,6 @@ import type { Theme } from "@/styles/theme";
   */
  export const HOST_BADGE_ICON_SIZE = 12;
  
@@ -301,7 +252,7 @@ index d35a4324f5cffe297cf567d1affb052100cc57b8..aa63c5531b17be7a31a868eb89c48103
  const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
  
  // One stable mapping per host color for the life of the module — a fresh `uniProps` identity
-@@ -21,7 +19,7 @@ const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted })
+@@ -21,7 +20,7 @@ const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted })
  //
  // Glyph and label share one color, so a badge reads as one object rather than a colored icon
  // with an unrelated grey word beside it.
@@ -310,11 +261,11 @@ index d35a4324f5cffe297cf567d1affb052100cc57b8..aa63c5531b17be7a31a868eb89c48103
    const byColor = {} as Record<HostColor, (theme: Theme) => { color: string }>;
    for (const color of HOST_COLORS) {
      byColor[color] =
-@@ -41,13 +39,14 @@ const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }>
+@@ -41,13 +40,14 @@ const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }>
   * them — see `flexShrink` below.
   */
  export function HostBadge({ badge }: { badge: HostBadgeModel }) {
-+  const ThemedIcon = themedHostIcon(badge.icon);
++  const ThemedIcon = themedHostIcon(useHostIcon(badge.serverId));
    return (
      <View
        style={styles.badge}
@@ -326,6 +277,187 @@ index d35a4324f5cffe297cf567d1affb052100cc57b8..aa63c5531b17be7a31a868eb89c48103
          size={HOST_BADGE_ICON_SIZE}
          style={styles.icon}
          uniProps={HOST_ICON_MAPPINGS[badge.color]}
+diff --git a/packages/app/src/hosts/host-icon-store.test.ts b/packages/app/src/hosts/host-icon-store.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e9ffe885399d2da7fc45cbaa319b70a66fea1c5
+--- /dev/null
++++ b/packages/app/src/hosts/host-icon-store.test.ts
+@@ -0,0 +1,74 @@
++import { describe, expect, it } from "vitest";
++import { defaultHostAppearance } from "@/hosts/appearance";
++import type { HostProfile } from "@/types/host-connection";
++import {
++  adoptHostIcons,
++  HOST_ICONS_STORAGE_KEY,
++  parseStoredHostIcons,
++  setHostIcon,
++} from "./host-icon-store";
++
++function memoryStorage(initial: Record<string, string> = {}) {
++  const items = new Map(Object.entries(initial));
++  return {
++    items,
++    getItem: async (key: string) => items.get(key) ?? null,
++    setItem: async (key: string, value: string) => {
++      items.set(key, value);
++    },
++  };
++}
++
++function profile(serverId: string, icon?: string): HostProfile {
++  return {
++    serverId,
++    appearance: { ...defaultHostAppearance(), ...(icon === undefined ? {} : { icon }) },
++  } as HostProfile;
++}
++
++describe("parseStoredHostIcons", () => {
++  it("keeps known icon names and drops the rest", () => {
++    expect(parseStoredHostIcons(JSON.stringify({ a: "laptop", b: "toaster" }))).toEqual({
++      a: "laptop",
++    });
++    expect(parseStoredHostIcons("not json")).toEqual({});
++    expect(parseStoredHostIcons(null)).toEqual({});
++  });
++});
++
++describe("adoptHostIcons", () => {
++  it("moves icons out of the registry into their own key", async () => {
++    const storage = memoryStorage();
++    const profiles = [profile("a", "cloud"), profile("b")];
++
++    expect(await adoptHostIcons(storage, profiles)).toBe(true);
++
++    expect(profiles[0].appearance).toEqual(defaultHostAppearance());
++    expect(JSON.parse(storage.items.get(HOST_ICONS_STORAGE_KEY) ?? "{}")).toEqual({ a: "cloud" });
++  });
++
++  it("keeps an icon already saved under its own key over a legacy one", async () => {
++    const storage = memoryStorage({ [HOST_ICONS_STORAGE_KEY]: JSON.stringify({ a: "laptop" }) });
++
++    await adoptHostIcons(storage, [profile("a", "cloud")]);
++
++    expect(JSON.parse(storage.items.get(HOST_ICONS_STORAGE_KEY) ?? "{}")).toEqual({ a: "laptop" });
++  });
++
++  it("changes nothing when no profile has a legacy icon", async () => {
++    const storage = memoryStorage();
++    expect(await adoptHostIcons(storage, [profile("a")])).toBe(false);
++    expect(storage.items.has(HOST_ICONS_STORAGE_KEY)).toBe(false);
++  });
++});
++
++describe("setHostIcon", () => {
++  it("saves under the icon key, also on a device with no saved hosts", async () => {
++    const storage = memoryStorage();
++    await adoptHostIcons(storage, []);
++
++    await setHostIcon("a", "laptop");
++
++    expect(JSON.parse(storage.items.get(HOST_ICONS_STORAGE_KEY) ?? "{}")).toEqual({ a: "laptop" });
++  });
++});
+diff --git a/packages/app/src/hosts/host-icon-store.ts b/packages/app/src/hosts/host-icon-store.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..34e60e3fe727b86f05b27ecc0f10a82a3fa7bf6e
+--- /dev/null
++++ b/packages/app/src/hosts/host-icon-store.ts
+@@ -0,0 +1,95 @@
++import { create } from "zustand";
++import { z } from "zod";
++import { HOST_ICON_NAMES, type HostIconName } from "@/hosts/host-icons";
++import type { HostProfile } from "@/types/host-connection";
++
++/**
++ * Host icons live under their own storage key, not in the host registry. The registry's schema is
++ * strict and a registry that fails it is deleted whole, so an icon there would cost every saved host
++ * and connection on a build that does not know the field.
++ */
++export const HOST_ICONS_STORAGE_KEY = "@paseo:host-icons";
++
++const StoredHostIconsSchema = z.record(z.string(), z.string());
++
++export interface HostIconStorage {
++  getItem: (key: string) => Promise<string | null>;
++  setItem: (key: string, value: string) => Promise<void>;
++}
++
++interface HostIconState {
++  icons: Readonly<Record<string, HostIconName>>;
++}
++
++const useHostIconStore = create<HostIconState>()(() => ({ icons: {} }));
++
++let storage: HostIconStorage | null = null;
++
++function isHostIconName(value: string): value is HostIconName {
++  return (HOST_ICON_NAMES as readonly string[]).includes(value);
++}
++
++/** Icons the user saved; an entry with a name this build does not know is dropped. */
++export function parseStoredHostIcons(raw: string | null): Record<string, HostIconName> {
++  if (raw === null) return {};
++  let decoded: unknown;
++  try {
++    decoded = JSON.parse(raw);
++  } catch {
++    return {};
++  }
++  const result = StoredHostIconsSchema.safeParse(decoded);
++  if (!result.success) return {};
++  const icons: Record<string, HostIconName> = {};
++  for (const [serverId, icon] of Object.entries(result.data)) {
++    if (isHostIconName(icon)) icons[serverId] = icon;
++  }
++  return icons;
++}
++
++async function saveHostIcons(): Promise<void> {
++  if (!storage) throw new Error("Host icons are not loaded yet.");
++  await storage.setItem(HOST_ICONS_STORAGE_KEY, JSON.stringify(useHostIconStore.getState().icons));
++}
++
++async function readHostIcons(hostStorage: HostIconStorage): Promise<Record<string, HostIconName>> {
++  try {
++    return parseStoredHostIcons(await hostStorage.getItem(HOST_ICONS_STORAGE_KEY));
++  } catch {
++    return {};
++  }
++}
++
++/**
++ * Loads the saved icons when the host registry loads, and moves any icon an older build stored in
++ * a host's appearance into them. Returns whether a profile changed, so the registry is saved
++ * again without the icon. Never throws: an icon problem must not stop the hosts from loading.
++ */
++export async function adoptHostIcons(
++  hostStorage: HostIconStorage,
++  profiles: HostProfile[],
++): Promise<boolean> {
++  storage = hostStorage;
++  const icons = await readHostIcons(hostStorage);
++  let migrated = false;
++  for (const profile of profiles) {
++    // COMPAT(hostIconRegistry): F-9 kept icons in the registry until 2026-11-12, remove after 2027-05-12.
++    const { icon, ...appearance } = profile.appearance;
++    if (icon === undefined) continue;
++    if (!(profile.serverId in icons) && isHostIconName(icon)) icons[profile.serverId] = icon;
++    profile.appearance = appearance;
++    migrated = true;
++  }
++  useHostIconStore.setState({ icons });
++  if (migrated) await saveHostIcons().catch(() => undefined);
++  return migrated;
++}
++
++export function useHostIcon(serverId: string): HostIconName | undefined {
++  return useHostIconStore((state) => state.icons[serverId]);
++}
++
++export async function setHostIcon(serverId: string, icon: HostIconName): Promise<void> {
++  useHostIconStore.setState((state) => ({ icons: { ...state.icons, [serverId]: icon } }));
++  await saveHostIcons();
++}
 diff --git a/packages/app/src/hosts/host-icons.ts b/packages/app/src/hosts/host-icons.ts
 new file mode 100644
 index 0000000000000000000000000000000000000000..8296a5276e2aa73ece40a43f7eb9813989cc60b9
@@ -544,47 +676,25 @@ index b61fad78c00f75ce758c85e7a0b4705738457979..29b50c945f2eaabaca8cfd142ed94e45
            label: "侧边栏徽章",
            accessibilityLabel: "侧边栏徽章，{{value}}",
 diff --git a/packages/app/src/runtime/host-runtime.ts b/packages/app/src/runtime/host-runtime.ts
-index 0c7c9f466037b9c2f98c056faf957b483e327a44..d2be8ccae484f5aefceb8d0bb7954fa807103d14 100644
+index 0c7c9f466037b9c2f98c056faf957b483e327a44..33997465bc9f8588945e8de4b3a2793c7e16324c 100644
 --- a/packages/app/src/runtime/host-runtime.ts
 +++ b/packages/app/src/runtime/host-runtime.ts
 @@ -26,6 +26,7 @@ import {
    type HostProfile,
  } from "@/types/host-connection";
  import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
-+import type { HostIconName } from "@/hosts/host-icons";
++import { adoptHostIcons } from "@/hosts/host-icon-store";
  import {
    buildDaemonWebSocketUrl,
    buildRelayWebSocketUrl,
-@@ -2221,6 +2222,13 @@ export class HostRuntimeStore {
-     }));
-   }
- 
-+  async setHostIcon(serverId: string, icon: HostIconName): Promise<void> {
-+    await this.updateHostAppearance(serverId, (host) => ({
-+      ...host,
-+      appearance: { ...host.appearance, icon },
-+    }));
-+  }
-+
-   async setHostBadgeDisplay(serverId: string, badgeDisplay: HostBadgeDisplay): Promise<void> {
-     await this.updateHostAppearance(serverId, (host) => ({
-       ...host,
-@@ -3034,6 +3042,7 @@ export interface HostMutations {
-   beginLinkPairing: () => LinkPairing;
-   renameHost: (serverId: string, label: string) => Promise<void>;
-   setHostColor: (serverId: string, color: HostColor) => Promise<void>;
-+  setHostIcon: (serverId: string, icon: HostIconName) => Promise<void>;
-   setHostBadgeDisplay: (serverId: string, badgeDisplay: HostBadgeDisplay) => Promise<void>;
-   removeHost: (serverId: string) => Promise<void>;
-   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
-@@ -3049,6 +3058,7 @@ export function useHostMutations(): HostMutations {
-       beginLinkPairing: () => store.beginLinkPairing(),
-       renameHost: (serverId, label) => store.renameHost(serverId, label),
-       setHostColor: (serverId, color) => store.setHostColor(serverId, color),
-+      setHostIcon: (serverId, icon) => store.setHostIcon(serverId, icon),
-       setHostBadgeDisplay: (serverId, badgeDisplay) =>
-         store.setHostBadgeDisplay(serverId, badgeDisplay),
-       removeHost: (serverId) => store.removeHost(serverId),
+@@ -1762,6 +1763,7 @@ export class HostRuntimeStore {
+           shouldPersistHosts = true;
+         }
+       }
++      if (await adoptHostIcons(this.storage, profiles)) shouldPersistHosts = true;
+       this.hosts = profiles;
+       this.replicaCache.setHosts(profiles.map((profile) => profile.serverId));
+       projectIconCache.setHosts(profiles.map((profile) => profile.serverId));
 diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
 index c1cf1e2482705408fe7b0f672faf7a32a8bda3b6..9baccb02a156bdf73f33ed0242117f6d3b01d0bf 100644
 --- a/packages/app/src/screens/new-workspace/form/index.tsx
@@ -630,39 +740,28 @@ index fa87c28cfa479d705bd9d9bcd291d8b64c9736d2..c8ff9c3311116fee1e0f295d6e7a4c08
          ) : null}
          <Text style={sidebarStyles.pickerTriggerLabel} numberOfLines={1}>
 diff --git a/packages/app/src/screens/settings/host-appearance-section.tsx b/packages/app/src/screens/settings/host-appearance-section.tsx
-index 585be1cfda815859326ac224f60580ddf0047dc3..069de4ffb797cebe5f9d80ae9b74b4ff57ac4968 100644
+index 585be1cfda815859326ac224f60580ddf0047dc3..c63c29833246e4332a73931953761ea54b1f52cc 100644
 --- a/packages/app/src/screens/settings/host-appearance-section.tsx
 +++ b/packages/app/src/screens/settings/host-appearance-section.tsx
-@@ -19,6 +19,8 @@ import {
+@@ -19,6 +19,9 @@ import {
  } from "@/hosts/appearance";
  import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
  import { useHostMutations } from "@/runtime/host-runtime";
 +import { HostIconRow } from "@/screens/settings/host-icon-row";
++import { setHostIcon, useHostIcon } from "@/hosts/host-icon-store";
 +import type { HostIconName } from "@/hosts/host-icons";
  import { identityColor } from "@/styles/identity-colors";
  import { settingsStyles } from "@/styles/settings";
  import { ICON_SIZE, type Theme } from "@/styles/theme";
-@@ -220,8 +222,9 @@ function BadgePreview({
-             label: host.label,
-             color: host.appearance.color,
-             showLabel: badgeDisplay === "name",
-+            icon: host.appearance.icon,
-           },
--    [badgeDisplay, host.serverId, host.label, host.appearance.color],
-+    [badgeDisplay, host.serverId, host.label, host.appearance.color, host.appearance.icon],
-   );
-   // The real sidebar row, so the preview can't drift from what the setting actually does.
-   return (
-@@ -243,7 +246,7 @@ function BadgePreview({
- export function HostAppearanceSection({ host }: { host: HostProfile }) {
+@@ -244,6 +247,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
    const { t } = useTranslation();
    const toast = useToast();
--  const { setHostColor, setHostBadgeDisplay } = useHostMutations();
-+  const { setHostColor, setHostIcon, setHostBadgeDisplay } = useHostMutations();
+   const { setHostColor, setHostBadgeDisplay } = useHostMutations();
++  const hostIcon = useHostIcon(host.serverId);
    const localDaemon = useLocalDaemonServerIdState();
    const isLocalHost = localDaemon.status === "resolved" && localDaemon.serverId === host.serverId;
    const badgeDisplay = resolveHostBadgeDisplay({
-@@ -262,6 +265,16 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+@@ -262,6 +266,16 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
      },
      [host.serverId, setHostColor, t, toast],
    );
@@ -674,20 +773,16 @@ index 585be1cfda815859326ac224f60580ddf0047dc3..069de4ffb797cebe5f9d80ae9b74b4ff
 +        toast.error(t("errors.unableToSave"));
 +      }
 +    },
-+    [host.serverId, setHostIcon, t, toast],
++    [host.serverId, t, toast],
 +  );
    const handleBadgeDisplayChange = useCallback(
      async (next: HostBadgeDisplay) => {
        try {
-@@ -288,6 +301,11 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+@@ -288,6 +302,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
            </View>
          </View>
          <ColorRow color={host.appearance.color} onChange={handleColorChange} />
-+        <HostIconRow
-+          icon={host.appearance.icon}
-+          color={host.appearance.color}
-+          onChange={handleIconChange}
-+        />
++        <HostIconRow icon={hostIcon} color={host.appearance.color} onChange={handleIconChange} />
          {badgeDisplay === null ? null : (
            <>
              <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />

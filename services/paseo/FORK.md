@@ -163,16 +163,22 @@ patches refer to them in their `Fork-Change` trailer.
   hosts with similar names (one per laptop) were hard to tell apart. Host appearance lives in the app,
   which no plugin hook reaches.
 - Patches: `feat(app): pick a host icon and show it in host pickers`
-- Touches: app new `hosts/host-icons.ts` (the icon set), `components/hosts/host-identity-icon.tsx`,
-  `screens/settings/host-icon-row.tsx`; small hooks in `hosts/appearance.ts` (optional `icon`) and its
-  test, `hosts/host-badge.tsx`, `runtime/host-runtime.ts` (`setHostIcon`),
+- Touches: app new `hosts/host-icons.ts` (the icon set), `hosts/host-icon-store.ts` (where icons are saved)
+  and its test, `components/hosts/host-identity-icon.tsx`, `screens/settings/host-icon-row.tsx`; small hooks
+  in `hosts/appearance.ts` (the legacy `icon` field), `hosts/host-badge.tsx`, `runtime/host-runtime.ts`
+  (one `adoptHostIcons` call in `loadFromStorage`),
   `components/hosts/host-picker.tsx` (`HostStatusDotSlot`), `screens/new-workspace/form/index.tsx`,
   `screens/settings/host-appearance-section.tsx`, `components/sidebar/display-preferences/menu.tsx`
   (the sidebar's host filter), `screens/settings-screen.tsx` (the settings host switcher),
   `components/add-project-flow.tsx` (a `leading` slot on rows, used by the Choose host step); a comment
   in `e2e/support/helpers/hosts.ts`; `en.ts` strings and one line per other locale.
-- Compatibility: web UI only; no wire or daemon change, so no feature flag. The icon is per-device, next
-  to the color, and optional in the stored host registry, so registries saved before it still parse.
+- Compatibility: web UI only; no wire or daemon change, so no feature flag. The icon is per-device, like
+  the color, saved under its own storage key, `@paseo:host-icons`, not in the host registry: the registry's
+  schema is strict and a registry that fails it is deleted whole, so an icon there would cost every saved
+  host on a build without this patch (an upstream web UI on the same origin, or after dropping F-9). Until
+  2026-11-12 the icon was in the registry; `appearance.icon` stays accepted as any string
+  (`COMPAT(hostIconRegistry)`, remove after 2027-05-12), and loading the registry moves it to the new key
+  and saves the registry without it. An unknown icon name is dropped, not fatal.
   Every host list draws `HostIdentityIcon`: the host's icon in its color (the server glyph, muted, by
   default), with the status dot on its bottom-right corner only while the host is not connected.
   `HostStatusDotSlot` draws it, so the lists that use the slot (new workspace, host filter trigger, host
