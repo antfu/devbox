@@ -1,0 +1,781 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Thu, 12 Nov 2026 01:43:50 +0000
+Subject: [PATCH] feat: show each host's CPU and memory in the host pickers
+
+The hosts dropdown at the bottom of the sidebar and the host picker in New
+workspace now show each host's CPU and memory use, so you can see which
+host has room before starting work there.
+
+There was no API for it. A new daemon.get_host_stats RPC, gated on
+server_info.features.hostStats, reports the CPU share in use and the used
+and total memory. Inside a container the daemon reads its own cgroup, which
+gives the numbers docker stats shows; elsewhere it uses the OS totals. The
+app polls it every 3 s, only while a picker is open.
+
+Fork-Change: F-17
+---
+ .../app/src/components/hosts/host-picker.tsx  |  25 ++-
+ .../src/components/hosts/host-stats-label.tsx |  45 +++++
+ packages/app/src/components/left-sidebar.tsx  |   3 +-
+ .../app/src/hosts/host-stats-format.test.ts   |  32 +++
+ packages/app/src/hosts/host-stats-format.ts   |  28 +++
+ packages/app/src/hosts/use-host-stats.ts      |  26 +++
+ .../src/screens/new-workspace/form/index.tsx  |   3 +-
+ packages/client/src/daemon-client.ts          |  12 ++
+ packages/protocol/src/messages.ts             |  28 +++
+ .../authorization/operation-permissions.ts    |   2 +
+ packages/server/src/server/host-stats.test.ts | 101 ++++++++++
+ packages/server/src/server/host-stats.ts      | 182 ++++++++++++++++++
+ packages/server/src/server/session.ts         |   8 +
+ .../server/src/server/websocket-server.ts     |   2 +
+ 14 files changed, 494 insertions(+), 3 deletions(-)
+ create mode 100644 packages/app/src/components/hosts/host-stats-label.tsx
+ create mode 100644 packages/app/src/hosts/host-stats-format.test.ts
+ create mode 100644 packages/app/src/hosts/host-stats-format.ts
+ create mode 100644 packages/app/src/hosts/use-host-stats.ts
+ create mode 100644 packages/server/src/server/host-stats.test.ts
+ create mode 100644 packages/server/src/server/host-stats.ts
+
+diff --git a/packages/app/src/components/hosts/host-picker.tsx b/packages/app/src/components/hosts/host-picker.tsx
+index 4a0fbfcd52ece098dc347200922253fabbd1a228..5c54a536e3d89e603e60663c99d311e4226d1cf1 100644
+--- a/packages/app/src/components/hosts/host-picker.tsx
++++ b/packages/app/src/components/hosts/host-picker.tsx
+@@ -4,6 +4,7 @@ import type { GestureResponderEvent } from "react-native";
+ import { Plus, Server, Settings } from "lucide-react-native";
+ import { StyleSheet, useUnistyles } from "react-native-unistyles";
+ import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
++import { HostStatsLabel } from "@/components/hosts/host-stats-label";
+ import { Button } from "@/components/ui/button";
+ import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
+ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+@@ -64,6 +65,7 @@ export interface HostPickerOptionProps {
+   label: string;
+   extras?: HostPickerOptionExtras | null;
+   showActiveConnection: boolean;
++  showHostStats?: boolean;
+   selected?: boolean;
+   active: boolean;
+   onPress: () => void;
+@@ -76,6 +78,7 @@ export function HostPickerOption({
+   label,
+   extras,
+   showActiveConnection,
++  showHostStats,
+   selected,
+   active,
+   onPress,
+@@ -137,13 +140,23 @@ export function HostPickerOption({
+     theme.colors.foregroundMuted,
+     theme.iconSize.sm,
+   ]);
++  const statsTrailingSlot = useMemo(
++    () =>
++      showHostStats ? (
++        <View style={styles.trailingRow}>
++          <HostStatsLabel serverId={serverId} />
++          {trailingSlot}
++        </View>
++      ) : null,
++    [serverId, showHostStats, trailingSlot],
++  );
+ 
+   return (
+     <ComboboxItem
+       label={label}
+       description={extras?.description ?? connectionLabel}
+       leadingSlot={leadingSlot}
+-      trailingSlot={trailingSlot}
++      trailingSlot={statsTrailingSlot ?? trailingSlot}
+       selected={selected}
+       active={active}
+       onPress={onPress}
+@@ -204,6 +217,8 @@ export interface HostPickerProps {
+   includeEnableBuiltInDaemon?: boolean;
+   onEnableBuiltInDaemon?: () => void;
+   showActiveConnection?: boolean;
++  /** Shows each host's CPU and memory on its row, refreshed while the picker is open. */
++  showHostStats?: boolean;
+   onOpenHostSettings?: (serverId: string) => void;
+   searchable?: boolean;
+   title?: string;
+@@ -228,6 +243,7 @@ export function HostPicker({
+   includeEnableBuiltInDaemon,
+   onEnableBuiltInDaemon,
+   showActiveConnection,
++  showHostStats,
+   onOpenHostSettings,
+   searchable,
+   title,
+@@ -314,6 +330,7 @@ export function HostPicker({
+           label={option.label}
+           extras={hostOptionExtras?.(option.id) ?? null}
+           showActiveConnection={showActiveConnection === true}
++          showHostStats={showHostStats}
+           selected={selected}
+           active={active}
+           onPress={onPress}
+@@ -328,6 +345,7 @@ export function HostPicker({
+       hostOptionTestID,
+       onOpenHostSettings,
+       showActiveConnection,
++      showHostStats,
+       handleOpenHostSettings,
+     ],
+   );
+@@ -360,4 +378,9 @@ const styles = StyleSheet.create((theme) => ({
+     alignItems: "center",
+     justifyContent: "center",
+   },
++  trailingRow: {
++    flexDirection: "row",
++    alignItems: "center",
++    gap: theme.spacing[3],
++  },
+ }));
+diff --git a/packages/app/src/components/hosts/host-stats-label.tsx b/packages/app/src/components/hosts/host-stats-label.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..530198aa3d64845c1b7bbff7f27dbfe945a050e9
+--- /dev/null
++++ b/packages/app/src/components/hosts/host-stats-label.tsx
+@@ -0,0 +1,45 @@
++import type { ReactElement } from "react";
++import { Text, View } from "react-native";
++import { StyleSheet } from "react-native-unistyles";
++import { formatHostStats } from "@/hosts/host-stats-format";
++import { useHostStats } from "@/hosts/use-host-stats";
++
++/** "CPU 12%  MEM 3.1/16G" for a host row; nothing until the host reports, or on hosts without it. */
++export function HostStatsLabel({ serverId }: { serverId: string }): ReactElement | null {
++  const stats = useHostStats(serverId);
++  if (!stats) return null;
++  const text = formatHostStats(stats);
++  return (
++    <View
++      style={styles.row}
++      accessible
++      accessibilityLabel={`CPU ${text.cpu}, memory ${text.memory}`}
++      testID={`host-stats-${serverId}`}
++    >
++      <Text numberOfLines={1} style={styles.text}>
++        <Text style={styles.key}>CPU </Text>
++        {text.cpu}
++      </Text>
++      <Text numberOfLines={1} style={styles.text}>
++        <Text style={styles.key}>MEM </Text>
++        {text.memory}
++      </Text>
++    </View>
++  );
++}
++
++const styles = StyleSheet.create((theme) => ({
++  row: {
++    flexDirection: "row",
++    alignItems: "center",
++    gap: theme.spacing[2],
++  },
++  text: {
++    fontSize: theme.fontSize.sm,
++    color: theme.colors.foreground,
++    fontVariant: ["tabular-nums"],
++  },
++  key: {
++    color: theme.colors.foregroundMuted,
++  },
++}));
+diff --git a/packages/app/src/components/left-sidebar.tsx b/packages/app/src/components/left-sidebar.tsx
+index 983d142beb1cca6bcf731db139a048c79331e2d1..33865393104752a3df555807cd8a4246309ab51b 100644
+--- a/packages/app/src/components/left-sidebar.tsx
++++ b/packages/app/src/components/left-sidebar.tsx
+@@ -364,10 +364,11 @@ function SidebarHostPicker({
+       includeAddHost
+       onAddHost={onAddHost}
+       showActiveConnection
++      showHostStats
+       onOpenHostSettings={onOpenHostSettings}
+       searchable
+       desktopPlacement="top-start"
+-      desktopMinWidth={240}
++      desktopMinWidth={360}
+       addHostTestID="sidebar-host-add"
+       hostOptionTestID={sidebarHostOptionTestID}
+     >
+diff --git a/packages/app/src/hosts/host-stats-format.test.ts b/packages/app/src/hosts/host-stats-format.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd1f3b170fc36bb93d035cffaf158637633af74b
+--- /dev/null
++++ b/packages/app/src/hosts/host-stats-format.test.ts
+@@ -0,0 +1,32 @@
++import { describe, expect, it } from "vitest";
++import { formatHostStats, formatMemory } from "./host-stats-format";
++
++const GIB = 1024 ** 3;
++
++describe("formatMemory", () => {
++  it("shows used and total in gigabytes, one decimal under 10", () => {
++    expect(formatMemory(3.14 * GIB, 16 * GIB)).toBe("3.1/16G");
++    expect(formatMemory(12.6 * GIB, 64 * GIB)).toBe("13/64G");
++  });
++
++  it("switches to megabytes when the total is under a gigabyte", () => {
++    expect(formatMemory(256 * 1024 ** 2, 512 * 1024 ** 2)).toBe("256/512M");
++  });
++});
++
++describe("formatHostStats", () => {
++  it("rounds CPU to a whole percent and shows a dash when it is unknown", () => {
++    const stats = {
++      requestId: "r",
++      source: "cgroup",
++      cpuCount: 4,
++      memoryUsedBytes: GIB,
++      memoryTotalBytes: 8 * GIB,
++    };
++    expect(formatHostStats({ ...stats, cpuPercent: 12.6 })).toEqual({
++      cpu: "13%",
++      memory: "1.0/8.0G",
++    });
++    expect(formatHostStats({ ...stats, cpuPercent: null }).cpu).toBe("–");
++  });
++});
+diff --git a/packages/app/src/hosts/host-stats-format.ts b/packages/app/src/hosts/host-stats-format.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..bc69084bafb5cba1bebf9f4289fb9e93b245782c
+--- /dev/null
++++ b/packages/app/src/hosts/host-stats-format.ts
+@@ -0,0 +1,28 @@
++import type { DaemonGetHostStatsResponse } from "@getpaseo/protocol/messages";
++
++export type HostStats = DaemonGetHostStatsResponse["payload"];
++
++export interface HostStatsText {
++  cpu: string;
++  memory: string;
++}
++
++const GIB = 1024 ** 3;
++const MIB = 1024 ** 2;
++
++function formatAmount(value: number): string {
++  return value < 10 ? value.toFixed(1) : Math.round(value).toString();
++}
++
++/** "3.1/16G": used and total in one unit, so the pair reads at a glance. */
++export function formatMemory(usedBytes: number, totalBytes: number): string {
++  const [unit, suffix] = totalBytes >= GIB ? [GIB, "G"] : [MIB, "M"];
++  return `${formatAmount(usedBytes / unit)}/${formatAmount(totalBytes / unit)}${suffix}`;
++}
++
++export function formatHostStats(stats: HostStats): HostStatsText {
++  return {
++    cpu: stats.cpuPercent === null ? "–" : `${Math.round(stats.cpuPercent)}%`,
++    memory: formatMemory(stats.memoryUsedBytes, stats.memoryTotalBytes),
++  };
++}
+diff --git a/packages/app/src/hosts/use-host-stats.ts b/packages/app/src/hosts/use-host-stats.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..b635ebd13e606c79f8310ef3ecc0eb4bc8850b25
+--- /dev/null
++++ b/packages/app/src/hosts/use-host-stats.ts
+@@ -0,0 +1,26 @@
++import { useFetchQuery } from "@/data/query";
++import { useHostFeature } from "@/runtime/host-features";
++import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
++import type { HostStats } from "./host-stats-format";
++
++const HOST_STATS_REFRESH_MS = 3_000;
++
++/** The host's CPU and memory, refreshed while a caller is mounted; null until the host answers. */
++export function useHostStats(serverId: string): HostStats | null {
++  const client = useHostRuntimeClient(serverId);
++  const isConnected = useHostRuntimeIsConnected(serverId);
++  const isSupported = useHostFeature(serverId, "hostStats");
++  const query = useFetchQuery({
++    queryKey: ["hostStats", serverId],
++    dataShape: "value",
++    staleTimeMs: HOST_STATS_REFRESH_MS,
++    enabled: Boolean(client && isConnected && isSupported),
++    refetchInterval: HOST_STATS_REFRESH_MS,
++    retry: false,
++    queryFn: async () => {
++      if (!client) throw new Error("The host client is unavailable.");
++      return client.getHostStats();
++    },
++  });
++  return isConnected ? (query.data ?? null) : null;
++}
+diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
+index 0a0049f6cd1c44d7e672d2a4430d08a5892acbf4..0017a0923e576c4ad818ea57f6f31990091ae8d0 100644
+--- a/packages/app/src/screens/new-workspace/form/index.tsx
++++ b/packages/app/src/screens/new-workspace/form/index.tsx
+@@ -254,9 +254,10 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+       onAddHost={host.onAddHost}
+       addHostTestID="new-workspace-host-picker-add-host"
+       searchable={false}
++      showHostStats
+       title={t("newWorkspace.fields.host")}
+       desktopPlacement="bottom-start"
+-      desktopMinWidth={200}
++      desktopMinWidth={320}
+       hostOptionTestID={hostOptionTestID}
+       hostOptionExtras={hostOptionExtras}
+     >
+diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
+index 53eb63f712cb2fb710ab096d1ab1f46b4d6840b3..dfa16cf7a66fecb51da2503147e08a7e53fe0e20 100644
+--- a/packages/client/src/daemon-client.ts
++++ b/packages/client/src/daemon-client.ts
+@@ -111,6 +111,7 @@ import type {
+   ProviderUsageListResponseMessage,
+   UsageReportEntry,
+   DaemonGetStatusResponse,
++  DaemonGetHostStatsResponse,
+   DaemonGetPairingOfferResponse,
+   DaemonConfigReloadResponse,
+   DiagnosticsResponse,
+@@ -5600,6 +5601,17 @@ export class DaemonClient {
+     });
+   }
+ 
++  async getHostStats(requestId?: string): Promise<DaemonGetHostStatsResponse["payload"]> {
++    // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
++    if (this.lastServerInfoMessage?.features?.hostStats !== true) {
++      throw new Error("Update the host to read its CPU and memory.");
++    }
++    return this.sendNamespacedCorrelatedSessionRequest({
++      requestId,
++      message: { type: "daemon.get_host_stats.request" },
++    });
++  }
++
+   async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
+     this.requireDaemonConfigReloadSupport();
+     return this.sendNamespacedCorrelatedSessionRequest({
+diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
+index 74121adac03ba746081da6171de03d64dd48086f..2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1 100644
+--- a/packages/protocol/src/messages.ts
++++ b/packages/protocol/src/messages.ts
+@@ -1457,6 +1457,12 @@ export const DaemonGetStatusRequestSchema = z.object({
+   requestId: z.string(),
+ });
+ 
++// Gated on features.hostStats.
++export const DaemonGetHostStatsRequestSchema = z.object({
++  type: z.literal("daemon.get_host_stats.request"),
++  requestId: z.string(),
++});
++
+ export const DaemonGetPairingOfferRequestSchema = z.object({
+   type: z.literal("daemon.get_pairing_offer.request"),
+   requestId: z.string(),
+@@ -3338,6 +3344,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+   SendAgentMessageRequestSchema,
+   WaitForFinishRequestSchema,
+   DaemonGetStatusRequestSchema,
++  DaemonGetHostStatsRequestSchema,
+   DaemonGetPairingOfferRequestSchema,
+   DaemonConfigReloadRequestSchema,
+   HubManagementDaemonConnectRequestSchema,
+@@ -3894,6 +3901,8 @@ export const ServerInfoStatusPayloadSchema = z
+         providerDefaultMode: z.boolean().optional(),
+         // COMPAT(worktreeDefaultSetup): added in v0.14.0, remove gate after 2027-05-02.
+         worktreeDefaultSetup: z.boolean().optional(),
++        // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
++        hostStats: z.boolean().optional(),
+       })
+       .optional(),
+   })
+@@ -5169,6 +5178,23 @@ export const GetDaemonConfigResponseMessageSchema = z.object({
+     .passthrough(),
+ });
+ 
++// CPU and memory of the machine the daemon runs on, or of its container when it runs in one.
++export const DaemonGetHostStatsResponseSchema = z.object({
++  type: z.literal("daemon.get_host_stats.response"),
++  payload: z
++    .object({
++      requestId: z.string(),
++      // "cgroup" inside a container, "os" otherwise.
++      source: z.string(),
++      // Share of the available CPU in use, 0-100; null when it could not be measured.
++      cpuPercent: z.number().nullable(),
++      cpuCount: z.number(),
++      memoryUsedBytes: z.number(),
++      memoryTotalBytes: z.number(),
++    })
++    .passthrough(),
++});
++
+ export const DaemonGetStatusResponseSchema = z.object({
+   type: z.literal("daemon.get_status.response"),
+   payload: z
+@@ -7160,6 +7186,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+   SendAgentMessageResponseMessageSchema,
+   SetVoiceModeResponseMessageSchema,
+   DaemonGetStatusResponseSchema,
++  DaemonGetHostStatsResponseSchema,
+   DaemonGetPairingOfferResponseSchema,
+   DaemonConfigReloadResponseSchema,
+   HubManagementDaemonConnectResponseSchema,
+@@ -7418,6 +7445,7 @@ export type ListProviderFeaturesResponseMessage = z.infer<
+ >;
+ export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
+ export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
++export type DaemonGetHostStatsResponse = z.infer<typeof DaemonGetHostStatsResponseSchema>;
+ export type DaemonGetPairingOfferResponse = z.infer<typeof DaemonGetPairingOfferResponseSchema>;
+ export type DaemonConfigReloadResponse = z.infer<typeof DaemonConfigReloadResponseSchema>;
+ export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
+diff --git a/packages/server/src/server/authorization/operation-permissions.ts b/packages/server/src/server/authorization/operation-permissions.ts
+index d040e508ccb02fc39906cae5cbf485c36d6cfb33..ff2d9a13b9c3eb764330dab96dfe8579b894ef66 100644
+--- a/packages/server/src/server/authorization/operation-permissions.ts
++++ b/packages/server/src/server/authorization/operation-permissions.ts
+@@ -78,6 +78,7 @@ const INBOUND_PERMISSION = {
+   "daemon.config.reload.request": "daemon.manage",
+   "daemon.get_pairing_offer.request": "access.manage",
+   "daemon.get_status.request": "daemon.read",
++  "daemon.get_host_stats.request": "daemon.read",
+   "daemon.update.request": "daemon.manage",
+   delete_agent_request: "workspace.write",
+   "diagnostics.request": "daemon.read",
+@@ -313,6 +314,7 @@ const OUTBOUND_PERMISSION = {
+   "daemon.config.reload.response": "daemon.manage",
+   "daemon.get_pairing_offer.response": "access.manage",
+   "daemon.get_status.response": "daemon.read",
++  "daemon.get_host_stats.response": "daemon.read",
+   "daemon.update.progress": "daemon.manage",
+   "daemon.update.response": "daemon.manage",
+   "diagnostics.response": "daemon.read",
+diff --git a/packages/server/src/server/host-stats.test.ts b/packages/server/src/server/host-stats.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..522c0a21e59be9efb9f8037cc5dd659b2d2be46a
+--- /dev/null
++++ b/packages/server/src/server/host-stats.test.ts
+@@ -0,0 +1,101 @@
++import { describe, expect, it } from "vitest";
++import {
++  type CpuSample,
++  type HostProbe,
++  createHostStatsReader,
++  cpuPercentBetween,
++  parseCgroupCpuLimit,
++  parseCgroupMemoryLimit,
++  parseCgroupStat,
++} from "./host-stats.js";
++
++describe("cgroup parsers", () => {
++  it("reads the CPU limit from cpu.max", () => {
++    expect(parseCgroupCpuLimit("200000 100000\n")).toBe(2);
++    expect(parseCgroupCpuLimit("max 100000\n")).toBeNull();
++  });
++
++  it("reads one key of a stat file", () => {
++    const stat = "usage_usec 4799405845\nuser_usec 3363499049\n";
++    expect(parseCgroupStat(stat, "usage_usec")).toBe(4799405845);
++    expect(parseCgroupStat(stat, "missing")).toBeNull();
++  });
++
++  it("reads the memory limit from memory.max", () => {
++    expect(parseCgroupMemoryLimit("1073741824\n")).toBe(1073741824);
++    expect(parseCgroupMemoryLimit("max\n")).toBeNull();
++  });
++});
++
++describe("cpuPercentBetween", () => {
++  it("is the busy share of the capacity between two samples, clamped to 0-100", () => {
++    const from = { atMs: 0, usedMicros: 0, capacityMicros: 0 };
++    expect(cpuPercentBetween(from, { atMs: 1, usedMicros: 250, capacityMicros: 1000 })).toBe(25);
++    expect(cpuPercentBetween(from, { atMs: 1, usedMicros: 2000, capacityMicros: 1000 })).toBe(100);
++    expect(cpuPercentBetween(from, from)).toBeNull();
++  });
++});
++
++function scriptedProbe(samples: CpuSample[]): HostProbe {
++  let index = 0;
++  return {
++    source: "cgroup",
++    cpuCount: 2,
++    async readCpu() {
++      const sample = samples[Math.min(index, samples.length - 1)];
++      index += 1;
++      return sample;
++    },
++    async readMemory() {
++      return { usedBytes: 512, totalBytes: 1024 };
++    },
++  };
++}
++
++describe("createHostStatsReader", () => {
++  it("measures over a short window first, then averages since the previous read", async () => {
++    const waits: number[] = [];
++    const read = createHostStatsReader({
++      probe: async () =>
++        scriptedProbe([
++          { atMs: 0, usedMicros: 0, capacityMicros: 0 },
++          { atMs: 250, usedMicros: 100, capacityMicros: 1000 },
++          { atMs: 5000, usedMicros: 600, capacityMicros: 2000 },
++        ]),
++      wait: async (ms) => waits.push(ms),
++      sampleWindowMs: 250,
++    });
++
++    expect(await read()).toEqual({
++      source: "cgroup",
++      cpuPercent: 10,
++      cpuCount: 2,
++      memoryUsedBytes: 512,
++      memoryTotalBytes: 1024,
++    });
++    expect(waits).toEqual([250]);
++
++    expect((await read()).cpuPercent).toBe(50);
++    expect(waits).toEqual([250]);
++  });
++
++  it("measures afresh when the previous read is stale", async () => {
++    const waits: number[] = [];
++    const read = createHostStatsReader({
++      probe: async () =>
++        scriptedProbe([
++          { atMs: 0, usedMicros: 0, capacityMicros: 0 },
++          { atMs: 250, usedMicros: 100, capacityMicros: 1000 },
++          { atMs: 120_000, usedMicros: 900, capacityMicros: 2000 },
++          { atMs: 120_250, usedMicros: 1600, capacityMicros: 3000 },
++        ]),
++      wait: async (ms) => waits.push(ms),
++      sampleWindowMs: 250,
++      maxSampleAgeMs: 60_000,
++    });
++
++    await read();
++    expect((await read()).cpuPercent).toBe(70);
++    expect(waits).toEqual([250, 250]);
++  });
++});
+diff --git a/packages/server/src/server/host-stats.ts b/packages/server/src/server/host-stats.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..98b19e57738ae62daea0757c14777af90410b262
+--- /dev/null
++++ b/packages/server/src/server/host-stats.ts
+@@ -0,0 +1,182 @@
++import { readFile } from "node:fs/promises";
++import { availableParallelism, cpus, freemem, totalmem } from "node:os";
++import { setTimeout as sleep } from "node:timers/promises";
++
++export interface HostStats {
++  source: "cgroup" | "os";
++  cpuPercent: number | null;
++  cpuCount: number;
++  memoryUsedBytes: number;
++  memoryTotalBytes: number;
++}
++
++/** Cumulative CPU counters: time spent busy, out of the time the available CPUs could have spent. */
++export interface CpuSample {
++  atMs: number;
++  usedMicros: number;
++  capacityMicros: number;
++}
++
++export interface HostProbe {
++  source: HostStats["source"];
++  cpuCount: number;
++  readCpu(): Promise<CpuSample>;
++  readMemory(): Promise<{ usedBytes: number; totalBytes: number }>;
++}
++
++const CGROUP_ROOT = "/sys/fs/cgroup";
++
++/** `cpu.max` holds "<quota> <period>", or "max <period>" without a limit. */
++export function parseCgroupCpuLimit(cpuMax: string): number | null {
++  const [quota, period] = cpuMax.trim().split(/\s+/);
++  const quotaMicros = Number(quota);
++  const periodMicros = Number(period);
++  if (!Number.isFinite(quotaMicros) || !Number.isFinite(periodMicros) || periodMicros <= 0) {
++    return null;
++  }
++  return quotaMicros / periodMicros;
++}
++
++/** Reads one `<key> <value>` line of a cgroup stat file such as `cpu.stat` or `memory.stat`. */
++export function parseCgroupStat(stat: string, key: string): number | null {
++  for (const line of stat.split("\n")) {
++    const [name, value] = line.trim().split(/\s+/);
++    if (name === key) {
++      const parsed = Number(value);
++      return Number.isFinite(parsed) ? parsed : null;
++    }
++  }
++  return null;
++}
++
++/** `memory.max` holds a byte count, or "max" without a limit. */
++export function parseCgroupMemoryLimit(memoryMax: string): number | null {
++  const parsed = Number(memoryMax.trim());
++  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
++}
++
++export function cpuPercentBetween(from: CpuSample, to: CpuSample): number | null {
++  const capacity = to.capacityMicros - from.capacityMicros;
++  if (capacity <= 0) return null;
++  const percent = ((to.usedMicros - from.usedMicros) / capacity) * 100;
++  return Math.min(100, Math.max(0, percent));
++}
++
++function readCgroupFile(name: string): Promise<string> {
++  return readFile(`${CGROUP_ROOT}/${name}`, "utf8");
++}
++
++// Counts docker's way: page cache the kernel can drop (inactive_file) is not "used".
++async function readCgroupMemory(): Promise<{ usedBytes: number; totalBytes: number }> {
++  const [current, max, stat] = await Promise.all([
++    readCgroupFile("memory.current"),
++    readCgroupFile("memory.max"),
++    readCgroupFile("memory.stat"),
++  ]);
++  const inactiveFile = parseCgroupStat(stat, "inactive_file") ?? 0;
++  return {
++    usedBytes: Math.max(0, Number(current.trim()) - inactiveFile),
++    totalBytes: parseCgroupMemoryLimit(max) ?? totalmem(),
++  };
++}
++
++async function createCgroupProbe(): Promise<HostProbe> {
++  const limit = parseCgroupCpuLimit(await readCgroupFile("cpu.max"));
++  const cpuCount = Math.min(limit ?? Number.POSITIVE_INFINITY, availableParallelism());
++  return {
++    source: "cgroup",
++    cpuCount,
++    async readCpu() {
++      const usedMicros = parseCgroupStat(await readCgroupFile("cpu.stat"), "usage_usec");
++      if (usedMicros === null) throw new Error("cpu.stat has no usage_usec");
++      const atMs = performance.now();
++      return { atMs, usedMicros, capacityMicros: atMs * 1000 * cpuCount };
++    },
++    readMemory: readCgroupMemory,
++  };
++}
++
++function createOsProbe(): HostProbe {
++  return {
++    source: "os",
++    cpuCount: availableParallelism(),
++    async readCpu() {
++      let usedMs = 0;
++      let totalMs = 0;
++      for (const { times } of cpus()) {
++        const busy = times.user + times.nice + times.sys + times.irq;
++        usedMs += busy;
++        totalMs += busy + times.idle;
++      }
++      return { atMs: performance.now(), usedMicros: usedMs * 1000, capacityMicros: totalMs * 1000 };
++    },
++    async readMemory() {
++      const totalBytes = totalmem();
++      return { usedBytes: totalBytes - freemem(), totalBytes };
++    },
++  };
++}
++
++// The cgroup files describe the container only when the daemon sits at the root of its own cgroup
++// namespace ("0::/"). On a bare Linux host the path names a session scope, which is not the machine.
++async function detectHostProbe(): Promise<HostProbe> {
++  try {
++    const cgroup = await readFile("/proc/self/cgroup", "utf8");
++    if (cgroup.trim() === "0::/") {
++      const probe = await createCgroupProbe();
++      await Promise.all([probe.readCpu(), probe.readMemory()]);
++      return probe;
++    }
++  } catch {
++    // No cgroup v2 here (macOS, Windows, cgroup v1): the OS numbers apply.
++  }
++  return createOsProbe();
++}
++
++export interface HostStatsReaderOptions {
++  probe: () => Promise<HostProbe>;
++  wait?: (ms: number) => Promise<unknown>;
++  /** CPU use is the average since the previous read, or over this window when there is none. */
++  sampleWindowMs?: number;
++  /** A previous read older than this is too stale to average over. */
++  maxSampleAgeMs?: number;
++}
++
++export function createHostStatsReader(options: HostStatsReaderOptions): () => Promise<HostStats> {
++  const wait = options.wait ?? sleep;
++  const sampleWindowMs = options.sampleWindowMs ?? 250;
++  const maxSampleAgeMs = options.maxSampleAgeMs ?? 60_000;
++  let probePromise: Promise<HostProbe> | undefined;
++  let lastSample: CpuSample | undefined;
++  let lastPercent: number | null = null;
++
++  async function readCpuPercent(probe: HostProbe): Promise<number | null> {
++    let current = await probe.readCpu();
++    const age = lastSample ? current.atMs - lastSample.atMs : Number.POSITIVE_INFINITY;
++    if (age < sampleWindowMs && lastPercent !== null) return lastPercent;
++    let base = lastSample;
++    if (!base || age > maxSampleAgeMs) {
++      base = current;
++      await wait(sampleWindowMs);
++      current = await probe.readCpu();
++    }
++    lastSample = current;
++    lastPercent = cpuPercentBetween(base, current);
++    return lastPercent;
++  }
++
++  return async () => {
++    probePromise ??= options.probe();
++    const probe = await probePromise;
++    const [cpuPercent, memory] = await Promise.all([readCpuPercent(probe), probe.readMemory()]);
++    return {
++      source: probe.source,
++      cpuPercent,
++      cpuCount: probe.cpuCount,
++      memoryUsedBytes: memory.usedBytes,
++      memoryTotalBytes: memory.totalBytes,
++    };
++  };
++}
++
++export const readHostStats = createHostStatsReader({ probe: detectHostProbe });
+diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
+index 5a4961b37b770997360087519a7cd02c9ce4f42d..89f49d6968f744bdb2eab1c447cc63a62beae994 100644
+--- a/packages/server/src/server/session.ts
++++ b/packages/server/src/server/session.ts
+@@ -279,6 +279,7 @@ import { resolveCloneDirectoryName } from "./project-clone-directory.js";
+ import { runGitCommand } from "../utils/run-git-command.js";
+ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
+ import { resolveWorktreeSourceCwd } from "./workspace-source.js";
++import { readHostStats } from "./host-stats.js";
+ 
+ type ProviderSubagentManagerEvent = Extract<
+   AgentManagerEvent,
+@@ -2957,6 +2958,13 @@ export class Session {
+         return undefined;
+       case "daemon.get_status.request":
+         return this.daemonSession.handleGetStatusRequest(msg);
++      case "daemon.get_host_stats.request":
++        return readHostStats().then((stats) =>
++          this.emit({
++            type: "daemon.get_host_stats.response",
++            payload: { requestId: msg.requestId, ...stats },
++          }),
++        );
+       case "daemon.get_pairing_offer.request":
+         return this.daemonSession.handleGetPairingOfferRequest(msg);
+       case "daemon.config.reload.request":
+diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
+index 4a424365fc2d9cd6f6550c306f38904324edf38b..7b9b7e4ad891bd9983a5406629c01a66ba63476b 100644
+--- a/packages/server/src/server/websocket-server.ts
++++ b/packages/server/src/server/websocket-server.ts
+@@ -2186,6 +2186,8 @@ export class VoiceAssistantWebSocketServer {
+         providerDefaultMode: true,
+         // COMPAT(worktreeDefaultSetup): added in v0.14.0, remove gate after 2027-05-02.
+         worktreeDefaultSetup: true,
++        // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
++        hostStats: true,
+       },
+     };
+   }

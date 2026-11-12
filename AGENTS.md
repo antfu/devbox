@@ -117,8 +117,10 @@ Use upstream **release tags**, not `main`, so the daemon we run matches a versio
    `git am`, "ours" is the release), run `npm install` to apply the patch's dependency change on top, and
    `git add` it before `git am --continue`.
 4. Run upstream's checks, then `pnpm paseo:export`.
-5. `pnpm build`, the client check above, then one commit `chore(paseo): move to vX.Y.Z` with the submodule
-   bump, the refreshed patches and the ledger's Base and Sync log.
+5. If upstream's `NODE_IMAGE` default changed, move `services/toolchain/Dockerfile` to its tag. Either way,
+   bump the digest pinned there to the tag's current one. This rebuilds every image, so do it only here.
+6. `pnpm build`, the client check above, then one commit `chore(paseo): move to vX.Y.Z` with the submodule
+   bump, the refreshed patches, the node digest and the ledger's Base and Sync log.
 
 ### Shipping a change
 

@@ -1,0 +1,861 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Anthony Fu <github@antfu.me>
+Date: Tue, 10 Nov 2026 15:50:15 +0900
+Subject: [PATCH] feat(app): clone a project from another connected host
+
+Moving a project to another machine meant finding its remote URL on the
+first host and pasting it into "Clone from GitHub" on the second. With
+more than one host connected, Add project now offers "Clone from other
+host": it lists the git projects on the other connected hosts (minus the
+ones this host already has), and picking one continues with the usual
+clone steps, destination and name, using the project's remote. The remote
+comes from one of the project's workspaces, or else from its `remote:`
+project key.
+
+New workspace uses it too. A host without the selected project looked like
+any other host there, and picking it silently lost the project. Its row in
+the host picker now says "(project not exists)", and an online one has a
+Setup button, which opens Add project on that host at "Clone from other
+host", already searching for the project, so it can be cloned there in a
+few steps.
+
+Fork-Change: F-11
+---
+ .../app/src/add-project-flow/model.test.ts    |  16 ++
+ packages/app/src/add-project-flow/model.ts    |  25 +++-
+ .../other-host-projects.test.ts               | 103 +++++++++++++
+ .../add-project-flow/other-host-projects.ts   | 138 ++++++++++++++++++
+ .../app/src/components/add-project-flow.tsx   |  56 ++++++-
+ .../app/src/components/hosts/host-picker.tsx  |  37 ++++-
+ packages/app/src/i18n/resources/ar.ts         |   1 +
+ packages/app/src/i18n/resources/en.ts         |   4 +
+ packages/app/src/i18n/resources/es.ts         |   1 +
+ packages/app/src/i18n/resources/fr.ts         |   1 +
+ packages/app/src/i18n/resources/ja.ts         |   1 +
+ packages/app/src/i18n/resources/ko.ts         |   1 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   1 +
+ packages/app/src/i18n/resources/ru.ts         |   1 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   1 +
+ .../src/screens/new-workspace/form/index.tsx  |  31 +++-
+ .../app/src/stores/add-project-flow-store.ts  |  13 +-
+ 17 files changed, 422 insertions(+), 9 deletions(-)
+ create mode 100644 packages/app/src/add-project-flow/other-host-projects.test.ts
+ create mode 100644 packages/app/src/add-project-flow/other-host-projects.ts
+
+diff --git a/packages/app/src/add-project-flow/model.test.ts b/packages/app/src/add-project-flow/model.test.ts
+index f710e38813fba0bbad46df0da5e4b561448a2156..8a695f5d7161f6cd7af80ca8e79417af0cb0f2c4 100644
+--- a/packages/app/src/add-project-flow/model.test.ts
++++ b/packages/app/src/add-project-flow/model.test.ts
+@@ -34,6 +34,22 @@ const HOST: AddProjectHost = {
+ };
+ 
+ describe("Add Project navigation", () => {
++  it("opens on Clone from other host with the query, and Back returns to the methods", () => {
++    const state = openAddProjectFlow({
++      hosts: [HOST, { ...HOST, serverId: "host-2", label: "Other" }],
++      preferredHostId: "host-2",
++      cloneFromOtherHostQuery: "devtools",
++    });
++
++    expect(currentAddProjectPage(state)).toMatchObject({
++      kind: "other-host-projects",
++      hostId: "host-2",
++      query: "devtools",
++    });
++    const back = backAddProjectPage(state);
++    expect(back && currentAddProjectPage(back)).toMatchObject({ kind: "method", hostId: "host-2" });
++  });
++
+   it("skips a single connected host without adding it to history", () => {
+     const state = openAddProjectFlow({ hosts: [HOST] });
+ 
+diff --git a/packages/app/src/add-project-flow/model.ts b/packages/app/src/add-project-flow/model.ts
+index ca4b2650e1252a7890c604196ac665c84419e6b3..939ef21f23ee59006bc7e02f8f4cc02c3594fec9 100644
+--- a/packages/app/src/add-project-flow/model.ts
++++ b/packages/app/src/add-project-flow/model.ts
+@@ -37,6 +37,7 @@ export type AddProjectPage =
+   | ({ kind: "method"; hostId: string; isSubmitting: boolean } & PageState)
+   | ({ kind: "directory-search"; hostId: string; isSubmitting: boolean } & SearchPageState)
+   | ({ kind: "github-search"; hostId: string } & SearchPageState)
++  | ({ kind: "other-host-projects"; hostId: string } & SearchPageState)
+   | ({
+       kind: "github-location";
+       hostId: string;
+@@ -72,6 +73,7 @@ export interface AddProjectFlowState {
+ export interface OpenAddProjectFlowInput {
+   hosts: AddProjectHost[];
+   preferredHostId?: string;
++  cloneFromOtherHostQuery?: string;
+ }
+ 
+ type SearchPageKind = Extract<AddProjectPage, { query: string }>["kind"];
+@@ -84,6 +86,15 @@ function methodPage(hostId: string): AddProjectPage {
+   return { kind: "method", hostId, activeIndex: 0, error: null, isSubmitting: false };
+ }
+ 
++/** The host's method page, then "Clone from other host" already searching when asked for. */
++function hostPages(hostId: string, cloneFromOtherHostQuery?: string): AddProjectPage[] {
++  if (!cloneFromOtherHostQuery) return [methodPage(hostId)];
++  return [
++    methodPage(hostId),
++    { ...searchPage("other-host-projects"), hostId, query: cloneFromOtherHostQuery },
++  ];
++}
++
+ export function openAddProjectFlow(input: OpenAddProjectFlowInput): AddProjectFlowState {
+   const preferredHost = input.preferredHostId
+     ? input.hosts.find((host) => host.serverId === input.preferredHostId)
+@@ -93,7 +104,9 @@ export function openAddProjectFlow(input: OpenAddProjectFlowInput): AddProjectFl
+ 
+   return {
+     hosts: input.hosts,
+-    pages: initialHost ? [methodPage(initialHost.serverId)] : [searchPage("host")],
++    pages: initialHost
++      ? hostPages(initialHost.serverId, input.cloneFromOtherHostQuery)
++      : [searchPage("host")],
+     newDirectoryNameDrafts: {},
+     githubLocationDrafts: {},
+   };
+@@ -103,6 +116,7 @@ export function applyAvailableAddProjectHosts(
+   state: AddProjectFlowState,
+   hosts: AddProjectHost[],
+   preferredHostId?: string,
++  cloneFromOtherHostQuery?: string,
+ ): AddProjectFlowState {
+   const current = currentAddProjectPage(state);
+   if (state.pages.length !== 1 || current.kind !== "host") {
+@@ -116,7 +130,7 @@ export function applyAvailableAddProjectHosts(
+   return {
+     ...state,
+     hosts,
+-    pages: initialHost ? [methodPage(initialHost.serverId)] : state.pages,
++    pages: initialHost ? hostPages(initialHost.serverId, cloneFromOtherHostQuery) : state.pages,
+   };
+ }
+ 
+@@ -178,6 +192,13 @@ export function openGithubSearchPage(
+   return pushAddProjectPage(state, { ...searchPage("github-search"), hostId });
+ }
+ 
++export function openOtherHostProjectsPage(
++  state: AddProjectFlowState,
++  hostId: string,
++): AddProjectFlowState {
++  return pushAddProjectPage(state, { ...searchPage("other-host-projects"), hostId });
++}
++
+ export function openGithubLocationPage(
+   state: AddProjectFlowState,
+   hostId: string,
+diff --git a/packages/app/src/add-project-flow/other-host-projects.test.ts b/packages/app/src/add-project-flow/other-host-projects.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..55ec7567b52fe81924322d882b73b759d1d1bf94
+--- /dev/null
++++ b/packages/app/src/add-project-flow/other-host-projects.test.ts
+@@ -0,0 +1,103 @@
++import { describe, expect, it } from "vitest";
++import type { ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
++import { buildOtherHostProjectChoices } from "./other-host-projects";
++
++function project(input: Partial<ProjectDescriptor> & { projectId: string }): ProjectDescriptor {
++  return {
++    projectKey: null,
++    projectDisplayName: input.projectId,
++    projectCustomName: null,
++    projectRootPath: `/repos/${input.projectId}`,
++    projectKind: "git",
++    ...input,
++  };
++}
++
++function workspace(projectId: string, remoteUrl: string | null): WorkspaceDescriptor {
++  return {
++    createdAt: null,
++    lastUserMessageAt: null,
++    id: `${projectId}-main`,
++    projectId,
++    projectDisplayName: projectId,
++    projectRootPath: `/repos/${projectId}`,
++    workspaceDirectory: `/repos/${projectId}`,
++    projectKind: "git",
++    workspaceKind: "local_checkout",
++    name: "main",
++    status: "done",
++    statusEnteredAt: null,
++    archivingAt: null,
++    diffStat: null,
++    scripts: [],
++    gitRuntime: { remoteUrl },
++  };
++}
++
++describe("buildOtherHostProjectChoices", () => {
++  it("lists the other hosts' git projects with their workspace remote", () => {
++    const choices = buildOtherHostProjectChoices({
++      targetHostId: "here",
++      query: "",
++      hosts: [
++        { serverId: "here", label: "Here", projects: [], workspaces: [] },
++        {
++          serverId: "there",
++          label: "There",
++          projects: [project({ projectId: "app" })],
++          workspaces: [workspace("app", "git@github.com:acme/app.git")],
++        },
++      ],
++    });
++    expect(choices).toHaveLength(1);
++    expect(choices[0]).toMatchObject({
++      serverId: "there",
++      projectName: "app",
++      hostLabel: "There",
++      remoteUrl: "git@github.com:acme/app.git",
++      repository: { cloneUrl: "git@github.com:acme/app.git" },
++    });
++  });
++
++  it("falls back to the remote project key and skips projects without a remote", () => {
++    const choices = buildOtherHostProjectChoices({
++      targetHostId: "here",
++      query: "",
++      hosts: [
++        {
++          serverId: "there",
++          label: "There",
++          projects: [
++            project({ projectId: "lib", projectKey: "remote:github.com/acme/lib#subdir:pkg" }),
++            project({ projectId: "scratch" }),
++            project({ projectId: "notes", projectKind: "directory" }),
++          ],
++          workspaces: [],
++        },
++      ],
++    });
++    expect(choices.map((choice) => choice.remoteUrl)).toEqual(["https://github.com/acme/lib.git"]);
++  });
++
++  it("leaves out projects the target host already has and filters by the query", () => {
++    const shared = project({ projectId: "app", projectKey: "remote:github.com/acme/app" });
++    const hosts = [
++      { serverId: "here", label: "Here", projects: [shared], workspaces: [] },
++      {
++        serverId: "there",
++        label: "There",
++        projects: [
++          shared,
++          project({ projectId: "site", projectKey: "remote:github.com/acme/site" }),
++        ],
++        workspaces: [],
++      },
++    ];
++    expect(
++      buildOtherHostProjectChoices({ targetHostId: "here", query: "", hosts }).map(
++        (choice) => choice.projectName,
++      ),
++    ).toEqual(["site"]);
++    expect(buildOtherHostProjectChoices({ targetHostId: "here", query: "zzz", hosts })).toEqual([]);
++  });
++});
+diff --git a/packages/app/src/add-project-flow/other-host-projects.ts b/packages/app/src/add-project-flow/other-host-projects.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..57dcca021107d6eff26288c3a20c1b270b92b1a3
+--- /dev/null
++++ b/packages/app/src/add-project-flow/other-host-projects.ts
+@@ -0,0 +1,138 @@
++import { useMemo } from "react";
++import { useStoreWithEqualityFn } from "zustand/traditional";
++import {
++  useSessionStore,
++  type ProjectDescriptor,
++  type WorkspaceDescriptor,
++} from "@/stores/session-store";
++import type { AddProjectHost, GithubRepositoryChoice } from "./model";
++import { buildManualGithubRepositoryChoices } from "./options";
++
++export interface OtherHostProjectChoice {
++  id: string;
++  serverId: string;
++  projectName: string;
++  hostLabel: string;
++  remoteUrl: string;
++  repository: GithubRepositoryChoice;
++}
++
++interface HostProjects {
++  serverId: string;
++  label: string;
++  projects: readonly ProjectDescriptor[];
++  workspaces: readonly WorkspaceDescriptor[];
++}
++
++/**
++ * The git projects on the other connected hosts, as clone choices for `targetHostId`. A project's
++ * remote comes from one of its workspaces, or else from its `remote:` project key. Projects with
++ * no remote, and projects the target host already has, are left out.
++ */
++export function buildOtherHostProjectChoices(input: {
++  targetHostId: string;
++  hosts: readonly HostProjects[];
++  query: string;
++}): OtherHostProjectChoice[] {
++  const targetKeys = new Set(
++    input.hosts
++      .find((host) => host.serverId === input.targetHostId)
++      ?.projects.map((project) => project.projectKey)
++      .filter((key): key is string => Boolean(key)) ?? [],
++  );
++  const query = input.query.trim().toLowerCase();
++  const seen = new Set<string>();
++  const choices: OtherHostProjectChoice[] = [];
++  for (const host of input.hosts) {
++    if (host.serverId === input.targetHostId) continue;
++    for (const project of host.projects) {
++      if (project.projectKind !== "git") continue;
++      if (project.projectKey && targetKeys.has(project.projectKey)) continue;
++      const remoteUrl = projectRemoteUrl(project, host.workspaces);
++      if (!remoteUrl || seen.has(remoteUrl)) continue;
++      const repository = buildManualGithubRepositoryChoices(remoteUrl)[0];
++      if (!repository) continue;
++      const projectName = project.projectCustomName ?? project.projectDisplayName;
++      if (
++        query &&
++        !projectName.toLowerCase().includes(query) &&
++        !remoteUrl.toLowerCase().includes(query) &&
++        !host.label.toLowerCase().includes(query)
++      ) {
++        continue;
++      }
++      seen.add(remoteUrl);
++      choices.push({
++        id: `${host.serverId}:${project.projectId}`,
++        serverId: host.serverId,
++        projectName,
++        hostLabel: host.label,
++        remoteUrl,
++        repository: {
++          ...repository,
++          id: `other-host:${host.serverId}:${project.projectId}`,
++          description: `${remoteUrl} on ${host.label}`,
++        },
++      });
++    }
++  }
++  return choices;
++}
++
++function projectRemoteUrl(
++  project: ProjectDescriptor,
++  workspaces: readonly WorkspaceDescriptor[],
++): string | null {
++  for (const workspace of workspaces) {
++    const remoteUrl = workspace.gitRuntime?.remoteUrl;
++    if (workspace.projectId === project.projectId && remoteUrl) return remoteUrl;
++  }
++  if (!project.projectKey?.startsWith("remote:")) return null;
++  const location = project.projectKey.slice("remote:".length).split("#")[0];
++  return location ? `https://${location}.git` : null;
++}
++
++/** `buildOtherHostProjectChoices` over the hosts the flow can see, from the session store. */
++export function useOtherHostProjectChoices(input: {
++  targetHostId: string | null;
++  hosts: readonly AddProjectHost[];
++  query: string;
++}): OtherHostProjectChoice[] {
++  const sessions = useStoreWithEqualityFn(
++    useSessionStore,
++    (state) =>
++      input.hosts.map((host) => {
++        const session = state.sessions[host.serverId];
++        return { projects: session?.projects ?? null, workspaces: session?.workspaces ?? null };
++      }),
++    (left, right) =>
++      left.length === right.length &&
++      left.every(
++        (entry, index) =>
++          entry.projects === right[index]?.projects &&
++          entry.workspaces === right[index]?.workspaces,
++      ),
++  );
++  return useMemo(() => {
++    if (!input.targetHostId) return [];
++    const hosts = input.hosts.map<HostProjects>((host, index) => ({
++      serverId: host.serverId,
++      label: host.label,
++      projects: [...(sessions[index]?.projects?.values() ?? [])],
++      workspaces: [...(sessions[index]?.workspaces?.values() ?? [])],
++    }));
++    return buildOtherHostProjectChoices({
++      targetHostId: input.targetHostId,
++      hosts,
++      query: input.query,
++    });
++  }, [input.hosts, input.query, input.targetHostId, sessions]);
++}
++
++/** Whether any other connected host could offer a project to clone onto `targetHostId`. */
++export function hasOtherAddProjectHosts(
++  hosts: readonly AddProjectHost[],
++  targetHostId: string,
++): boolean {
++  return hosts.some((host) => host.serverId !== targetHostId);
++}
+diff --git a/packages/app/src/components/add-project-flow.tsx b/packages/app/src/components/add-project-flow.tsx
+index 0c23cb3cd9a9d8496d02c247021366be17b767b8..20f50f7042b95ecf4f157e9bdac1613bcfc81280 100644
+--- a/packages/app/src/components/add-project-flow.tsx
++++ b/packages/app/src/components/add-project-flow.tsx
+@@ -42,6 +42,7 @@ import {
+   openDirectorySearchPage,
+   openGithubLocationPage,
+   openGithubSearchPage,
++  openOtherHostProjectsPage,
+   openNewDirectoryNamePage,
+   openNewDirectoryParentPage,
+   openProjectNamePage,
+@@ -70,6 +71,10 @@ import {
+   pathBaseName,
+   type AddProjectMethodId,
+ } from "@/add-project-flow/options";
++import {
++  hasOtherAddProjectHosts,
++  useOtherHostProjectChoices,
++} from "@/add-project-flow/other-host-projects";
+ import {
+   buildProjectPickerOptions,
+   type ProjectPickerOption,
+@@ -199,6 +204,7 @@ function progressText(page: AddProjectPage): string {
+ function emptyText(page: AddProjectPage, host: AddProjectHost | null): string {
+   if (page.kind === "host") return "No connected hosts";
+   if (page.kind === "github-search") return "Enter a GitHub URL or owner/repo";
++  if (page.kind === "other-host-projects") return "No git projects on other hosts";
+   if (page.kind === "method") return addProjectMethodEmptyText(host);
+   return "No matching options";
+ }
+@@ -233,6 +239,8 @@ function pageTitle(page: AddProjectPage): string {
+       return "Search for directory";
+     case "github-search":
+       return "Clone from GitHub";
++    case "other-host-projects":
++      return "Clone from other host";
+     case "github-location":
+       return "Choose destination";
+     case "new-directory-parent":
+@@ -254,6 +262,8 @@ function pagePlaceholder(page: AddProjectInputPage): string {
+       return "Search directories or enter a path...";
+     case "github-search":
+       return "Search or enter a GitHub repository...";
++    case "other-host-projects":
++      return "Search projects on other hosts...";
+     case "github-location":
+     case "new-directory-parent":
+       return "Search parent directories or enter a path...";
+@@ -399,6 +409,9 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     openAddProjectFlow({
+       hosts: availableHosts,
+       ...(request.preferredHostId ? { preferredHostId: request.preferredHostId } : {}),
++      ...(request.cloneFromOtherHostQuery
++        ? { cloneFromOtherHostQuery: request.cloneFromOtherHostQuery }
++        : {}),
+     }),
+   );
+   const page = currentAddProjectPage(state);
+@@ -409,6 +422,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+   const recommendedPaths = useRecommendedProjectPaths(hostId);
+   const openProject = useOpenProject(hostId);
+   const cloneGithubProject = useCloneGithubProject(hostId);
++  const otherHostProjects = useOtherHostProjectChoices({
++    targetHostId: page.kind === "other-host-projects" ? page.hostId : null,
++    hosts: state.hosts,
++    query: page.kind === "other-host-projects" ? page.query : "",
++  });
+   const upsertProject = useCallback(
+     (
+       targetServerId: string,
+@@ -430,9 +448,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+ 
+   useEffect(() => {
+     setState((current) =>
+-      applyAvailableAddProjectHosts(current, availableHosts, request.preferredHostId),
++      applyAvailableAddProjectHosts(
++        current,
++        availableHosts,
++        request.preferredHostId,
++        request.cloneFromOtherHostQuery,
++      ),
+     );
+-  }, [availableHosts, request.preferredHostId]);
++  }, [availableHosts, request.cloneFromOtherHostQuery, request.preferredHostId]);
+ 
+   useEffect(() => {
+     const timer = setTimeout(() => setDebouncedQuery(query), 250);
+@@ -712,7 +735,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     }
+     if (page.kind === "method") {
+       if (!host) return [];
+-      return buildAddProjectMethods(host).map((method) => ({
++      const methods = buildAddProjectMethods(host).map<FlowRowOption>((method) => ({
+         id: method.id,
+         title: method.label,
+         subtitle: method.description,
+@@ -721,6 +744,32 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+         testID: `add-project-flow-method-${method.id}`,
+         select: () => selectMethod(method.id),
+       }));
++      if (host.canAddProject && hasOtherAddProjectHosts(state.hosts, host.serverId)) {
++        methods.push({
++          id: "other-host",
++          title: "Clone from other host",
++          subtitle: host.canCloneGithubRepositories
++            ? `Clone a project from another connected host onto ${host.label}`
++            : "Update this host to clone repositories",
++          icon: Server,
++          disabled: !host.canCloneGithubRepositories,
++          testID: "add-project-flow-method-other-host",
++          select: () => setState((current) => openOtherHostProjectsPage(current, host.serverId)),
++        });
++      }
++      return methods;
++    }
++    if (page.kind === "other-host-projects") {
++      return otherHostProjects.map((choice) => ({
++        id: choice.id,
++        title: choice.projectName,
++        subtitle: `${choice.hostLabel} · ${choice.remoteUrl}`,
++        icon: Server,
++        leading: <HostIdentityIcon serverId={choice.serverId} />,
++        testID: `add-project-flow-other-host-project-${choice.id}`,
++        select: () =>
++          setState((current) => openGithubLocationPage(current, page.hostId, choice.repository)),
++      }));
+     }
+     if (page.kind === "directory-search") {
+       return pathOptions.map((option) => {
+@@ -811,6 +860,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+     githubQuery.data,
+     host,
+     onClose,
++    otherHostProjects,
+     page,
+     pathOptions,
+     recommendedPaths,
+diff --git a/packages/app/src/components/hosts/host-picker.tsx b/packages/app/src/components/hosts/host-picker.tsx
+index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fabbd1a228 100644
+--- a/packages/app/src/components/hosts/host-picker.tsx
++++ b/packages/app/src/components/hosts/host-picker.tsx
+@@ -4,6 +4,7 @@ import type { GestureResponderEvent } from "react-native";
+ import { Plus, Server, Settings } from "lucide-react-native";
+ import { StyleSheet, useUnistyles } from "react-native-unistyles";
+ import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
++import { Button } from "@/components/ui/button";
+ import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
+ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+ import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
+@@ -52,9 +53,16 @@ function formatActiveConnectionLabel(connection: ActiveConnection): string {
+   return formatConnectionEndpoint(connection.endpoint);
+ }
+ 
++/** A per-host note and action a picker's caller adds to that host's row. */
++export interface HostPickerOptionExtras {
++  description?: string;
++  action?: { label: string; onPress: () => void; testID?: string };
++}
++
+ export interface HostPickerOptionProps {
+   serverId: string;
+   label: string;
++  extras?: HostPickerOptionExtras | null;
+   showActiveConnection: boolean;
+   selected?: boolean;
+   active: boolean;
+@@ -66,6 +74,7 @@ export interface HostPickerOptionProps {
+ export function HostPickerOption({
+   serverId,
+   label,
++  extras,
+   showActiveConnection,
+   selected,
+   active,
+@@ -87,7 +96,27 @@ export function HostPickerOption({
+     },
+     [onOpenHostSettings, serverId],
+   );
++  const extraAction = extras?.action;
++  const handleExtraActionPress = useCallback(
++    (event: GestureResponderEvent) => {
++      event.stopPropagation();
++      extraAction?.onPress();
++    },
++    [extraAction],
++  );
+   const trailingSlot = useMemo(() => {
++    if (extraAction) {
++      return (
++        <Button
++          variant="outline"
++          size="sm"
++          onPress={handleExtraActionPress}
++          testID={extraAction.testID}
++        >
++          {extraAction.label}
++        </Button>
++      );
++    }
+     if (!onOpenHostSettings) return undefined;
+     return (
+       <Pressable
+@@ -100,6 +129,8 @@ export function HostPickerOption({
+       </Pressable>
+     );
+   }, [
++    extraAction,
++    handleExtraActionPress,
+     handleSettingsPress,
+     label,
+     onOpenHostSettings,
+@@ -110,7 +141,7 @@ export function HostPickerOption({
+   return (
+     <ComboboxItem
+       label={label}
+-      description={connectionLabel}
++      description={extras?.description ?? connectionLabel}
+       leadingSlot={leadingSlot}
+       trailingSlot={trailingSlot}
+       selected={selected}
+@@ -180,6 +211,7 @@ export interface HostPickerProps {
+   desktopMinWidth?: number;
+   addHostTestID?: string;
+   hostOptionTestID?: (serverId: string) => string;
++  hostOptionExtras?: (serverId: string) => HostPickerOptionExtras | null;
+   children: ReactNode;
+ }
+ 
+@@ -203,6 +235,7 @@ export function HostPicker({
+   desktopMinWidth,
+   addHostTestID,
+   hostOptionTestID,
++  hostOptionExtras,
+   children,
+ }: HostPickerProps): ReactElement {
+   const localServerId = useLocalDaemonServerId();
+@@ -279,6 +312,7 @@ export function HostPicker({
+         <HostPickerOption
+           serverId={option.id}
+           label={option.label}
++          extras={hostOptionExtras?.(option.id) ?? null}
+           showActiveConnection={showActiveConnection === true}
+           selected={selected}
+           active={active}
+@@ -290,6 +324,7 @@ export function HostPicker({
+     },
+     [
+       addHostTestID,
++      hostOptionExtras,
+       hostOptionTestID,
+       onOpenHostSettings,
+       showActiveConnection,
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index 2d7e363bf21d3c987cfdb8d41050e4e7e97f8b5f..39d76a1fa3233e4d44fa409a6d6c725691778c71 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -1342,6 +1342,7 @@ export const ar: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "مساحة عمل جديدة",
+     create: "يخلق",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index e63c774d3f33ec6c7b5f426914043b08a60e7fdd..c7f25cfb440042ec58a830f81977c7ab3042756d 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -1366,6 +1366,10 @@ export const en = {
+   },
+   newWorkspace: {
+     title: "New workspace",
++    hostPicker: {
++      projectMissing: "(project not exists)",
++      setup: "Setup",
++    },
+     create: "Create",
+     isolation: {
+       local: "Local",
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index e85d7a97de3c41b6ae14a3b481191e3ba3a734c3..ca22e409588ca671a6e6feb2674fd19717ec520c 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -1378,6 +1378,7 @@ export const es: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "Nuevo espacio de trabajo",
+     create: "Crear",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index 45633d647773b7fd48ed752fda9ae056668cbaf7..3746c4e1b4f09cbd7b2613d1b2a3e5f64fe8cc6f 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -1372,6 +1372,7 @@ export const fr: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "Nouvel espace de travail",
+     create: "Créer",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index 51c89a765726bbee44e059e11107debcc0af8909..7c9a8e0ce43cbe4a77250b7a03433049a6c7106f 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -1356,6 +1356,7 @@ export const ja: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "新しいワークスペース",
+     create: "作成",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index 4167eb463b440e361189ae4207ed5c267fca2c70..4c022e4cb3643d81aced9803df5710f7a662a99c 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -1349,6 +1349,7 @@ export const ko: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "새 워크스페이스",
+     create: "생성",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index 148ba56bda6ac960ff5bd8dd55c22d7c2e35da12..6f7f6a5cb7035fa3fbc2e227b8377d9293e23d50 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -1368,6 +1368,7 @@ export const ptBR: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "Novo workspace",
+     create: "Criar",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index cfda58db8b78dae20d60b4c025cc6b9421210c4f..2396cb4b894569561b723d12d967e438e94b0e89 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -1360,6 +1360,7 @@ export const ru: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "Новое рабочее пространство",
+     create: "Создать",
+     isolation: {
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index 1378206d1543f0145194d5a860e2baae0f1f4896..1b1566194c4db1d346aca380ff47133204c03d1a 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -1331,6 +1331,7 @@ export const zhCN: TranslationResources = {
+     },
+   },
+   newWorkspace: {
++    hostPicker: en.newWorkspace.hostPicker,
+     title: "新建 workspace",
+     create: "创建",
+     isolation: {
+diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
+index 9baccb02a156bdf73f33ed0242117f6d3b01d0bf..0a0049f6cd1c44d7e672d2a4430d08a5892acbf4 100644
+--- a/packages/app/src/screens/new-workspace/form/index.tsx
++++ b/packages/app/src/screens/new-workspace/form/index.tsx
+@@ -5,7 +5,9 @@ import { StyleSheet } from "react-native-unistyles";
+ import type { TerminalProfile } from "@getpaseo/protocol/messages";
+ import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
+ import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+-import { HostPicker } from "@/components/hosts/host-picker";
++import { HostPicker, type HostPickerOptionExtras } from "@/components/hosts/host-picker";
++import { useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
++import { useAddProjectFlowStore } from "@/stores/add-project-flow-store";
+ import type { LaunchTarget } from "@/new-workspace-launch/target";
+ import type { HostProjectListItem } from "@/projects/host-projects";
+ import type { HostProfile } from "@/types/host-connection";
+@@ -190,6 +192,32 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+       ),
+     [selectedProject, selectedProjectIconUri],
+   );
++  const openAddProject = useAddProjectFlowStore((state) => state.open);
++  const onHostPickerOpenChange = host.onOpenChange;
++  const hostIds = useMemo(() => host.allHosts.map((h) => h.serverId), [host.allHosts]);
++  const connectionStatuses = useHostRuntimeConnectionStatuses(hostIds);
++  // A host without the selected project says so, and offers to set it up by cloning the project
++  // there from a host that has it. Add project only opens on an online host.
++  const hostOptionExtras = useCallback(
++    (serverId: string): HostPickerOptionExtras | null => {
++      if (!selectedProject) return null;
++      if (selectedProject.hosts.some((placement) => placement.serverId === serverId)) return null;
++      const description = t("newWorkspace.hostPicker.projectMissing");
++      if (connectionStatuses.get(serverId) !== "online") return { description };
++      return {
++        description,
++        action: {
++          label: t("newWorkspace.hostPicker.setup"),
++          testID: `new-workspace-host-setup-${serverId}`,
++          onPress: () => {
++            onHostPickerOpenChange(false);
++            openAddProject(serverId, { cloneFromOtherHostQuery: selectedProject.projectName });
++          },
++        },
++      };
++    },
++    [connectionStatuses, onHostPickerOpenChange, openAddProject, selectedProject, t],
++  );
+   const hostIcon = useMemo(
+     () => <HostIdentityIcon serverId={host.selectedServerId} />,
+     [host.selectedServerId],
+@@ -230,6 +258,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+       desktopPlacement="bottom-start"
+       desktopMinWidth={200}
+       hostOptionTestID={hostOptionTestID}
++      hostOptionExtras={hostOptionExtras}
+     >
+       <FieldTrigger
+         ref={host.anchorRef}
+diff --git a/packages/app/src/stores/add-project-flow-store.ts b/packages/app/src/stores/add-project-flow-store.ts
+index 49eabbb90863e43798119b5ef5d3426ca7c28a46..d585750d8b1bf07cf20e069cd49fa9b26d569a2e 100644
+--- a/packages/app/src/stores/add-project-flow-store.ts
++++ b/packages/app/src/stores/add-project-flow-store.ts
+@@ -3,11 +3,17 @@ import { create } from "zustand";
+ export interface AddProjectFlowRequest {
+   id: number;
+   preferredHostId?: string;
++  /** Opens on "Clone from other host" for the preferred host, searching for this. */
++  cloneFromOtherHostQuery?: string;
++}
++
++export interface AddProjectFlowOpenOptions {
++  cloneFromOtherHostQuery?: string;
+ }
+ 
+ interface AddProjectFlowStoreState {
+   request: AddProjectFlowRequest | null;
+-  open: (preferredHostId?: string) => void;
++  open: (preferredHostId?: string, options?: AddProjectFlowOpenOptions) => void;
+   close: () => void;
+ }
+ 
+@@ -15,11 +21,14 @@ let nextRequestId = 1;
+ 
+ export const useAddProjectFlowStore = create<AddProjectFlowStoreState>((set) => ({
+   request: null,
+-  open: (preferredHostId) => {
++  open: (preferredHostId, options) => {
+     set({
+       request: {
+         id: nextRequestId++,
+         ...(preferredHostId ? { preferredHostId } : {}),
++        ...(options?.cloneFromOtherHostQuery
++          ? { cloneFromOtherHostQuery: options.cloneFromOtherHostQuery }
++          : {}),
+       },
+     });
+   },
