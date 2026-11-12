@@ -18,7 +18,7 @@ Run [Paseo](https://github.com/getpaseo/paseo) coding agents in network-caged co
 ```
 
 - **`paseo`** is the client. It serves the Paseo web UI, and runs no agents. You open it and add the two servers as hosts, then switch between them in the UI.
-- **`paseo-bot` and `paseo-main`** are the servers, the same image with separate homes, logins and projects. Each has its own GitHub token and commit identity, so the bot's agents never see your main account's private repos. `paseo-main` gets its token from `GITHUB_TOKEN_MAIN` through dev-container's per-service secrets.
+- **`paseo-bot` and `paseo-main`** are the servers, the same image with separate homes, logins and projects. Each has its own GitHub token and commit identity, so the bot's agents never see your main account's private repos. `paseo-main` gets its token from `GITHUB_TOKEN_MAIN` through dev-container's per-service secrets, and its npm token, if any, from `NPM_TOKEN_MAIN`.
 - **The cage:** the services sit on a network with no route out. Their traffic goes through the **broker**, which holds the real tokens. The containers only see placeholders, and the broker swaps in the real value on the wire, only for the hosts a token is bound to. A **relay** publishes the ports on the host, and a **Tailscale sidecar** per service serves each one at `https://<prefix><name>.<your-tailnet>.ts.net`. A dashboard at `monitor` lists the services and has an Upgrade button.
 - **The images** build in layers, so a change only rebuilds what it touches: `paseo-toolchain` (system packages, Rust, Chromium), then `paseo-base` (upstream Paseo with our [patches](#paseo-patches)), then `dev-base` (agent CLIs, GPG), then the services.
 
@@ -31,7 +31,7 @@ git clone --recurse-submodules <this repo> && cd devbox
 pnpm install
 pnpm vendor:setup                    # build the dev-container CLI
 cp .env.example .env                 # settings the containers can see
-cp .env.secret.example .env.secret   # secrets only the broker sees: TS_AUTHKEY, GITHUB_TOKEN_BOT, GITHUB_TOKEN_MAIN
+cp .env.secret.example .env.secret   # secrets only the broker sees: TS_AUTHKEY, GITHUB_TOKEN_BOT, GITHUB_TOKEN_MAIN, NPM_TOKEN_MAIN
 pnpm keys:setup                      # signing keys, see below
 pnpm run up                          # build and start
 pnpm down                            # stop
