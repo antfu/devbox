@@ -364,6 +364,82 @@ patches refer to them in their `Fork-Change` trailer.
   Checked: typecheck, lint and unit tests only; not checked in a browser yet.
 - Drop when: upstream reports host resource use.
 
+### F-18: Copy and paste host configs
+
+- Status: active, ours only
+- Requested: 2026-11-16, "patch paseo, to allow copy/paste the all host configures (links, port, password,
+  host name, color, icon, settings etc)." (confirmed: device-side host data only, not the daemon's own
+  settings; both one host and all hosts)
+- Why: a host's connections, password and appearance are saved per device, and the only way to add a host
+  elsewhere was to type it in again or pair it. Host storage and the Add host flow are app code, which no
+  plugin hook reaches.
+- Patches: `feat(app): copy a host config and paste it into Add host`
+- Touches: app new `hosts/host-config-transfer.ts` and its test, `hosts/import-host-config.ts`,
+  `screens/settings/host-config-copy-section.tsx`; hooks in `components/pair-link-modal.tsx` (a pasted host
+  config is previewed and imported instead of paired), `runtime/host-runtime.ts` (`replaceHosts`),
+  `hosts/host-icon-store.ts` (`getHostIcons`, `replaceHostIcons`), `screens/settings/host-page.tsx` (the
+  section); `en.ts` strings and one line per other locale.
+- Compatibility: web UI only; no wire or daemon change, so no flag. Settings → host → Share copies this host
+  or every saved host as one line of JSON (`format: "paseo-host-config"`, `version: 1`) holding each host's
+  connections, password, name, color, badge display and icon. Routed connections are left out. The text
+  holds passwords in the clear. Pasting it into Add host → Paste pairing link adds the hosts, or updates
+  the saved ones with the same server id, which keep their other connections. Hosts are validated with the
+  registry's own `normalizeStoredHostProfile`; an invalid host is skipped. The import skips the pairing
+  link's confirmation; the preview line ("Adds or updates N hosts: …") and the Import button take its place.
+  Checked: typecheck, lint and unit tests only; not checked in a browser yet.
+- Drop when: upstream ships host export and import.
+
+### F-19: Name, color and icon in the Direct connection form
+
+- Status: active, ours only
+- Requested: 2026-11-16, "also on normal add host form, allow to set name,color,icon before creating."
+- Why: a new host showed its hostname and the default look until you opened its settings. The form is app
+  code, which no plugin hook reaches.
+- Patches: `feat(app): pick a host's name, color and icon while adding it`
+- Touches: app new `components/add-host-identity-fields.tsx`; hooks in `components/add-host-modal.tsx` (the
+  fields, applied after a direct or relay connect), `screens/settings/host-appearance-section.tsx`
+  (`ColorRow` exported; the formatter split its signature); `en.ts` string and one line per other locale.
+- Compatibility: web UI only; no wire change. The values are saved with the existing rename, color and F-9
+  icon setters once the host connects; empty values keep the host's own name and the default look. Only
+  the Direct connection form has them; the SSH and pairing link forms do not.
+  Checked: typecheck and lint only; not checked in a browser yet.
+- Drop when: upstream adds appearance fields to Add host.
+
+### F-20: Host list synced through the daemon that serves the web app
+
+- Status: active, ours only
+- Requested: 2026-11-16, "also, can we have the daemon store the host settings (for our paseo-app), so any
+  devices open the same paseo app, they get the host automatically (and auto-synced)" (confirmed: the
+  serving daemon holds the list; a full mirror, removals included)
+- Why: each browser kept its own host list, so every device had to add every host, and a change on one
+  device never reached the others. Storing it needs a daemon RPC and the sync is app code; neither is
+  reachable from a plugin.
+- Patches: `feat: sync the web app's host list through the daemon that serves it`
+- Touches: protocol `messages.ts` (`daemon.app_host_registry.get` and `.set` requests and responses, the
+  flag); server new `server/app-host-registry.ts` and its test, one case in `session.ts`
+  (`dispatchMiscMessage`, as `dispatchAgentConfigMessage` was at the complexity limit), four lines in
+  `authorization/operation-permissions.ts`, the flag in `websocket-server.ts`; client `getAppHostRegistry`
+  and `setAppHostRegistry` in `daemon-client.ts`; app new `hosts/serving-daemon.ts`,
+  `hosts/host-registry-sync-model.ts` and its test, `hosts/host-registry-sync.ts`; hooks in `app/_layout.tsx`
+  (mounts `HostRegistrySync`), `components/add-host-modal.tsx` (the prefill),
+  `hosts/host-icon-store.ts` (`subscribeHostIcons`).
+- Compatibility: flag `server_info.features.appHostRegistry`. Two new dotted RPCs, both `daemon.manage`
+  because the list holds passwords; no existing message changes. Upstream apps never send them. The daemon
+  stores `$PASEO_HOME/app-host-registry.json` (`{ revision, config }`, at most 1 MiB) and does not read the
+  config, which is F-18's host config text. A write is saved only when its `baseRevision` is the stored
+  revision; otherwise the stored list comes back to merge. Only our web UI syncs, and only with the daemon
+  that served the page, found through its unauthenticated `/api/status` (`serverId`); app.paseo.sh, the
+  desktop app and native builds never match one. While that host is saved and connected, the app polls every
+  5 s and 300 ms after each local change, merges per host against the list it last agreed on (kept in
+  `@paseo:host-registry-sync`), applies the result and saves it back. Conflicts on one host go to the local
+  side, except on a device's first sync, which takes the daemon's copy and adds the device's other hosts.
+  Hosts with only routed connections are not synced and stay. Without a saved serving host, Direct
+  connection is prefilled with the page's address, port and TLS. The daemon serving our web UI is the
+  `paseo` client service, so it holds the list for `paseo-bot` and `paseo-main` too.
+  Checked: typecheck, lint, the unit tests and the server's authorization test only; not checked in a
+  browser or against an upstream client yet.
+- Drop when: upstream syncs hosts between devices.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.

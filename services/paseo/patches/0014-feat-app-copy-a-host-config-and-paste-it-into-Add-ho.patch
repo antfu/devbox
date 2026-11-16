@@ -1,0 +1,790 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 16 Nov 2026 05:33:42 +0000
+Subject: [PATCH] feat(app): copy a host config and paste it into Add host
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Setting up the same hosts on another device meant entering every
+connection, password, name, color and icon again.
+
+Settings → host → Share now copies this host, or every saved host, as a
+host config: one line of JSON with each host's connections, password,
+name, color, badge display and icon. Pasting it into Add host → Paste
+pairing link shows which hosts it adds or updates, and Import saves
+them. A saved host keeps its other connections. Routed connections are
+left out, since the daemon that routes them registers them again.
+
+Fork-Change: F-18
+---
+ .../app/src/components/pair-link-modal.tsx    |  70 +++++++++++-
+ .../src/hosts/host-config-transfer.test.ts    | 106 ++++++++++++++++++
+ .../app/src/hosts/host-config-transfer.ts     | 103 +++++++++++++++++
+ packages/app/src/hosts/host-icon-store.ts     |  10 ++
+ packages/app/src/hosts/import-host-config.ts  |  21 ++++
+ packages/app/src/i18n/resources/ar.ts         |   2 +
+ packages/app/src/i18n/resources/en.ts         |  22 ++++
+ packages/app/src/i18n/resources/es.ts         |   2 +
+ packages/app/src/i18n/resources/fr.ts         |   2 +
+ packages/app/src/i18n/resources/ja.ts         |   2 +
+ packages/app/src/i18n/resources/ko.ts         |   2 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   2 +
+ packages/app/src/i18n/resources/ru.ts         |   2 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   2 +
+ packages/app/src/runtime/host-runtime.ts      |   6 +
+ .../settings/host-config-copy-section.tsx     |  84 ++++++++++++++
+ .../app/src/screens/settings/host-page.tsx    |   2 +
+ 17 files changed, 438 insertions(+), 2 deletions(-)
+ create mode 100644 packages/app/src/hosts/host-config-transfer.test.ts
+ create mode 100644 packages/app/src/hosts/host-config-transfer.ts
+ create mode 100644 packages/app/src/hosts/import-host-config.ts
+ create mode 100644 packages/app/src/screens/settings/host-config-copy-section.tsx
+
+diff --git a/packages/app/src/components/pair-link-modal.tsx b/packages/app/src/components/pair-link-modal.tsx
+index 8ed9cefba95f3adad1956618943e4aaaf3befc78..ebb7b90d97bdd680c7cc27952006579ef858023d 100644
+--- a/packages/app/src/components/pair-link-modal.tsx
++++ b/packages/app/src/components/pair-link-modal.tsx
+@@ -1,4 +1,5 @@
+ import { useCallback, useMemo, useReducer, useRef, useState } from "react";
++import type { TFunction } from "i18next";
+ import { useTranslation } from "react-i18next";
+ import { Alert, Text, View } from "react-native";
+ import { StyleSheet, useUnistyles } from "react-native-unistyles";
+@@ -13,6 +14,8 @@ import { getConnectionAuthFailureReason } from "@/utils/test-daemon-connection";
+ import { PairingTargetTracker } from "./pair-link-credentials";
+ import { Button } from "@/components/ui/button";
+ import type { EditingTextInputHandle } from "@/components/ui/text-input";
++import { type HostConfigEntry, parseHostConfig } from "@/hosts/host-config-transfer";
++import { importHostConfig } from "@/hosts/import-host-config";
+ 
+ const FLEX_ONE_STYLE = { flex: 1 } as const;
+ 
+@@ -27,6 +30,18 @@ function parsedHostLabel(input: string): string {
+   }
+ }
+ 
++function pairLinkSubmitLabel(
++  t: TFunction,
++  state: { isSaving: boolean; isHostConfig: boolean },
++): string {
++  if (state.isHostConfig) {
++    return state.isSaving
++      ? t("pairing.link.hostConfig.importing")
++      : t("pairing.link.hostConfig.import");
++  }
++  return state.isSaving ? t("pairing.link.actions.pairing") : t("pairing.link.actions.pair");
++}
++
+ const styles = StyleSheet.create((theme) => ({
+   helper: {
+     color: theme.colors.foregroundMuted,
+@@ -116,11 +131,14 @@ function PairLinkModalContent({
+   const [password, setPassword] = useState("");
+   const [needsPassword, setNeedsPassword] = useState(passwordRequired !== undefined);
+   const [passwordResetKey, resetPasswordInput] = useReducer((key: number) => key + 1, 0);
++  // Set while the input holds a host config copied from Settings instead of a pairing link.
++  const [hostConfig, setHostConfig] = useState<HostConfigEntry[] | null>(null);
+ 
+   const clearInput = useCallback(() => {
+     offerUrlRef.current = "";
+     targetTracker.current = new PairingTargetTracker();
+     inputRef.current?.replaceText("");
++    setHostConfig(null);
+     setPassword("");
+     setNeedsPassword(false);
+     resetPasswordInput();
+@@ -145,6 +163,29 @@ function PairLinkModalContent({
+     (onCancel ?? onClose)();
+   }, [isSaving, clearInput, onCancel, onClose]);
+ 
++  const handleImportHostConfig = useCallback(
++    async (entries: HostConfigEntry[]) => {
++      const first = entries[0]?.profile;
++      if (!first) {
++        setErrorMessage(t("pairing.link.hostConfig.empty"));
++        return;
++      }
++      try {
++        setIsSaving(true);
++        setErrorMessage("");
++        const isNewHost = !daemons.some((daemon) => daemon.serverId === first.serverId);
++        await importHostConfig(entries);
++        onSaved?.({ profile: first, serverId: first.serverId, hostname: null, isNewHost });
++        handleClose();
++      } catch (error) {
++        setErrorMessage(error instanceof Error ? error.message : t("errors.unableToSave"));
++      } finally {
++        setIsSaving(false);
++      }
++    },
++    [daemons, handleClose, onSaved, t],
++  );
++
+   const handleSave = useCallback(
+     async (input?: string) => {
+       if (isSaving) return;
+@@ -153,6 +194,11 @@ function PairLinkModalContent({
+         setErrorMessage(t("pairing.link.errors.required"));
+         return;
+       }
++      const pastedHosts = parseHostConfig(raw);
++      if (pastedHosts) {
++        await handleImportHostConfig(pastedHosts);
++        return;
++      }
+       if (!raw.includes("#offer=") && !raw.startsWith("relay://") && !raw.includes("#connect=")) {
+         setErrorMessage(t("pairing.link.errors.missingOffer"));
+         return;
+@@ -182,7 +228,17 @@ function PairLinkModalContent({
+         setIsSaving(false);
+       }
+     },
+-    [daemons, handleClose, isMobile, isSaving, onSaved, password, t, pairing],
++    [
++      daemons,
++      handleClose,
++      handleImportHostConfig,
++      isMobile,
++      isSaving,
++      onSaved,
++      password,
++      t,
++      pairing,
++    ],
+   );
+ 
+   const handleChangeOfferUrl = useCallback((next: string) => {
+@@ -193,6 +249,7 @@ function PairLinkModalContent({
+       setErrorMessage("");
+     }
+     offerUrlRef.current = next;
++    setHostConfig(parseHostConfig(next));
+   }, []);
+ 
+   const handleSavePress = useCallback(() => {
+@@ -209,6 +266,7 @@ function PairLinkModalContent({
+       testID="pair-link-modal"
+     >
+       <Text style={styles.helper}>{t("pairing.link.helper")}</Text>
++      <Text style={styles.helper}>{t("pairing.link.hostConfig.helper")}</Text>
+ 
+       <View style={styles.field}>
+         <Text style={styles.label}>{t("pairing.link.label")}</Text>
+@@ -227,6 +285,14 @@ function PairLinkModalContent({
+           autoCorrect={false}
+           keyboardType="url"
+         />
++        {hostConfig ? (
++          <Text style={styles.helper} testID="pair-link-host-config-preview">
++            {t("pairing.link.hostConfig.preview", {
++              count: hostConfig.length,
++              hosts: hostConfig.map((entry) => entry.profile.label).join(", "),
++            })}
++          </Text>
++        ) : null}
+         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+       </View>
+ 
+@@ -268,7 +334,7 @@ function PairLinkModalContent({
+           accessibilityLabel={t("pairing.link.actions.pair")}
+           leftIcon={pairIcon}
+         >
+-          {isSaving ? t("pairing.link.actions.pairing") : t("pairing.link.actions.pair")}
++          {pairLinkSubmitLabel(t, { isSaving, isHostConfig: hostConfig !== null })}
+         </Button>
+       </View>
+     </AdaptiveModalSheet>
+diff --git a/packages/app/src/hosts/host-config-transfer.test.ts b/packages/app/src/hosts/host-config-transfer.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..50478fe47848c0ea85fd9e83b1263787a0eb3f7f
+--- /dev/null
++++ b/packages/app/src/hosts/host-config-transfer.test.ts
+@@ -0,0 +1,106 @@
++import { describe, expect, it } from "vitest";
++import type { HostProfile } from "@/types/host-connection";
++import { mergeImportedHosts, parseHostConfig, serializeHostConfig } from "./host-config-transfer";
++
++const NOW = "2026-11-16T00:00:00.000Z";
++
++function host(serverId: string, overrides: Partial<HostProfile> = {}): HostProfile {
++  return {
++    serverId,
++    label: serverId,
++    appearance: { color: "none", badgeDisplay: null },
++    lifecycle: {},
++    connections: [
++      {
++        id: `direct:${serverId}.ts.net:443`,
++        type: "directTcp",
++        endpoint: `${serverId}.ts.net:443`,
++        useTls: true,
++      },
++    ],
++    preferredConnectionId: `direct:${serverId}.ts.net:443`,
++    createdAt: "2026-01-01T00:00:00.000Z",
++    updatedAt: "2026-01-01T00:00:00.000Z",
++    ...overrides,
++  };
++}
++
++describe("host config transfer", () => {
++  it("round-trips connections, password, name, color, badge and icon", () => {
++    const profile = host("srv_a", {
++      label: "Laptop",
++      password: "secret",
++      appearance: { color: "sky", badgeDisplay: "icon" },
++    });
++    const [entry] = parseHostConfig(serializeHostConfig([{ profile, icon: "laptop" }])) ?? [];
++    expect(entry?.icon).toBe("laptop");
++    expect(entry?.profile).toMatchObject({
++      serverId: "srv_a",
++      label: "Laptop",
++      password: "secret",
++      appearance: { color: "sky", badgeDisplay: "icon" },
++      connections: profile.connections,
++      preferredConnectionId: profile.preferredConnectionId,
++    });
++  });
++
++  it("leaves out routed connections and hosts that have nothing else", () => {
++    const routed = host("srv_r", {
++      connections: [{ id: "routed:srv_a", type: "routed", originServerId: "srv_a" }],
++      preferredConnectionId: "routed:srv_a",
++    });
++    const entries = parseHostConfig(
++      serializeHostConfig([{ profile: routed }, { profile: host("srv_a") }]),
++    );
++    expect(entries?.map((entry) => entry.profile.serverId)).toEqual(["srv_a"]);
++  });
++
++  it("is not a host config for pairing links or other JSON", () => {
++    expect(parseHostConfig("https://app.paseo.sh/#offer=abc")).toBeNull();
++    expect(parseHostConfig('{"hosts":[]}')).toBeNull();
++    expect(parseHostConfig("{not json")).toBeNull();
++  });
++
++  it("skips invalid hosts and drops unknown icons", () => {
++    const text = JSON.stringify({
++      format: "paseo-host-config",
++      version: 1,
++      hosts: [
++        { serverId: "" },
++        { ...JSON.parse(serializeHostConfig([{ profile: host("srv_a") }])).hosts[0], icon: "nope" },
++      ],
++    });
++    expect(parseHostConfig(text)).toEqual([
++      { profile: expect.objectContaining({ serverId: "srv_a" }) },
++    ]);
++  });
++
++  it("adds new hosts and updates saved ones, keeping their other connections", () => {
++    const saved = host("srv_a", {
++      connections: [
++        { id: "direct:old:6767", type: "directTcp", endpoint: "old:6767", useTls: false },
++        { id: "routed:srv_b", type: "routed", originServerId: "srv_b" },
++      ],
++      preferredConnectionId: "direct:old:6767",
++    });
++    const imported = host("srv_a", {
++      label: "Renamed",
++      appearance: { color: "red", badgeDisplay: null },
++    });
++    const next = mergeImportedHosts([saved], [imported, host("srv_b")], NOW);
++    expect(next.map((profile) => profile.serverId)).toEqual(["srv_a", "srv_b"]);
++    expect(next[0]).toMatchObject({
++      label: "Renamed",
++      appearance: { color: "red" },
++      preferredConnectionId: imported.preferredConnectionId,
++      createdAt: saved.createdAt,
++      updatedAt: NOW,
++    });
++    expect(next[0]?.connections.map((connection) => connection.id)).toEqual([
++      imported.connections[0]?.id,
++      "direct:old:6767",
++      "routed:srv_b",
++    ]);
++    expect(next[1]?.createdAt).toBe(NOW);
++  });
++});
+diff --git a/packages/app/src/hosts/host-config-transfer.ts b/packages/app/src/hosts/host-config-transfer.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ac927d0d936fb34360ae6050f2d0932a64c316d
+--- /dev/null
++++ b/packages/app/src/hosts/host-config-transfer.ts
+@@ -0,0 +1,103 @@
++import { HOST_ICON_NAMES, type HostIconName } from "@/hosts/host-icons";
++import { type HostProfile, normalizeStoredHostProfile } from "@/types/host-connection";
++
++/**
++ * A host config is the text "Copy host config" puts on the clipboard: every saved host's connections,
++ * password, name and appearance, so another device can add the same hosts by pasting it. Routed
++ * connections are left out, because the daemon that routes them re-registers them by itself.
++ */
++const HOST_CONFIG_FORMAT = "paseo-host-config";
++const HOST_CONFIG_VERSION = 1;
++
++export interface HostConfigEntry {
++  profile: HostProfile;
++  icon?: HostIconName;
++}
++
++function isHostIconName(value: unknown): value is HostIconName {
++  return typeof value === "string" && (HOST_ICON_NAMES as readonly string[]).includes(value);
++}
++
++/** The host as a host config stores it, or null when it has nothing but routed connections. */
++function toStoredHost({ profile, icon }: HostConfigEntry): Record<string, unknown> | null {
++  const connections = profile.connections.filter((connection) => connection.type !== "routed");
++  if (connections.length === 0) return null;
++  const preferredConnectionId = connections.some(
++    (connection) => connection.id === profile.preferredConnectionId,
++  )
++    ? profile.preferredConnectionId
++    : (connections[0]?.id ?? null);
++  return {
++    serverId: profile.serverId,
++    label: profile.label,
++    ...(profile.password ? { password: profile.password } : {}),
++    appearance: { color: profile.appearance.color, badgeDisplay: profile.appearance.badgeDisplay },
++    connections,
++    preferredConnectionId,
++    ...(icon ? { icon } : {}),
++  };
++}
++
++export function serializeHostConfig(entries: readonly HostConfigEntry[]): string {
++  const hosts = entries.flatMap((entry) => toStoredHost(entry) ?? []);
++  return JSON.stringify({ format: HOST_CONFIG_FORMAT, version: HOST_CONFIG_VERSION, hosts });
++}
++
++/**
++ * The hosts in a pasted host config, or null when the text is not one (a pairing link, say). A host
++ * that fails validation is skipped; an unknown icon is dropped.
++ */
++export function parseHostConfig(text: string): HostConfigEntry[] | null {
++  const trimmed = text.trim();
++  if (!trimmed.startsWith("{")) return null;
++  let decoded: unknown;
++  try {
++    decoded = JSON.parse(trimmed);
++  } catch {
++    return null;
++  }
++  if (typeof decoded !== "object" || decoded === null) return null;
++  const record = decoded as Record<string, unknown>;
++  if (record.format !== HOST_CONFIG_FORMAT || !Array.isArray(record.hosts)) return null;
++  return record.hosts.flatMap((host: unknown) => {
++    if (typeof host !== "object" || host === null) return [];
++    const { icon, ...stored } = host as Record<string, unknown>;
++    const profile = normalizeStoredHostProfile(stored);
++    if (!profile) return [];
++    return [isHostIconName(icon) ? { profile, icon } : { profile }];
++  });
++}
++
++/**
++ * Adds the imported hosts to the registry. A host already saved here takes the imported name,
++ * appearance, password and preferred connection, and keeps its other connections.
++ */
++export function mergeImportedHosts(
++  existing: readonly HostProfile[],
++  imported: readonly HostProfile[],
++  now: string,
++): HostProfile[] {
++  const next = existing.slice();
++  for (const profile of imported) {
++    const index = next.findIndex((host) => host.serverId === profile.serverId);
++    const previous = index === -1 ? undefined : next[index];
++    if (!previous) {
++      next.push({ ...profile, createdAt: now, updatedAt: now });
++      continue;
++    }
++    const importedIds = new Set(profile.connections.map((connection) => connection.id));
++    next[index] = {
++      ...previous,
++      ...(profile.password ? { password: profile.password } : {}),
++      label: profile.label,
++      appearance: profile.appearance,
++      connections: [
++        ...profile.connections,
++        ...previous.connections.filter((connection) => !importedIds.has(connection.id)),
++      ],
++      preferredConnectionId: profile.preferredConnectionId,
++      updatedAt: now,
++    };
++  }
++  return next;
++}
+diff --git a/packages/app/src/hosts/host-icon-store.ts b/packages/app/src/hosts/host-icon-store.ts
+index 34e60e3fe727b86f05b27ecc0f10a82a3fa7bf6e..9a2a4f6274781eea57068bf09f0341db416f000d 100644
+--- a/packages/app/src/hosts/host-icon-store.ts
++++ b/packages/app/src/hosts/host-icon-store.ts
+@@ -93,3 +93,13 @@ export async function setHostIcon(serverId: string, icon: HostIconName): Promise
+   useHostIconStore.setState((state) => ({ icons: { ...state.icons, [serverId]: icon } }));
+   await saveHostIcons();
+ }
++
++export function getHostIcons(): Readonly<Record<string, HostIconName>> {
++  return useHostIconStore.getState().icons;
++}
++
++/** Replaces every saved icon at once, as a pasted or synced host list does. */
++export async function replaceHostIcons(icons: Record<string, HostIconName>): Promise<void> {
++  useHostIconStore.setState({ icons });
++  await saveHostIcons();
++}
+diff --git a/packages/app/src/hosts/import-host-config.ts b/packages/app/src/hosts/import-host-config.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..e412b4235c0261a804ebd4a2fdda0824c37b40fc
+--- /dev/null
++++ b/packages/app/src/hosts/import-host-config.ts
+@@ -0,0 +1,21 @@
++import { type HostConfigEntry, mergeImportedHosts } from "@/hosts/host-config-transfer";
++import { getHostIcons, replaceHostIcons } from "@/hosts/host-icon-store";
++import { getHostRuntimeStore } from "@/runtime/host-runtime";
++
++/** Adds the pasted hosts, or updates the saved ones they name, with their icons. */
++export async function importHostConfig(entries: readonly HostConfigEntry[]): Promise<void> {
++  const store = getHostRuntimeStore();
++  const now = new Date().toISOString();
++  await store.replaceHosts(
++    mergeImportedHosts(
++      store.getHosts(),
++      entries.map((entry) => entry.profile),
++      now,
++    ),
++  );
++  const icons = { ...getHostIcons() };
++  for (const { profile, icon } of entries) {
++    if (icon) icons[profile.serverId] = icon;
++  }
++  await replaceHostIcons(icons);
++}
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index 39d76a1fa3233e4d44fa409a6d6c725691778c71..525e5063202ca523adc57915f2bad47b28e6f233 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -1872,6 +1872,7 @@ export const ar: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "الصق رابط الاقتران",
+       helper: "الصق رابط الاقتران من الخادم الخاص بك.",
+       label: "رابط الاقتران",
+@@ -2728,6 +2729,7 @@ export const ar: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance: "أزل هذا المضيف ثم أضفه مرة أخرى بكلمة المرور التي يطلبها هذا الخادم.",
+       },
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index c7f25cfb440042ec58a830f81977c7ab3042756d..2f940c1a3482357791d5441502a3401635c79c32 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -1915,6 +1915,14 @@ export const en = {
+       },
+     },
+     link: {
++      hostConfig: {
++        helper: "Or paste a host config copied from Settings → host → Share.",
++        preview_one: "Adds or updates 1 host: {{hosts}}",
++        preview_other: "Adds or updates {{count}} hosts: {{hosts}}",
++        empty: "This host config has no hosts.",
++        import: "Import",
++        importing: "Importing...",
++      },
+       title: "Paste pairing link",
+       helper: "Paste the pairing link from your server.",
+       label: "Pairing link",
+@@ -2840,6 +2848,20 @@ export const en = {
+       },
+     },
+     host: {
++      configTransfer: {
++        title: "Share",
++        host: {
++          title: "Copy this host",
++          hint: "Its connections, password, name, color and icon. Paste them in Add host → Paste pairing link on another device.",
++        },
++        all: {
++          title: "Copy all hosts",
++          hint: "The same for every saved host.",
++        },
++        copy: "Copy",
++        copiedLabel: "host config",
++        copyFailed: "Could not copy the host config",
++      },
+       password: {
+         guidance: "Remove this host and add it again with the password this daemon asks for.",
+       },
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index ca22e409588ca671a6e6feb2674fd19717ec520c..4cbfcc5be72c55276fbd2c1a04c5afd0fa37d4a2 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -1919,6 +1919,7 @@ export const es: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "Pegar enlace de emparejamiento",
+       helper: "Pegue el enlace de emparejamiento de su servidor.",
+       label: "Enlace de emparejamiento",
+@@ -2750,6 +2751,7 @@ export const es: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance: "Elimina este host y vuelve a añadirlo con la contraseña que pide este daemon.",
+       },
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index 3746c4e1b4f09cbd7b2613d1b2a3e5f64fe8cc6f..58bcc83f13ac234c6a96ebaddb2c133f2fabbe60 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -1918,6 +1918,7 @@ export const fr: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "Coller le lien d’association",
+       helper: "Collez le lien d’association fourni par votre serveur.",
+       label: "Lien d’association",
+@@ -2753,6 +2754,7 @@ export const fr: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance:
+           "Supprimez cet hôte puis ajoutez-le à nouveau avec le mot de passe demandé par ce daemon.",
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index 7c9a8e0ce43cbe4a77250b7a03433049a6c7106f..bf34e61f86a02fb405a208f72755a54a9fa7417a 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -1890,6 +1890,7 @@ export const ja: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "ペアリングリンクを貼り付け",
+       helper: "サーバーからのペアリングリンクを貼り付けてください。",
+       label: "ペアリングリンク",
+@@ -2717,6 +2718,7 @@ export const ja: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance:
+           "このホストを削除し、このデーモンが求めるパスワードを入力して追加し直してください。",
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index 4c022e4cb3643d81aced9803df5710f7a662a99c..fdbf9a7462a0009c8dfbf48b57f36b7a3ed5b14d 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -1881,6 +1881,7 @@ export const ko: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "페어링 링크 붙여넣기",
+       helper: "서버에서 받은 페어링 링크를 붙여넣으세요.",
+       label: "페어링 링크",
+@@ -2705,6 +2706,7 @@ export const ko: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance: "이 호스트를 제거한 뒤 이 데몬이 요구하는 비밀번호로 다시 추가하세요.",
+       },
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index 6f7f6a5cb7035fa3fbc2e227b8377d9293e23d50..6a56ad5c4bb71d7b956df90b8037beda49b37d4a 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -1904,6 +1904,7 @@ export const ptBR: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "Colar link de pareamento",
+       helper: "Cole o link de pareamento do seu servidor.",
+       label: "Link de pareamento",
+@@ -2731,6 +2732,7 @@ export const ptBR: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance: "Remova este host e adicione-o novamente com a senha que este daemon pede.",
+       },
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index 2396cb4b894569561b723d12d967e438e94b0e89..1c3d73e40f695890d48d3e198ddd0a7fc3df7977 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -1903,6 +1903,7 @@ export const ru: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "Вставить ссылку для сопряжения",
+       helper: "Вставьте ссылку на сопряжение с вашего сервера.",
+       label: "Ссылка на сопряжение",
+@@ -2738,6 +2739,7 @@ export const ru: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance:
+           "Удалите этот хост и добавьте его снова с паролем, который запрашивает этот демон.",
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index 1b1566194c4db1d346aca380ff47133204c03d1a..cc9ccce1550143e2c813701e11b09fdeb440cf90 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -1851,6 +1851,7 @@ export const zhCN: TranslationResources = {
+       },
+     },
+     link: {
++      hostConfig: en.pairing.link.hostConfig,
+       title: "粘贴配对链接",
+       helper: "粘贴来自 server 的配对链接。",
+       label: "配对链接",
+@@ -2662,6 +2663,7 @@ export const zhCN: TranslationResources = {
+       },
+     },
+     host: {
++      configTransfer: en.settings.host.configTransfer,
+       password: {
+         guidance: "移除此主机，然后使用此守护进程要求的密码重新添加。",
+       },
+diff --git a/packages/app/src/runtime/host-runtime.ts b/packages/app/src/runtime/host-runtime.ts
+index 33997465bc9f8588945e8de4b3a2793c7e16324c..8891fec2ed9565023a7d67ccaad44717b92ae65c 100644
+--- a/packages/app/src/runtime/host-runtime.ts
++++ b/packages/app/src/runtime/host-runtime.ts
+@@ -2205,6 +2205,12 @@ export class HostRuntimeStore {
+     await this.persistHosts();
+   }
+ 
++  /** Swaps in a whole host list, as a pasted host config or the synced host list does. */
++  async replaceHosts(hosts: HostProfile[]): Promise<void> {
++    this.setHostsAndSync(hosts);
++    await this.persistHosts();
++  }
++
+   async renameHost(serverId: string, label: string): Promise<void> {
+     await this.updateHost(serverId, (host) => ({ ...host, label }));
+   }
+diff --git a/packages/app/src/screens/settings/host-config-copy-section.tsx b/packages/app/src/screens/settings/host-config-copy-section.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..5b765f4fc562efd5698d7c7524c3c8807bcc2ae0
+--- /dev/null
++++ b/packages/app/src/screens/settings/host-config-copy-section.tsx
+@@ -0,0 +1,84 @@
++import { useCallback } from "react";
++import { useTranslation } from "react-i18next";
++import { Text, View } from "react-native";
++import * as Clipboard from "expo-clipboard";
++import { Button } from "@/components/ui/button";
++import { SettingsSection } from "@/components/settings/headings/settings-section";
++import { useToast } from "@/contexts/toast-context";
++import { serializeHostConfig } from "@/hosts/host-config-transfer";
++import { getHostIcons } from "@/hosts/host-icon-store";
++import { getHostRuntimeStore } from "@/runtime/host-runtime";
++import { settingsStyles } from "@/styles/settings";
++import type { HostProfile } from "@/types/host-connection";
++
++function useCopyHostConfig(): (hosts: readonly HostProfile[]) => Promise<void> {
++  const { t } = useTranslation();
++  const toast = useToast();
++  return useCallback(
++    async (hosts: readonly HostProfile[]) => {
++      const icons = getHostIcons();
++      const text = serializeHostConfig(
++        hosts.map((profile) => {
++          const icon = icons[profile.serverId];
++          return icon ? { profile, icon } : { profile };
++        }),
++      );
++      try {
++        await Clipboard.setStringAsync(text);
++        toast.copied(t("settings.host.configTransfer.copiedLabel"));
++      } catch {
++        toast.error(t("settings.host.configTransfer.copyFailed"));
++      }
++    },
++    [t, toast],
++  );
++}
++
++/** Copies this host, or every saved host, as text that Add host → Paste link takes back. */
++export function HostConfigCopySection({ host }: { host: HostProfile }) {
++  const { t } = useTranslation();
++  const copy = useCopyHostConfig();
++  const handleCopyHost = useCallback(() => void copy([host]), [copy, host]);
++  const handleCopyAll = useCallback(() => void copy(getHostRuntimeStore().getHosts()), [copy]);
++
++  return (
++    <SettingsSection title={t("settings.host.configTransfer.title")}>
++      <View style={settingsStyles.card}>
++        <View style={settingsStyles.row}>
++          <View style={settingsStyles.rowContent}>
++            <Text style={settingsStyles.rowTitle}>
++              {t("settings.host.configTransfer.host.title")}
++            </Text>
++            <Text style={settingsStyles.rowHint}>
++              {t("settings.host.configTransfer.host.hint")}
++            </Text>
++          </View>
++          <Button
++            variant="outline"
++            size="sm"
++            onPress={handleCopyHost}
++            testID="host-page-copy-host-config"
++          >
++            {t("settings.host.configTransfer.copy")}
++          </Button>
++        </View>
++        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
++          <View style={settingsStyles.rowContent}>
++            <Text style={settingsStyles.rowTitle}>
++              {t("settings.host.configTransfer.all.title")}
++            </Text>
++            <Text style={settingsStyles.rowHint}>{t("settings.host.configTransfer.all.hint")}</Text>
++          </View>
++          <Button
++            variant="outline"
++            size="sm"
++            onPress={handleCopyAll}
++            testID="host-page-copy-all-hosts-config"
++          >
++            {t("settings.host.configTransfer.copy")}
++          </Button>
++        </View>
++      </View>
++    </SettingsSection>
++  );
++}
+diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
+index ed75fbfd91531af83eb6d611b8e192b56fbe89ff..1dbc2165a3198c756aa0ef642f4e6ed0f719ea26 100644
+--- a/packages/app/src/screens/settings/host-page.tsx
++++ b/packages/app/src/screens/settings/host-page.tsx
+@@ -53,6 +53,7 @@ import { ProvidersSection } from "@/screens/settings/providers-section";
+ import { HostUsageSection } from "@/usage";
+ import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
+ import { SettingsSection } from "@/components/settings/headings/settings-section";
++import { HostConfigCopySection } from "@/screens/settings/host-config-copy-section";
+ import { useSessionStore } from "@/stores/session-store";
+ import { settingsStyles } from "@/styles/settings";
+ import type { HostConnection, HostProfile } from "@/types/host-connection";
+@@ -384,6 +385,7 @@ export function HostSettingsPage({
+       <HostConnectionError serverId={serverId} />
+ 
+       <HostAppearanceSection host={host} />
++      <HostConfigCopySection host={host} />
+ 
+       {isLocalDaemon ? <LocalDaemonSection /> : null}
+ 

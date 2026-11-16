@@ -1,0 +1,333 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 16 Nov 2026 05:33:55 +0000
+Subject: [PATCH] feat(app): pick a host's name, color and icon while adding it
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The Direct connection form only took the address and password, so a new
+host showed up as its hostname with the default look until you opened
+its settings.
+
+The form now has Name, Color and Icon fields, the same pickers as
+Settings → host → Appearance. They are saved on the host once it
+connects; left empty, the host keeps its own name and the default look.
+
+Fork-Change: F-19
+---
+ .../components/add-host-identity-fields.tsx   | 100 ++++++++++++++++++
+ .../app/src/components/add-host-modal.tsx     |  12 +++
+ packages/app/src/i18n/resources/ar.ts         |   1 +
+ packages/app/src/i18n/resources/en.ts         |   3 +
+ packages/app/src/i18n/resources/es.ts         |   1 +
+ packages/app/src/i18n/resources/fr.ts         |   1 +
+ packages/app/src/i18n/resources/ja.ts         |   1 +
+ packages/app/src/i18n/resources/ko.ts         |   1 +
+ packages/app/src/i18n/resources/pt-BR.ts      |   1 +
+ packages/app/src/i18n/resources/ru.ts         |   1 +
+ packages/app/src/i18n/resources/zh-CN.ts      |   1 +
+ .../settings/host-appearance-section.tsx      |   8 +-
+ 12 files changed, 130 insertions(+), 1 deletion(-)
+ create mode 100644 packages/app/src/components/add-host-identity-fields.tsx
+
+diff --git a/packages/app/src/components/add-host-identity-fields.tsx b/packages/app/src/components/add-host-identity-fields.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..e1624dc41f9b43d9a9cce579b89c62b52b8f97ba
+--- /dev/null
++++ b/packages/app/src/components/add-host-identity-fields.tsx
+@@ -0,0 +1,100 @@
++import { useCallback } from "react";
++import { useTranslation } from "react-i18next";
++import { Text, View } from "react-native";
++import { StyleSheet } from "react-native-unistyles";
++import { AdaptiveTextInput } from "@/components/adaptive-text-input";
++import type { HostColor } from "@/hosts/appearance";
++import { setHostIcon } from "@/hosts/host-icon-store";
++import type { HostIconName } from "@/hosts/host-icons";
++import { getHostRuntimeStore } from "@/runtime/host-runtime";
++import { ColorRow } from "@/screens/settings/host-appearance-section";
++import { HostIconRow } from "@/screens/settings/host-icon-row";
++
++/** Name, color and icon picked while adding a host; empty values keep what the host has. */
++export interface HostIdentityDraft {
++  label: string;
++  color: HostColor;
++  icon?: HostIconName;
++}
++
++export function emptyHostIdentityDraft(): HostIdentityDraft {
++  return { label: "", color: "none" };
++}
++
++/** Saves the picked name, color and icon on the host that was just added. */
++export async function applyHostIdentityDraft(
++  serverId: string,
++  draft: HostIdentityDraft,
++): Promise<void> {
++  const store = getHostRuntimeStore();
++  const label = draft.label.trim();
++  if (label) await store.renameHost(serverId, label);
++  if (draft.color !== "none") await store.setHostColor(serverId, draft.color);
++  if (draft.icon) await setHostIcon(serverId, draft.icon);
++}
++
++export function AddHostIdentityFields({
++  draft,
++  onChange,
++  editable,
++}: {
++  draft: HostIdentityDraft;
++  onChange: (draft: HostIdentityDraft) => void;
++  editable: boolean;
++}) {
++  const { t } = useTranslation();
++  const handleLabel = useCallback(
++    (label: string) => onChange({ ...draft, label }),
++    [draft, onChange],
++  );
++  const handleColor = useCallback(
++    (color: HostColor) => onChange({ ...draft, color }),
++    [draft, onChange],
++  );
++  const handleIcon = useCallback(
++    (icon: HostIconName) => onChange({ ...draft, icon }),
++    [draft, onChange],
++  );
++
++  return (
++    <View>
++      <View style={styles.field}>
++        <Text style={styles.label}>{t("settings.host.appearance.name.label")}</Text>
++        <AdaptiveTextInput
++          testID="add-host-name-input"
++          nativeID="add-host-name-input"
++          accessibilityLabel={t("settings.host.appearance.name.label")}
++          initialValue={draft.label}
++          onChangeText={handleLabel}
++          placeholder={t("pairing.direct.identity.namePlaceholder")}
++          style={styles.input}
++          autoCorrect={false}
++          editable={editable}
++        />
++      </View>
++      <ColorRow color={draft.color} onChange={handleColor} />
++      <HostIconRow icon={draft.icon} color={draft.color} onChange={handleIcon} />
++    </View>
++  );
++}
++
++const styles = StyleSheet.create((theme) => ({
++  field: {
++    gap: theme.spacing[2],
++    paddingBottom: theme.spacing[3],
++  },
++  label: {
++    color: theme.colors.foregroundMuted,
++    fontSize: theme.fontSize.base,
++    fontWeight: theme.fontWeight.medium,
++  },
++  input: {
++    backgroundColor: theme.colors.surface2,
++    borderRadius: theme.borderRadius.lg,
++    paddingHorizontal: theme.spacing[4],
++    paddingVertical: theme.spacing[3],
++    color: theme.colors.foreground,
++    borderWidth: 1,
++    borderColor: theme.colors.border,
++  },
++}));
+diff --git a/packages/app/src/components/add-host-modal.tsx b/packages/app/src/components/add-host-modal.tsx
+index 5d8fc90cff86f8da01ec07fcf8435efb6a2e96ac..16517d5ccdfc0f18b899dadda66936568e4c944a 100644
+--- a/packages/app/src/components/add-host-modal.tsx
++++ b/packages/app/src/components/add-host-modal.tsx
+@@ -12,6 +12,11 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
+ import { Button } from "@/components/ui/button";
+ import { PairingTargetTracker } from "./pair-link-credentials";
+ import { buildDirectConnectionUri } from "./direct-connection-host";
++import {
++  AddHostIdentityFields,
++  applyHostIdentityDraft,
++  emptyHostIdentityDraft,
++} from "./add-host-identity-fields";
+ 
+ const FLEX_ONE_STYLE = { flex: 1 } as const;
+ 
+@@ -206,6 +211,7 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+   const [advancedUri, setAdvancedUri] = useState("");
+   const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
+   const advancedTarget = useRef(new PairingTargetTracker("", true));
++  const [identity, setIdentity] = useState(emptyHostIdentityDraft);
+ 
+   const connectIcon = useMemo(
+     () => <Link2 size={16} color={theme.colors.accentForeground} />,
+@@ -260,6 +266,7 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+         if (result.status === "cancelled") return;
+         const { profile, serverId, hostname } = result;
+         const isNewHost = !daemons.some((daemon) => daemon.serverId === serverId);
++        await applyHostIdentityDraft(serverId, identity);
+         onSaved?.({ profile, serverId, hostname, isNewHost });
+         handleClose();
+       } catch (error) {
+@@ -274,6 +281,7 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+       daemons,
+       directConnectionLabels.invalidConnection,
+       handleClose,
++      identity,
+       linkPairing,
+       onSaved,
+       password,
+@@ -312,6 +320,7 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+         ...(connection.password ? { password: connection.password } : {}),
+       });
+       const isNewHost = !daemons.some((daemon) => daemon.serverId === serverId);
++      await applyHostIdentityDraft(serverId, identity);
+ 
+       onSaved?.({ profile, serverId, hostname, isNewHost });
+       handleClose();
+@@ -348,6 +357,7 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+     directConnectionLabels,
+     handleClose,
+     host,
++    identity,
+     isAdvancedOpen,
+     isMobile,
+     isSaving,
+@@ -526,6 +536,8 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+         </View>
+       </View>
+ 
++      <AddHostIdentityFields draft={identity} onChange={setIdentity} editable={!isSaving} />
++
+       <View style={styles.field}>
+         <Pressable
+           style={styles.advancedToggle}
+diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
+index 525e5063202ca523adc57915f2bad47b28e6f233..6754f2f1bcc8fc655d7554d53abe797562fadbe4 100644
+--- a/packages/app/src/i18n/resources/ar.ts
++++ b/packages/app/src/i18n/resources/ar.ts
+@@ -1806,6 +1806,7 @@ export const ar: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "اتصال مباشر",
+       helper: "أدخل عنوان خادم Paseo.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
+index 2f940c1a3482357791d5441502a3401635c79c32..fc78e3cdadbb0516e0366ff54ce4a05549ee79b3 100644
+--- a/packages/app/src/i18n/resources/en.ts
++++ b/packages/app/src/i18n/resources/en.ts
+@@ -1850,6 +1850,9 @@ export const en = {
+       },
+     },
+     direct: {
++      identity: {
++        namePlaceholder: "The host's own name",
++      },
+       title: "Direct connection",
+       helper: "Enter the address of a Paseo server.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
+index 4cbfcc5be72c55276fbd2c1a04c5afd0fa37d4a2..5be197eb049c378ce5d94bb8ce11616758b17ffe 100644
+--- a/packages/app/src/i18n/resources/es.ts
++++ b/packages/app/src/i18n/resources/es.ts
+@@ -1853,6 +1853,7 @@ export const es: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "Conexión directa",
+       helper: "Ingrese la dirección de un servidorPaseo.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
+index 58bcc83f13ac234c6a96ebaddb2c133f2fabbe60..e8f861fa6a5e9153c1f3db0472fe3576e5331d65 100644
+--- a/packages/app/src/i18n/resources/fr.ts
++++ b/packages/app/src/i18n/resources/fr.ts
+@@ -1852,6 +1852,7 @@ export const fr: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "Connexion directe",
+       helper: "Saisissez l’adresse d’un serveur Paseo.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
+index bf34e61f86a02fb405a208f72755a54a9fa7417a..be2c00ed79d0cc63c3751d4d91e70e2c4292f297 100644
+--- a/packages/app/src/i18n/resources/ja.ts
++++ b/packages/app/src/i18n/resources/ja.ts
+@@ -1825,6 +1825,7 @@ export const ja: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "直接接続",
+       helper: "Paseoサーバーのアドレスを入力してください。",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
+index fdbf9a7462a0009c8dfbf48b57f36b7a3ed5b14d..da61b83c0561aefbd42260821f9e79fb2568c6eb 100644
+--- a/packages/app/src/i18n/resources/ko.ts
++++ b/packages/app/src/i18n/resources/ko.ts
+@@ -1817,6 +1817,7 @@ export const ko: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "직접 연결",
+       helper: "Paseo 서버의 주소를 입력하세요.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
+index 6a56ad5c4bb71d7b956df90b8037beda49b37d4a..1d518297ab05e8903f86d0ed98c8206238c38bbb 100644
+--- a/packages/app/src/i18n/resources/pt-BR.ts
++++ b/packages/app/src/i18n/resources/pt-BR.ts
+@@ -1838,6 +1838,7 @@ export const ptBR: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "Conexão direta",
+       helper: "Informe o endereço de um servidor Paseo.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
+index 1c3d73e40f695890d48d3e198ddd0a7fc3df7977..7df870b90095a5195c9eb941fcc5f6c9a3c00205 100644
+--- a/packages/app/src/i18n/resources/ru.ts
++++ b/packages/app/src/i18n/resources/ru.ts
+@@ -1837,6 +1837,7 @@ export const ru: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "Прямое подключение",
+       helper: "Введите адрес сервера Paseo.",
+       fields: {
+diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
+index cc9ccce1550143e2c813701e11b09fdeb440cf90..7006685c37ccf89911e7f22f0bd1d31a08d67be9 100644
+--- a/packages/app/src/i18n/resources/zh-CN.ts
++++ b/packages/app/src/i18n/resources/zh-CN.ts
+@@ -1787,6 +1787,7 @@ export const zhCN: TranslationResources = {
+       },
+     },
+     direct: {
++      identity: en.pairing.direct.identity,
+       title: "直接连接",
+       helper: "输入 Paseo server 的地址。",
+       fields: {
+diff --git a/packages/app/src/screens/settings/host-appearance-section.tsx b/packages/app/src/screens/settings/host-appearance-section.tsx
+index c63c29833246e4332a73931953761ea54b1f52cc..91148d2cf8876cc339ce3ac44600049effe11ffc 100644
+--- a/packages/app/src/screens/settings/host-appearance-section.tsx
++++ b/packages/app/src/screens/settings/host-appearance-section.tsx
+@@ -110,7 +110,13 @@ function ColorMenuItem({
+   );
+ }
+ 
+-function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: HostColor) => void }) {
++export function ColorRow({
++  color,
++  onChange,
++}: {
++  color: HostColor;
++  onChange: (color: HostColor) => void;
++}) {
+   const { t } = useTranslation();
+   const selectedLabel = colorLabel(t, color);
+   const leading = useMemo(() => <ColorSwatch color={color} />, [color]);

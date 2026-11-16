@@ -1,0 +1,953 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Anthony Fu (via agent)" <reg-github-bot@antfu.me>
+Date: Mon, 16 Nov 2026 05:34:56 +0000
+Subject: [PATCH] feat: sync the web app's host list through the daemon that
+ serves it
+
+Every browser that opened the web app had to add each host again, and a
+host changed on one device stayed stale on the others.
+
+The daemon now keeps the app's host list in app-host-registry.json, read
+and saved with daemon.app_host_registry.get and .set, gated on
+server_info.features.appHostRegistry. The daemon stores the list as an
+opaque string with a revision and saves a write only when it was made
+against the current revision.
+
+The web app asks the page's own /api/status which daemon served it. While
+that host is saved and connected, it polls the list every 5 seconds and
+on every local change, merges both sides host by host against the list it
+last agreed on, and saves the merge back. Adding, editing and removing a
+host on one device reaches every other device. A device's first sync adds
+its hosts to the list. A browser that has not saved the serving daemon
+gets its address prefilled in Direct connection, so only the password is
+left to type.
+
+Fork-Change: F-20
+---
+ packages/app/src/app/_layout.tsx              |   2 +
+ .../app/src/components/add-host-modal.tsx     |  17 +-
+ packages/app/src/hosts/host-icon-store.ts     |   4 +
+ .../hosts/host-registry-sync-model.test.ts    | 116 ++++++++++++
+ .../app/src/hosts/host-registry-sync-model.ts |  90 ++++++++++
+ packages/app/src/hosts/host-registry-sync.ts  | 165 ++++++++++++++++++
+ packages/app/src/hosts/serving-daemon.ts      |  56 ++++++
+ packages/client/src/daemon-client.ts          |  31 ++++
+ packages/protocol/src/messages.ts             |  52 ++++++
+ .../src/server/app-host-registry.test.ts      |  61 +++++++
+ .../server/src/server/app-host-registry.ts    | 102 +++++++++++
+ .../authorization/operation-permissions.ts    |   4 +
+ packages/server/src/server/session.ts         |   5 +
+ .../server/src/server/websocket-server.ts     |   2 +
+ 14 files changed, 706 insertions(+), 1 deletion(-)
+ create mode 100644 packages/app/src/hosts/host-registry-sync-model.test.ts
+ create mode 100644 packages/app/src/hosts/host-registry-sync-model.ts
+ create mode 100644 packages/app/src/hosts/host-registry-sync.ts
+ create mode 100644 packages/app/src/hosts/serving-daemon.ts
+ create mode 100644 packages/server/src/server/app-host-registry.test.ts
+ create mode 100644 packages/server/src/server/app-host-registry.ts
+
+diff --git a/packages/app/src/app/_layout.tsx b/packages/app/src/app/_layout.tsx
+index 35295aa53bdc044fff062618ad2add6efd6156f2..8932aa5022a8b03cc2f66a475190f6f57e8aa6b8 100644
+--- a/packages/app/src/app/_layout.tsx
++++ b/packages/app/src/app/_layout.tsx
+@@ -130,6 +130,7 @@ import {
+ import { PluginCatalogSync } from "@/plugins";
+ import { NotificationOpenRouter } from "@/notification-open/react";
+ import { ensureOsNotificationPermission } from "@/utils/os-notifications";
++import { HostRegistrySync } from "@/hosts/host-registry-sync";
+ 
+ polyfillCrypto();
+ 
+@@ -615,6 +616,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
+         <DesktopWindowControlsSync />
+         <OfferLinkListener />
+         <HostSessionManager />
++        <HostRegistrySync />
+         <FaviconStatusSync />
+         {children}
+       </VoiceProvider>
+diff --git a/packages/app/src/components/add-host-modal.tsx b/packages/app/src/components/add-host-modal.tsx
+index 16517d5ccdfc0f18b899dadda66936568e4c944a..8762834441eeeec2819a825f0a7d7a66a0245128 100644
+--- a/packages/app/src/components/add-host-modal.tsx
++++ b/packages/app/src/components/add-host-modal.tsx
+@@ -1,4 +1,4 @@
+-import { useCallback, useMemo, useReducer, useRef, useState } from "react";
++import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+ import { useTranslation } from "react-i18next";
+ import { Alert, Pressable, Text, View } from "react-native";
+ import { StyleSheet, useUnistyles } from "react-native-unistyles";
+@@ -12,6 +12,7 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
+ import { Button } from "@/components/ui/button";
+ import { PairingTargetTracker } from "./pair-link-credentials";
+ import { buildDirectConnectionUri } from "./direct-connection-host";
++import { useServingDaemon } from "@/hosts/serving-daemon";
+ import {
+   AddHostIdentityFields,
+   applyHostIdentityDraft,
+@@ -212,6 +213,20 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+   const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
+   const advancedTarget = useRef(new PairingTargetTracker("", true));
+   const [identity, setIdentity] = useState(emptyHostIdentityDraft);
++  const servingDaemon = useServingDaemon();
++  const didPrefill = useRef(false);
++
++  // A browser that has not saved the daemon serving this page starts from its address, so only
++  // the password is left to type; connecting to it then brings the synced host list.
++  useEffect(() => {
++    if (!servingDaemon || didPrefill.current) return;
++    didPrefill.current = true;
++    if (host || daemons.some((daemon) => daemon.serverId === servingDaemon.serverId)) return;
++    setHost(servingDaemon.host);
++    setPort(servingDaemon.port);
++    setUseTls(servingDaemon.useTls);
++    bumpInputResetKey();
++  }, [daemons, host, servingDaemon]);
+ 
+   const connectIcon = useMemo(
+     () => <Link2 size={16} color={theme.colors.accentForeground} />,
+diff --git a/packages/app/src/hosts/host-icon-store.ts b/packages/app/src/hosts/host-icon-store.ts
+index 9a2a4f6274781eea57068bf09f0341db416f000d..64cfd5ea898237746b4fadb1133c1da1d4d866f8 100644
+--- a/packages/app/src/hosts/host-icon-store.ts
++++ b/packages/app/src/hosts/host-icon-store.ts
+@@ -98,6 +98,10 @@ export function getHostIcons(): Readonly<Record<string, HostIconName>> {
+   return useHostIconStore.getState().icons;
+ }
+ 
++export function subscribeHostIcons(listener: () => void): () => void {
++  return useHostIconStore.subscribe(listener);
++}
++
+ /** Replaces every saved icon at once, as a pasted or synced host list does. */
+ export async function replaceHostIcons(icons: Record<string, HostIconName>): Promise<void> {
+   useHostIconStore.setState({ icons });
+diff --git a/packages/app/src/hosts/host-registry-sync-model.test.ts b/packages/app/src/hosts/host-registry-sync-model.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..497a3941057bf31d68d14ab1e4740d5fe908d1e2
+--- /dev/null
++++ b/packages/app/src/hosts/host-registry-sync-model.test.ts
+@@ -0,0 +1,116 @@
++import { describe, expect, it } from "vitest";
++import type { HostConfigEntry } from "@/hosts/host-config-transfer";
++import type { HostProfile } from "@/types/host-connection";
++import { applyHostConfigEntries, mergeHostConfigEntries } from "./host-registry-sync-model";
++
++const NOW = "2026-11-16T00:00:00.000Z";
++
++function host(serverId: string, label = serverId): HostProfile {
++  return {
++    serverId,
++    label,
++    appearance: { color: "none", badgeDisplay: null },
++    lifecycle: {},
++    connections: [
++      {
++        id: `direct:${serverId}:6767`,
++        type: "directTcp",
++        endpoint: `${serverId}:6767`,
++        useTls: false,
++      },
++    ],
++    preferredConnectionId: `direct:${serverId}:6767`,
++    createdAt: "2026-01-01T00:00:00.000Z",
++    updatedAt: "2026-01-01T00:00:00.000Z",
++  };
++}
++
++function entry(serverId: string, label = serverId): HostConfigEntry {
++  return { profile: host(serverId, label) };
++}
++
++function labels(entries: HostConfigEntry[]): string[] {
++  return entries.map((item) => item.profile.label);
++}
++
++describe("mergeHostConfigEntries", () => {
++  it("takes the other device's edits, additions and removals when this device changed nothing", () => {
++    const base = [entry("a"), entry("b")];
++    const remote = [entry("a", "A2"), entry("c")];
++    expect(labels(mergeHostConfigEntries({ base, local: base, remote, prefer: "local" }))).toEqual([
++      "A2",
++      "c",
++    ]);
++  });
++
++  it("keeps this device's edits, additions and removals when the daemon's list did not change", () => {
++    const base = [entry("a"), entry("b")];
++    const local = [entry("a", "A2"), entry("c")];
++    expect(labels(mergeHostConfigEntries({ base, local, remote: base, prefer: "remote" }))).toEqual(
++      ["A2", "c"],
++    );
++  });
++
++  it("merges edits to different hosts from both sides", () => {
++    const base = [entry("a"), entry("b")];
++    const local = [entry("a", "A-local"), entry("b")];
++    const remote = [entry("a"), entry("b", "B-remote")];
++    expect(labels(mergeHostConfigEntries({ base, local, remote, prefer: "local" }))).toEqual([
++      "A-local",
++      "B-remote",
++    ]);
++  });
++
++  it("lets the preferred side win a conflict, but never drops a host the other side edited", () => {
++    const base = [entry("a"), entry("b")];
++    const local = [entry("a", "A-local")];
++    const remote = [entry("a", "A-remote"), entry("b", "B-remote")];
++    expect(labels(mergeHostConfigEntries({ base, local, remote, prefer: "local" }))).toEqual([
++      "A-local",
++      "B-remote",
++    ]);
++  });
++
++  it("on a first sync unions both lists, preferring the daemon's copy of a shared host", () => {
++    const local = [entry("a", "A-local"), entry("x")];
++    const remote = [entry("a", "A-remote"), entry("b")];
++    expect(labels(mergeHostConfigEntries({ base: [], local, remote, prefer: "remote" }))).toEqual([
++      "A-remote",
++      "b",
++      "x",
++    ]);
++  });
++});
++
++describe("applyHostConfigEntries", () => {
++  it("mirrors the synced list, keeping creation times, routed connections and routed-only hosts", () => {
++    const saved = {
++      ...host("a"),
++      connections: [
++        ...host("a").connections,
++        { id: "routed:b", type: "routed" as const, originServerId: "b" },
++      ],
++    };
++    const routedOnly: HostProfile = {
++      ...host("r"),
++      connections: [{ id: "routed:a", type: "routed", originServerId: "a" }],
++      preferredConnectionId: "routed:a",
++    };
++    const result = applyHostConfigEntries({
++      hosts: [saved, host("gone"), routedOnly],
++      icons: { gone: "cloud", r: "cpu" },
++      entries: [{ profile: host("a", "A2"), icon: "laptop" }, entry("new")],
++      now: NOW,
++    });
++    expect(result.hosts.map((item) => [item.serverId, item.label, item.createdAt])).toEqual([
++      ["a", "A2", saved.createdAt],
++      ["new", "new", NOW],
++      ["r", "r", routedOnly.createdAt],
++    ]);
++    expect(result.hosts[0]?.connections.map((connection) => connection.id)).toEqual([
++      "direct:a:6767",
++      "routed:b",
++    ]);
++    expect(result.icons).toEqual({ a: "laptop", r: "cpu" });
++  });
++});
+diff --git a/packages/app/src/hosts/host-registry-sync-model.ts b/packages/app/src/hosts/host-registry-sync-model.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f32dec5b0fb02a5fb3aaa2e87e029ea496b94420
+--- /dev/null
++++ b/packages/app/src/hosts/host-registry-sync-model.ts
+@@ -0,0 +1,90 @@
++import type { HostIconName } from "@/hosts/host-icons";
++import {
++  type HostConfigEntry,
++  parseHostConfig,
++  serializeHostConfig,
++} from "@/hosts/host-config-transfer";
++import type { HostProfile } from "@/types/host-connection";
++
++/**
++ * The host list the web app keeps on the daemon that serves it. Each device remembers the list it
++ * last agreed on with the daemon (the base), so a sync can tell its own edits from another
++ * device's and merge them host by host.
++ */
++
++function canonicalHostJson(entry: HostConfigEntry): string | undefined {
++  const text = serializeHostConfig([entry]);
++  return JSON.stringify((JSON.parse(text) as { hosts: unknown[] }).hosts[0]);
++}
++
++function byServerId(entries: readonly HostConfigEntry[]): Map<string, HostConfigEntry> {
++  return new Map(entries.map((entry) => [entry.profile.serverId, entry]));
++}
++
++/** The entries of a host config text; an empty or unknown text is an empty list. */
++export function readHostConfigEntries(text: string | null): HostConfigEntry[] {
++  return text ? (parseHostConfig(text) ?? []) : [];
++}
++
++/**
++ * Three-way merge by host. A host one side changed since the base takes that side; when both
++ * changed it, `prefer` wins, unless `prefer` removed it while the other side edited it.
++ */
++export function mergeHostConfigEntries(input: {
++  base: readonly HostConfigEntry[];
++  local: readonly HostConfigEntry[];
++  remote: readonly HostConfigEntry[];
++  prefer: "local" | "remote";
++}): HostConfigEntry[] {
++  const base = byServerId(input.base);
++  const local = byServerId(input.local);
++  const remote = byServerId(input.remote);
++  const serverIds = [...new Set([...remote.keys(), ...local.keys()])];
++  return serverIds.flatMap((serverId) => {
++    const b = base.get(serverId);
++    const l = local.get(serverId);
++    const r = remote.get(serverId);
++    const [bJson, lJson, rJson] = [b, l, r].map((entry) => entry && canonicalHostJson(entry));
++    let picked: HostConfigEntry | undefined;
++    if (lJson === rJson || lJson === bJson) picked = r;
++    else if (rJson === bJson) picked = l;
++    else picked = input.prefer === "local" ? (l ?? r) : (r ?? l);
++    return picked ? [picked] : [];
++  });
++}
++
++/**
++ * The registry after a synced list: each synced host replaces the saved one, which keeps its
++ * creation time and routed connections. Saved hosts with only routed connections are never
++ * synced, so they stay, with their icons.
++ */
++export function applyHostConfigEntries(input: {
++  hosts: readonly HostProfile[];
++  icons: Readonly<Record<string, HostIconName>>;
++  entries: readonly HostConfigEntry[];
++  now: string;
++}): { hosts: HostProfile[]; icons: Record<string, HostIconName> } {
++  const saved = new Map(input.hosts.map((host) => [host.serverId, host]));
++  const synced = new Set(input.entries.map((entry) => entry.profile.serverId));
++  const hosts: HostProfile[] = [];
++  const icons: Record<string, HostIconName> = {};
++  for (const { profile, icon } of input.entries) {
++    const previous = saved.get(profile.serverId);
++    const routed = previous?.connections.filter((connection) => connection.type === "routed") ?? [];
++    hosts.push({
++      ...profile,
++      connections: [...profile.connections, ...routed],
++      createdAt: previous?.createdAt ?? input.now,
++      updatedAt: input.now,
++    });
++    if (icon) icons[profile.serverId] = icon;
++  }
++  for (const host of input.hosts) {
++    if (synced.has(host.serverId)) continue;
++    if (!host.connections.every((connection) => connection.type === "routed")) continue;
++    hosts.push(host);
++    const icon = input.icons[host.serverId];
++    if (icon) icons[host.serverId] = icon;
++  }
++  return { hosts, icons };
++}
+diff --git a/packages/app/src/hosts/host-registry-sync.ts b/packages/app/src/hosts/host-registry-sync.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..155dfeba1b61b15b04170e3091530c0f0120f8b0
+--- /dev/null
++++ b/packages/app/src/hosts/host-registry-sync.ts
+@@ -0,0 +1,165 @@
++import AsyncStorage from "@react-native-async-storage/async-storage";
++import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
++import { useEffect } from "react";
++import { type HostConfigEntry, serializeHostConfig } from "@/hosts/host-config-transfer";
++import { getHostIcons, replaceHostIcons, subscribeHostIcons } from "@/hosts/host-icon-store";
++import {
++  applyHostConfigEntries,
++  mergeHostConfigEntries,
++  readHostConfigEntries,
++} from "@/hosts/host-registry-sync-model";
++import { useServingDaemon } from "@/hosts/serving-daemon";
++import { useHostFeature } from "@/runtime/host-features";
++import {
++  getHostRuntimeStore,
++  useHostRuntimeClient,
++  useHostRuntimeIsConnected,
++  useHosts,
++} from "@/runtime/host-runtime";
++
++const SYNC_STATE_STORAGE_KEY = "@paseo:host-registry-sync";
++const SYNC_INTERVAL_MS = 5_000;
++const CHANGE_DEBOUNCE_MS = 300;
++
++/** The list this device last agreed on with the serving daemon. */
++interface SyncState {
++  serverId: string;
++  revision: number;
++  base: string;
++}
++
++type HostRegistryClient = Pick<DaemonClient, "getAppHostRegistry" | "setAppHostRegistry">;
++
++async function readSyncState(serverId: string): Promise<SyncState | null> {
++  try {
++    const raw = await AsyncStorage.getItem(SYNC_STATE_STORAGE_KEY);
++    const state = raw ? (JSON.parse(raw) as SyncState) : null;
++    return state?.serverId === serverId ? state : null;
++  } catch {
++    return null;
++  }
++}
++
++function localEntries(): HostConfigEntry[] {
++  const icons = getHostIcons();
++  return getHostRuntimeStore()
++    .getHosts()
++    .map((profile) => {
++      const icon = icons[profile.serverId];
++      return icon ? { profile, icon } : { profile };
++    });
++}
++
++/** Same hosts as text, whatever the key order of the objects they came from. */
++function canonical(text: string): string {
++  return serializeHostConfig(readHostConfigEntries(text));
++}
++
++/**
++ * Keeps this device's host list and the serving daemon's copy the same: polls it, merges both
++ * sides' changes host by host, and saves the merge back. Returns a stop function.
++ */
++function startHostRegistrySync(input: {
++  serverId: string;
++  client: HostRegistryClient;
++}): () => void {
++  const { serverId, client } = input;
++  let stopped = false;
++  let running = false;
++  let rerun = false;
++  let debounce: ReturnType<typeof setTimeout> | null = null;
++  let state: SyncState | null | undefined;
++  const isStopped = (): boolean => stopped;
++
++  async function syncOnce(): Promise<boolean> {
++    if (state === undefined) state = await readSyncState(serverId);
++    const remote = await client.getAppHostRegistry(state?.revision);
++    if (stopped) return false;
++    // No list where this device saw one (the daemon's file was removed): start over, without
++    // reading the empty list as every host removed.
++    if (state && remote.config === null && remote.revision !== state.revision) state = null;
++    const base = state?.base ?? null;
++    const remoteText = remote.config ?? (state ? base : null);
++    const localText = serializeHostConfig(localEntries());
++    const merged = mergeHostConfigEntries({
++      base: readHostConfigEntries(base),
++      local: readHostConfigEntries(localText),
++      remote: readHostConfigEntries(remoteText),
++      // A device's first sync takes the daemon's copy of a host both lists have.
++      prefer: state ? "local" : "remote",
++    });
++    const mergedText = serializeHostConfig(merged);
++    if (mergedText !== canonical(localText)) {
++      const next = applyHostConfigEntries({
++        hosts: getHostRuntimeStore().getHosts(),
++        icons: getHostIcons(),
++        entries: merged,
++        now: new Date().toISOString(),
++      });
++      await getHostRuntimeStore().replaceHosts(next.hosts);
++      await replaceHostIcons(next.icons);
++    }
++    let revision = remote.revision;
++    if (remoteText === null || mergedText !== canonical(remoteText)) {
++      const saved = await client.setAppHostRegistry({ config: mergedText, baseRevision: revision });
++      // Another device saved first: merge again against its list.
++      if (!saved.accepted) return true;
++      revision = saved.revision;
++    }
++    state = { serverId, revision, base: mergedText };
++    await AsyncStorage.setItem(SYNC_STATE_STORAGE_KEY, JSON.stringify(state));
++    return false;
++  }
++
++  async function run(): Promise<void> {
++    if (running) {
++      rerun = true;
++      return;
++    }
++    running = true;
++    try {
++      let again = true;
++      while (again && !isStopped()) {
++        rerun = false;
++        again = (await syncOnce()) || rerun;
++      }
++    } catch (error) {
++      console.warn("[HostRegistrySync] Failed to sync the host list", error);
++    } finally {
++      running = false;
++    }
++  }
++
++  function schedule(): void {
++    if (debounce) clearTimeout(debounce);
++    debounce = setTimeout(() => void run(), CHANGE_DEBOUNCE_MS);
++  }
++
++  const unsubscribeHosts = getHostRuntimeStore().subscribeHostList(schedule);
++  const unsubscribeIcons = subscribeHostIcons(schedule);
++  const interval = setInterval(() => void run(), SYNC_INTERVAL_MS);
++  void run();
++  return () => {
++    stopped = true;
++    if (debounce) clearTimeout(debounce);
++    clearInterval(interval);
++    unsubscribeHosts();
++    unsubscribeIcons();
++  };
++}
++
++/** Syncs the host list through the daemon that served this web page, while it is connected. */
++export function HostRegistrySync(): null {
++  const servingServerId = useServingDaemon()?.serverId ?? "";
++  const isSaved = useHosts().some((host) => host.serverId === servingServerId);
++  const client = useHostRuntimeClient(servingServerId);
++  const isConnected = useHostRuntimeIsConnected(servingServerId);
++  const isSupported = useHostFeature(servingServerId, "appHostRegistry");
++  const canSync = Boolean(servingServerId && isSaved && client && isConnected && isSupported);
++
++  useEffect(() => {
++    if (!canSync || !client) return;
++    return startHostRegistrySync({ serverId: servingServerId, client });
++  }, [canSync, client, servingServerId]);
++  return null;
++}
+diff --git a/packages/app/src/hosts/serving-daemon.ts b/packages/app/src/hosts/serving-daemon.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ca61e3081d8358df6454ebe539aa4380f23e7824
+--- /dev/null
++++ b/packages/app/src/hosts/serving-daemon.ts
+@@ -0,0 +1,56 @@
++import { useEffect, useState } from "react";
++import { isWeb } from "@/constants/platform";
++
++/**
++ * The daemon that served this web page, when a daemon did (not app.paseo.sh, the desktop app or a
++ * native build). Its public `/api/status` names it, so the page can tell which saved host it is.
++ */
++export interface ServingDaemon {
++  serverId: string;
++  host: string;
++  port: string;
++  useTls: boolean;
++}
++
++let lookup: Promise<ServingDaemon | null> | null = null;
++
++async function fetchServingDaemon(): Promise<ServingDaemon | null> {
++  const { location } = window;
++  if (location.protocol !== "http:" && location.protocol !== "https:") return null;
++  try {
++    const response = await fetch("/api/status", { headers: { accept: "application/json" } });
++    if (!response.ok) return null;
++    const body = (await response.json()) as { status?: unknown; serverId?: unknown };
++    if (body.status !== "server_info" || typeof body.serverId !== "string") return null;
++    const useTls = location.protocol === "https:";
++    return {
++      serverId: body.serverId,
++      host: location.hostname,
++      port: location.port || (useTls ? "443" : "80"),
++      useTls,
++    };
++  } catch {
++    return null;
++  }
++}
++
++export function readServingDaemon(): Promise<ServingDaemon | null> {
++  if (!isWeb || typeof window === "undefined") return Promise.resolve(null);
++  lookup ??= fetchServingDaemon();
++  return lookup;
++}
++
++export function useServingDaemon(): ServingDaemon | null {
++  const [daemon, setDaemon] = useState<ServingDaemon | null>(null);
++  useEffect(() => {
++    let active = true;
++    void readServingDaemon().then((result) => {
++      if (active) setDaemon(result);
++      return undefined;
++    });
++    return () => {
++      active = false;
++    };
++  }, []);
++  return daemon;
++}
+diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
+index dfa16cf7a66fecb51da2503147e08a7e53fe0e20..c1f2acae9d50b40787faed15c4f1ca2faef4e2e8 100644
+--- a/packages/client/src/daemon-client.ts
++++ b/packages/client/src/daemon-client.ts
+@@ -112,6 +112,8 @@ import type {
+   UsageReportEntry,
+   DaemonGetStatusResponse,
+   DaemonGetHostStatsResponse,
++  DaemonAppHostRegistryGetResponse,
++  DaemonAppHostRegistrySetResponse,
+   DaemonGetPairingOfferResponse,
+   DaemonConfigReloadResponse,
+   DiagnosticsResponse,
+@@ -5612,6 +5614,35 @@ export class DaemonClient {
+     });
+   }
+ 
++  async getAppHostRegistry(
++    knownRevision?: number,
++  ): Promise<DaemonAppHostRegistryGetResponse["payload"]> {
++    this.requireAppHostRegistrySupport();
++    return this.sendNamespacedCorrelatedSessionRequest({
++      message: {
++        type: "daemon.app_host_registry.get.request",
++        ...(knownRevision !== undefined ? { knownRevision } : {}),
++      },
++    });
++  }
++
++  async setAppHostRegistry(input: {
++    config: string;
++    baseRevision: number;
++  }): Promise<DaemonAppHostRegistrySetResponse["payload"]> {
++    this.requireAppHostRegistrySupport();
++    return this.sendNamespacedCorrelatedSessionRequest({
++      message: { type: "daemon.app_host_registry.set.request", ...input },
++    });
++  }
++
++  private requireAppHostRegistrySupport(): void {
++    // COMPAT(appHostRegistry): added in v0.15.4, remove gate after 2027-05-16.
++    if (this.lastServerInfoMessage?.features?.appHostRegistry !== true) {
++      throw new Error("Update the host to sync the host list.");
++    }
++  }
++
+   async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
+     this.requireDaemonConfigReloadSupport();
+     return this.sendNamespacedCorrelatedSessionRequest({
+diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
+index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa098f2ef124 100644
+--- a/packages/protocol/src/messages.ts
++++ b/packages/protocol/src/messages.ts
+@@ -1463,6 +1463,21 @@ export const DaemonGetHostStatsRequestSchema = z.object({
+   requestId: z.string(),
+ });
+ 
++// Gated on features.appHostRegistry. The response carries the list only when its revision is not knownRevision.
++export const DaemonAppHostRegistryGetRequestSchema = z.object({
++  type: z.literal("daemon.app_host_registry.get.request"),
++  requestId: z.string(),
++  knownRevision: z.number().optional(),
++});
++
++// Gated on features.appHostRegistry. Saved only when baseRevision is the stored revision.
++export const DaemonAppHostRegistrySetRequestSchema = z.object({
++  type: z.literal("daemon.app_host_registry.set.request"),
++  requestId: z.string(),
++  config: z.string(),
++  baseRevision: z.number(),
++});
++
+ export const DaemonGetPairingOfferRequestSchema = z.object({
+   type: z.literal("daemon.get_pairing_offer.request"),
+   requestId: z.string(),
+@@ -3345,6 +3360,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+   WaitForFinishRequestSchema,
+   DaemonGetStatusRequestSchema,
+   DaemonGetHostStatsRequestSchema,
++  DaemonAppHostRegistryGetRequestSchema,
++  DaemonAppHostRegistrySetRequestSchema,
+   DaemonGetPairingOfferRequestSchema,
+   DaemonConfigReloadRequestSchema,
+   HubManagementDaemonConnectRequestSchema,
+@@ -3903,6 +3920,8 @@ export const ServerInfoStatusPayloadSchema = z
+         worktreeDefaultSetup: z.boolean().optional(),
+         // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
+         hostStats: z.boolean().optional(),
++        // COMPAT(appHostRegistry): added in v0.15.4, remove gate after 2027-05-16.
++        appHostRegistry: z.boolean().optional(),
+       })
+       .optional(),
+   })
+@@ -5195,6 +5214,31 @@ export const DaemonGetHostStatsResponseSchema = z.object({
+     .passthrough(),
+ });
+ 
++// The host list the web app keeps on this daemon. config is null when unchanged or never saved.
++export const DaemonAppHostRegistryGetResponseSchema = z.object({
++  type: z.literal("daemon.app_host_registry.get.response"),
++  payload: z
++    .object({
++      requestId: z.string(),
++      revision: z.number(),
++      config: z.string().nullable(),
++    })
++    .passthrough(),
++});
++
++// accepted false: another device saved first; revision and config are the stored list to merge.
++export const DaemonAppHostRegistrySetResponseSchema = z.object({
++  type: z.literal("daemon.app_host_registry.set.response"),
++  payload: z
++    .object({
++      requestId: z.string(),
++      accepted: z.boolean(),
++      revision: z.number(),
++      config: z.string().nullable(),
++    })
++    .passthrough(),
++});
++
+ export const DaemonGetStatusResponseSchema = z.object({
+   type: z.literal("daemon.get_status.response"),
+   payload: z
+@@ -7187,6 +7231,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+   SetVoiceModeResponseMessageSchema,
+   DaemonGetStatusResponseSchema,
+   DaemonGetHostStatsResponseSchema,
++  DaemonAppHostRegistryGetResponseSchema,
++  DaemonAppHostRegistrySetResponseSchema,
+   DaemonGetPairingOfferResponseSchema,
+   DaemonConfigReloadResponseSchema,
+   HubManagementDaemonConnectResponseSchema,
+@@ -7446,6 +7492,12 @@ export type ListProviderFeaturesResponseMessage = z.infer<
+ export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
+ export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
+ export type DaemonGetHostStatsResponse = z.infer<typeof DaemonGetHostStatsResponseSchema>;
++export type DaemonAppHostRegistryGetResponse = z.infer<
++  typeof DaemonAppHostRegistryGetResponseSchema
++>;
++export type DaemonAppHostRegistrySetResponse = z.infer<
++  typeof DaemonAppHostRegistrySetResponseSchema
++>;
+ export type DaemonGetPairingOfferResponse = z.infer<typeof DaemonGetPairingOfferResponseSchema>;
+ export type DaemonConfigReloadResponse = z.infer<typeof DaemonConfigReloadResponseSchema>;
+ export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
+diff --git a/packages/server/src/server/app-host-registry.test.ts b/packages/server/src/server/app-host-registry.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..09daf03285c392cd46752999c3ff79fdb31aa895
+--- /dev/null
++++ b/packages/server/src/server/app-host-registry.test.ts
+@@ -0,0 +1,61 @@
++import { mkdtemp, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import {
++  APP_HOST_REGISTRY_MAX_BYTES,
++  readAppHostRegistry,
++  writeAppHostRegistry,
++} from "./app-host-registry.js";
++
++describe("app host registry", () => {
++  let paseoHome: string;
++
++  beforeEach(async () => {
++    paseoHome = await mkdtemp(path.join(tmpdir(), "paseo-app-hosts-"));
++  });
++
++  afterEach(async () => {
++    await rm(paseoHome, { recursive: true, force: true });
++  });
++
++  it("starts empty at revision 0", async () => {
++    await expect(readAppHostRegistry(paseoHome)).resolves.toEqual({ revision: 0, config: null });
++  });
++
++  it("saves a list written against the current revision and bumps the revision", async () => {
++    await expect(
++      writeAppHostRegistry(paseoHome, { config: "a", baseRevision: 0 }),
++    ).resolves.toEqual({ accepted: true, revision: 1 });
++    await expect(readAppHostRegistry(paseoHome)).resolves.toEqual({ revision: 1, config: "a" });
++  });
++
++  it("returns the current list instead of saving a write against an old revision", async () => {
++    await writeAppHostRegistry(paseoHome, { config: "a", baseRevision: 0 });
++    await expect(
++      writeAppHostRegistry(paseoHome, { config: "b", baseRevision: 0 }),
++    ).resolves.toEqual({ accepted: false, revision: 1, config: "a" });
++    await expect(readAppHostRegistry(paseoHome)).resolves.toEqual({ revision: 1, config: "a" });
++  });
++
++  it("runs concurrent writes one at a time, so only one of two racing writes lands", async () => {
++    const results = await Promise.all([
++      writeAppHostRegistry(paseoHome, { config: "a", baseRevision: 0 }),
++      writeAppHostRegistry(paseoHome, { config: "b", baseRevision: 0 }),
++    ]);
++    expect(results.map((result) => result.accepted)).toEqual([true, false]);
++    await expect(readAppHostRegistry(paseoHome)).resolves.toEqual({ revision: 1, config: "a" });
++  });
++
++  it("rejects a list over the size limit", async () => {
++    const config = "x".repeat(APP_HOST_REGISTRY_MAX_BYTES + 1);
++    await expect(writeAppHostRegistry(paseoHome, { config, baseRevision: 0 })).rejects.toThrow(
++      "too large",
++    );
++  });
++
++  it("fails on a corrupt file instead of reporting an empty list", async () => {
++    await writeFile(path.join(paseoHome, "app-host-registry.json"), '{"revision":"x"}');
++    await expect(readAppHostRegistry(paseoHome)).rejects.toThrow();
++  });
++});
+diff --git a/packages/server/src/server/app-host-registry.ts b/packages/server/src/server/app-host-registry.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..483f15ee1fbbeb8448278ee1312cb217757693fd
+--- /dev/null
++++ b/packages/server/src/server/app-host-registry.ts
+@@ -0,0 +1,102 @@
++import { promises as fs } from "node:fs";
++import path from "node:path";
++import type { SessionInboundMessage, SessionOutboundMessage } from "./messages.js";
++import { z } from "zod";
++import { writeJsonFileAtomic } from "./atomic-file.js";
++
++/**
++ * The host list the web app keeps on the daemon that serves it, so every browser that opens the app
++ * gets the same hosts. The daemon stores it as an opaque string: the app owns its format.
++ */
++const APP_HOST_REGISTRY_FILE = "app-host-registry.json";
++
++// A few hundred hosts fit comfortably; anything larger is not a host list.
++export const APP_HOST_REGISTRY_MAX_BYTES = 1024 * 1024;
++
++const StoredAppHostRegistrySchema = z.object({
++  revision: z.number().int().nonnegative(),
++  config: z.string(),
++});
++
++export interface AppHostRegistry {
++  revision: number;
++  config: string | null;
++}
++
++export type AppHostRegistryWrite =
++  | { accepted: true; revision: number }
++  | { accepted: false; revision: number; config: string | null };
++
++// Every session of the daemon shares the file, so writes run one at a time.
++const writeQueues = new Map<string, Promise<unknown>>();
++
++function registryPath(paseoHome: string): string {
++  return path.join(paseoHome, APP_HOST_REGISTRY_FILE);
++}
++
++export async function readAppHostRegistry(paseoHome: string): Promise<AppHostRegistry> {
++  let raw: string;
++  try {
++    raw = await fs.readFile(registryPath(paseoHome), "utf8");
++  } catch (error) {
++    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { revision: 0, config: null };
++    throw error;
++  }
++  return StoredAppHostRegistrySchema.parse(JSON.parse(raw));
++}
++
++/**
++ * Saves the list when the writer saw the current revision, so a device that missed another
++ * device's change gets the current list back to merge, instead of overwriting it.
++ */
++export function writeAppHostRegistry(
++  paseoHome: string,
++  input: { config: string; baseRevision: number },
++): Promise<AppHostRegistryWrite> {
++  if (Buffer.byteLength(input.config, "utf8") > APP_HOST_REGISTRY_MAX_BYTES) {
++    return Promise.reject(new Error("The host list is too large to save."));
++  }
++  const filePath = registryPath(paseoHome);
++  const previous = writeQueues.get(filePath) ?? Promise.resolve();
++  const next = previous
++    .catch(() => undefined)
++    .then(async (): Promise<AppHostRegistryWrite> => {
++      const current = await readAppHostRegistry(paseoHome);
++      if (current.revision !== input.baseRevision) {
++        return { accepted: false, revision: current.revision, config: current.config };
++      }
++      const revision = current.revision + 1;
++      await writeJsonFileAtomic(filePath, { revision, config: input.config });
++      return { accepted: true, revision };
++    });
++  writeQueues.set(filePath, next);
++  return next;
++}
++
++type AppHostRegistryRequest = Extract<
++  SessionInboundMessage,
++  { type: "daemon.app_host_registry.get.request" | "daemon.app_host_registry.set.request" }
++>;
++
++export async function handleAppHostRegistryRequest(
++  paseoHome: string,
++  msg: AppHostRegistryRequest,
++): Promise<SessionOutboundMessage> {
++  const { requestId } = msg;
++  if (msg.type === "daemon.app_host_registry.get.request") {
++    const current = await readAppHostRegistry(paseoHome);
++    const unchanged = msg.knownRevision === current.revision;
++    return {
++      type: "daemon.app_host_registry.get.response",
++      payload: { requestId, revision: current.revision, config: unchanged ? null : current.config },
++    };
++  }
++  // A failed write throws, which the session reports to the client as an rpc_error.
++  const result = await writeAppHostRegistry(paseoHome, msg);
++  return {
++    type: "daemon.app_host_registry.set.response",
++    payload: result.accepted
++      ? { requestId, accepted: true, revision: result.revision, config: null }
++      : { requestId, ...result },
++  };
++}
+diff --git a/packages/server/src/server/authorization/operation-permissions.ts b/packages/server/src/server/authorization/operation-permissions.ts
+index ff2d9a13b9c3eb764330dab96dfe8579b894ef66..b47c2d469ff4310690de95a03457cd7cb04de0b7 100644
+--- a/packages/server/src/server/authorization/operation-permissions.ts
++++ b/packages/server/src/server/authorization/operation-permissions.ts
+@@ -79,6 +79,8 @@ const INBOUND_PERMISSION = {
+   "daemon.get_pairing_offer.request": "access.manage",
+   "daemon.get_status.request": "daemon.read",
+   "daemon.get_host_stats.request": "daemon.read",
++  "daemon.app_host_registry.get.request": "daemon.manage",
++  "daemon.app_host_registry.set.request": "daemon.manage",
+   "daemon.update.request": "daemon.manage",
+   delete_agent_request: "workspace.write",
+   "diagnostics.request": "daemon.read",
+@@ -315,6 +317,8 @@ const OUTBOUND_PERMISSION = {
+   "daemon.get_pairing_offer.response": "access.manage",
+   "daemon.get_status.response": "daemon.read",
+   "daemon.get_host_stats.response": "daemon.read",
++  "daemon.app_host_registry.get.response": "daemon.manage",
++  "daemon.app_host_registry.set.response": "daemon.manage",
+   "daemon.update.progress": "daemon.manage",
+   "daemon.update.response": "daemon.manage",
+   "diagnostics.response": "daemon.read",
+diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
+index 89f49d6968f744bdb2eab1c447cc63a62beae994..ce648c110dad6d5fc839932f88f98abc82325f30 100644
+--- a/packages/server/src/server/session.ts
++++ b/packages/server/src/server/session.ts
+@@ -280,6 +280,7 @@ import { runGitCommand } from "../utils/run-git-command.js";
+ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
+ import { resolveWorktreeSourceCwd } from "./workspace-source.js";
+ import { readHostStats } from "./host-stats.js";
++import { handleAppHostRegistryRequest } from "./app-host-registry.js";
+ 
+ type ProviderSubagentManagerEvent = Extract<
+   AgentManagerEvent,
+@@ -3258,6 +3259,10 @@ export class Session {
+       case "register_push_token":
+         this.handleRegisterPushToken(msg.token);
+         return;
++      case "daemon.app_host_registry.get.request":
++      case "daemon.app_host_registry.set.request":
++        this.emit(await handleAppHostRegistryRequest(this.paseoHome, msg));
++        return;
+       case "push.unregister.request":
+         this.pushNotifications.revoke(msg.token);
+         if (this.currentClientMetadata().pushToken?.trim() === msg.token.trim()) {
+diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
+index 7b9b7e4ad891bd9983a5406629c01a66ba63476b..cebc38d5c42f3fb8f6e2f3a8b408a52cfdfac151 100644
+--- a/packages/server/src/server/websocket-server.ts
++++ b/packages/server/src/server/websocket-server.ts
+@@ -2188,6 +2188,8 @@ export class VoiceAssistantWebSocketServer {
+         worktreeDefaultSetup: true,
+         // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
+         hostStats: true,
++        // COMPAT(appHostRegistry): added in v0.15.4, remove gate after 2027-05-16.
++        appHostRegistry: true,
+       },
+     };
+   }
