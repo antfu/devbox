@@ -48,14 +48,13 @@ The image bundles Claude Code, Codex and Chrome, so think about their licenses b
 ## Always-on MacBook
 
 1. Install Docker Desktop or [OrbStack](https://orbstack.dev) and turn on "Start at login".
-2. Stay awake with the lid closed, and restart after a power cut:
+2. Stay awake with the lid closed, and restart after a power cut, only while the charger is plugged in:
 
    ```sh
-   sudo pmset -c sleep 0 autorestart 1 womp 1
-   sudo pmset -a disablesleep 1
+   pnpm awake:install
    ```
 
-   `-c` applies the settings only while the charger is plugged in. `disablesleep` has no per-power-source form, so it applies on battery too: the lid stays closed and awake in a bag. Undo it with `sudo pmset -a disablesleep 0` before carrying the laptop.
+   It sets `sleep`, `autorestart` and `womp` for the charger, and installs a small root daemon that turns `disablesleep` on when you plug in and off when you unplug (within 5 seconds), so there is nothing to undo before carrying the laptop. Remove it with `pnpm awake:uninstall`.
 3. Turn on automatic login in System Settings → Users & Groups. It does not work with FileVault, so with FileVault on, a reboot waits for your password.
 4. Run `pnpm daemon:install`. It starts at login and brings the stack up.
 5. Upgrade from `https://<prefix>monitor.<your-tailnet>.ts.net` (log in with `CLIENT_ACCESS_PASSWORD`) or run `pnpm selfupgrade`. It pulls the repo, builds or pulls the images, then restarts, so a failed build keeps the old containers running.
