@@ -25,7 +25,7 @@ left to type.
 Fork-Change: F-20
 ---
  packages/app/src/app/_layout.tsx              |   2 +
- .../app/src/components/add-host-modal.tsx     |  17 +-
+ .../add-host/internal/add-host-modal.tsx      |  17 +-
  packages/app/src/hosts/host-icon-store.ts     |   4 +
  .../hosts/host-registry-sync-model.test.ts    | 116 ++++++++++++
  .../app/src/hosts/host-registry-sync-model.ts |  90 ++++++++++
@@ -47,10 +47,10 @@ Fork-Change: F-20
  create mode 100644 packages/server/src/server/app-host-registry.ts
 
 diff --git a/packages/app/src/app/_layout.tsx b/packages/app/src/app/_layout.tsx
-index 35295aa53bdc044fff062618ad2add6efd6156f2..8932aa5022a8b03cc2f66a475190f6f57e8aa6b8 100644
+index 13868bb1a2e8e0cd108fb7008bce4ae5a952c26a..1c76baa8f87f38234befd608ef76d8893c1b420c 100644
 --- a/packages/app/src/app/_layout.tsx
 +++ b/packages/app/src/app/_layout.tsx
-@@ -130,6 +130,7 @@ import {
+@@ -147,6 +147,7 @@ import {
  import { PluginCatalogSync } from "@/plugins";
  import { NotificationOpenRouter } from "@/notification-open/react";
  import { ensureOsNotificationPermission } from "@/utils/os-notifications";
@@ -58,7 +58,7 @@ index 35295aa53bdc044fff062618ad2add6efd6156f2..8932aa5022a8b03cc2f66a475190f6f5
  
  polyfillCrypto();
  
-@@ -615,6 +616,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
+@@ -700,6 +701,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
          <DesktopWindowControlsSync />
          <OfferLinkListener />
          <HostSessionManager />
@@ -66,25 +66,26 @@ index 35295aa53bdc044fff062618ad2add6efd6156f2..8932aa5022a8b03cc2f66a475190f6f5
          <FaviconStatusSync />
          {children}
        </VoiceProvider>
-diff --git a/packages/app/src/components/add-host-modal.tsx b/packages/app/src/components/add-host-modal.tsx
-index 16517d5ccdfc0f18b899dadda66936568e4c944a..8762834441eeeec2819a825f0a7d7a66a0245128 100644
---- a/packages/app/src/components/add-host-modal.tsx
-+++ b/packages/app/src/components/add-host-modal.tsx
-@@ -1,4 +1,4 @@
+diff --git a/packages/app/src/hosts/add-host/internal/add-host-modal.tsx b/packages/app/src/hosts/add-host/internal/add-host-modal.tsx
+index d5a83aa7319ac937ec0d1dacf8e7f67473bab34e..0da407fc81f4bb681cb049a14f345fda7391c228 100644
+--- a/packages/app/src/hosts/add-host/internal/add-host-modal.tsx
++++ b/packages/app/src/hosts/add-host/internal/add-host-modal.tsx
+@@ -1,5 +1,5 @@
+ import { PressHighlight } from "@/components/ui/press-highlight";
 -import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 +import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
  import { useTranslation } from "react-i18next";
- import { Alert, Pressable, Text, View } from "react-native";
- import { StyleSheet, useUnistyles } from "react-native-unistyles";
-@@ -12,6 +12,7 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
+ import { Alert, Text, View } from "react-native";
+ import { StyleSheet, withUnistyles } from "react-native-unistyles";
+@@ -17,6 +17,7 @@ import {
  import { Button } from "@/components/ui/button";
- import { PairingTargetTracker } from "./pair-link-credentials";
- import { buildDirectConnectionUri } from "./direct-connection-host";
+ import { PairingTargetTracker } from "@/components/pair-link-credentials";
+ import { buildDirectConnectionUri } from "@/components/direct-connection-host";
 +import { useServingDaemon } from "@/hosts/serving-daemon";
  import {
    AddHostIdentityFields,
    applyHostIdentityDraft,
-@@ -212,6 +213,20 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
+@@ -216,6 +217,20 @@ function AddHostModalContent({ visible, onClose, onCancel, onSaved }: AddHostMod
    const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
    const advancedTarget = useRef(new PairingTargetTracker("", true));
    const [identity, setIdentity] = useState(emptyHostIdentityDraft);
@@ -103,8 +104,8 @@ index 16517d5ccdfc0f18b899dadda66936568e4c944a..8762834441eeeec2819a825f0a7d7a66
 +    bumpInputResetKey();
 +  }, [daemons, host, servingDaemon]);
  
-   const connectIcon = useMemo(
-     () => <Link2 size={16} color={theme.colors.accentForeground} />,
+   const connectIcon = useMemo(() => <ThemedLink2 size={16} />, []);
+   const hostFieldStyle = useMemo(() => [styles.field, styles.hostField], []);
 diff --git a/packages/app/src/hosts/host-icon-store.ts b/packages/app/src/hosts/host-icon-store.ts
 index 9a2a4f6274781eea57068bf09f0341db416f000d..64cfd5ea898237746b4fadb1133c1da1d4d866f8 100644
 --- a/packages/app/src/hosts/host-icon-store.ts
@@ -572,10 +573,10 @@ index 0000000000000000000000000000000000000000..ca61e3081d8358df6454ebe539aa4380
 +  return daemon;
 +}
 diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
-index dfa16cf7a66fecb51da2503147e08a7e53fe0e20..c1f2acae9d50b40787faed15c4f1ca2faef4e2e8 100644
+index 174183f2272fd4c5b7f6fc13e09d65eecdede34a..96721a4308230e3d402a8a5299d3155033fb43aa 100644
 --- a/packages/client/src/daemon-client.ts
 +++ b/packages/client/src/daemon-client.ts
-@@ -112,6 +112,8 @@ import type {
+@@ -121,6 +121,8 @@ import type {
    UsageReportEntry,
    DaemonGetStatusResponse,
    DaemonGetHostStatsResponse,
@@ -584,7 +585,7 @@ index dfa16cf7a66fecb51da2503147e08a7e53fe0e20..c1f2acae9d50b40787faed15c4f1ca2f
    DaemonGetPairingOfferResponse,
    DaemonConfigReloadResponse,
    DiagnosticsResponse,
-@@ -5612,6 +5614,35 @@ export class DaemonClient {
+@@ -6064,6 +6066,35 @@ export class DaemonClient {
      });
    }
  
@@ -621,10 +622,10 @@ index dfa16cf7a66fecb51da2503147e08a7e53fe0e20..c1f2acae9d50b40787faed15c4f1ca2f
      this.requireDaemonConfigReloadSupport();
      return this.sendNamespacedCorrelatedSessionRequest({
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa098f2ef124 100644
+index ed42af80e5be920fb48dd0223bf97d1c0518fcd1..e8949a484fbada7f40d3dae43fa56e1368c235bf 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
-@@ -1463,6 +1463,21 @@ export const DaemonGetHostStatsRequestSchema = z.object({
+@@ -1549,6 +1549,21 @@ export const DaemonGetHostStatsRequestSchema = z.object({
    requestId: z.string(),
  });
  
@@ -646,7 +647,7 @@ index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa09
  export const DaemonGetPairingOfferRequestSchema = z.object({
    type: z.literal("daemon.get_pairing_offer.request"),
    requestId: z.string(),
-@@ -3345,6 +3360,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+@@ -3580,6 +3595,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
    WaitForFinishRequestSchema,
    DaemonGetStatusRequestSchema,
    DaemonGetHostStatsRequestSchema,
@@ -655,7 +656,7 @@ index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa09
    DaemonGetPairingOfferRequestSchema,
    DaemonConfigReloadRequestSchema,
    HubManagementDaemonConnectRequestSchema,
-@@ -3903,6 +3920,8 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -4168,6 +4185,8 @@ export const ServerInfoStatusPayloadSchema = z
          worktreeDefaultSetup: z.boolean().optional(),
          // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
          hostStats: z.boolean().optional(),
@@ -664,7 +665,7 @@ index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa09
        })
        .optional(),
    })
-@@ -5195,6 +5214,31 @@ export const DaemonGetHostStatsResponseSchema = z.object({
+@@ -5533,6 +5552,31 @@ export const DaemonGetHostStatsResponseSchema = z.object({
      .passthrough(),
  });
  
@@ -696,7 +697,7 @@ index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa09
  export const DaemonGetStatusResponseSchema = z.object({
    type: z.literal("daemon.get_status.response"),
    payload: z
-@@ -7187,6 +7231,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+@@ -7578,6 +7622,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
    SetVoiceModeResponseMessageSchema,
    DaemonGetStatusResponseSchema,
    DaemonGetHostStatsResponseSchema,
@@ -705,7 +706,7 @@ index 2a36a7f7c4a0ba7747db62beddb8e9aa929a8ec1..ecaf4267e664cd3bf143bdaab5c9fa09
    DaemonGetPairingOfferResponseSchema,
    DaemonConfigReloadResponseSchema,
    HubManagementDaemonConnectResponseSchema,
-@@ -7446,6 +7492,12 @@ export type ListProviderFeaturesResponseMessage = z.infer<
+@@ -7844,6 +7890,12 @@ export type ListProviderFeaturesResponseMessage = z.infer<
  export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
  export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
  export type DaemonGetHostStatsResponse = z.infer<typeof DaemonGetHostStatsResponseSchema>;
@@ -894,10 +895,10 @@ index 0000000000000000000000000000000000000000..483f15ee1fbbeb8448278ee1312cb217
 +  };
 +}
 diff --git a/packages/server/src/server/authorization/operation-permissions.ts b/packages/server/src/server/authorization/operation-permissions.ts
-index ff2d9a13b9c3eb764330dab96dfe8579b894ef66..b47c2d469ff4310690de95a03457cd7cb04de0b7 100644
+index ef4cd2702898ebf7fec5a5adc0ff85256a1c72bb..512034839f6a6b5ab218f3f67cc17ffc0b15c115 100644
 --- a/packages/server/src/server/authorization/operation-permissions.ts
 +++ b/packages/server/src/server/authorization/operation-permissions.ts
-@@ -79,6 +79,8 @@ const INBOUND_PERMISSION = {
+@@ -82,6 +82,8 @@ const INBOUND_PERMISSION = {
    "daemon.get_pairing_offer.request": "access.manage",
    "daemon.get_status.request": "daemon.read",
    "daemon.get_host_stats.request": "daemon.read",
@@ -906,7 +907,7 @@ index ff2d9a13b9c3eb764330dab96dfe8579b894ef66..b47c2d469ff4310690de95a03457cd7c
    "daemon.update.request": "daemon.manage",
    delete_agent_request: "workspace.write",
    "diagnostics.request": "daemon.read",
-@@ -315,6 +317,8 @@ const OUTBOUND_PERMISSION = {
+@@ -331,6 +333,8 @@ const OUTBOUND_PERMISSION = {
    "daemon.get_pairing_offer.response": "access.manage",
    "daemon.get_status.response": "daemon.read",
    "daemon.get_host_stats.response": "daemon.read",
@@ -916,10 +917,10 @@ index ff2d9a13b9c3eb764330dab96dfe8579b894ef66..b47c2d469ff4310690de95a03457cd7c
    "daemon.update.response": "daemon.manage",
    "diagnostics.response": "daemon.read",
 diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
-index 89f49d6968f744bdb2eab1c447cc63a62beae994..ce648c110dad6d5fc839932f88f98abc82325f30 100644
+index df4c78a6fea333380a0c06096324daf2f4cb04e4..e91e8660ace9c0accaef636bbbf418d0b11fef11 100644
 --- a/packages/server/src/server/session.ts
 +++ b/packages/server/src/server/session.ts
-@@ -280,6 +280,7 @@ import { runGitCommand } from "../utils/run-git-command.js";
+@@ -314,6 +314,7 @@ import { runGitCommand } from "../utils/run-git-command.js";
  import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
  import { resolveWorktreeSourceCwd } from "./workspace-source.js";
  import { readHostStats } from "./host-stats.js";
@@ -927,7 +928,7 @@ index 89f49d6968f744bdb2eab1c447cc63a62beae994..ce648c110dad6d5fc839932f88f98abc
  
  type ProviderSubagentManagerEvent = Extract<
    AgentManagerEvent,
-@@ -3258,6 +3259,10 @@ export class Session {
+@@ -3560,6 +3561,10 @@ export class Session {
        case "register_push_token":
          this.handleRegisterPushToken(msg.token);
          return;
@@ -939,10 +940,10 @@ index 89f49d6968f744bdb2eab1c447cc63a62beae994..ce648c110dad6d5fc839932f88f98abc
          this.pushNotifications.revoke(msg.token);
          if (this.currentClientMetadata().pushToken?.trim() === msg.token.trim()) {
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index 7b9b7e4ad891bd9983a5406629c01a66ba63476b..cebc38d5c42f3fb8f6e2f3a8b408a52cfdfac151 100644
+index b7b71d2b479a0af873c0b4c1633552668c461070..ba1f47d5e177eba26e95e21dd6eb53af6c34f9f1 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2188,6 +2188,8 @@ export class VoiceAssistantWebSocketServer {
+@@ -2233,6 +2233,8 @@ export class VoiceAssistantWebSocketServer {
          worktreeDefaultSetup: true,
          // COMPAT(hostStats): added in v0.15.4, remove gate after 2027-05-12.
          hostStats: true,

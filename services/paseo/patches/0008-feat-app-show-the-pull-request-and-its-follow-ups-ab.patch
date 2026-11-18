@@ -23,9 +23,9 @@ Fork-Change: F-10
 ---
  .../src/components/sidebar-workspace-list.tsx |   2 +-
  .../sidebar/workspace-meta-row/index.tsx      |   6 +-
- .../src/composer/pull-request-actions.test.ts |  77 ++++++
+ .../src/composer/pull-request-actions.test.ts |  77 +++++++
  .../app/src/composer/pull-request-actions.ts  |  33 +++
- .../app/src/composer/pull-request-pills.tsx   | 220 ++++++++++++++++++
+ .../app/src/composer/pull-request-pills.tsx   | 206 ++++++++++++++++++
  .../src/composer/quick-action-prompts.test.ts |  31 +++
  .../app/src/composer/quick-action-prompts.ts  |  68 ++++++
  packages/app/src/git/pr-hint.test.ts          |  13 ++
@@ -40,11 +40,11 @@ Fork-Change: F-10
  packages/app/src/i18n/resources/pt-BR.ts      |   3 +
  packages/app/src/i18n/resources/ru.ts         |   3 +
  packages/app/src/i18n/resources/zh-CN.ts      |   3 +
- packages/app/src/panels/agent-tracks.tsx      |   7 +
+ packages/app/src/panels/agent-tracks.tsx      |   2 +
  packages/app/src/screens/settings-screen.tsx  |   8 +
- .../settings/quick-actions-section.tsx        |  88 +++++++
+ .../settings/quick-actions-section.tsx        |  88 ++++++++
  packages/app/src/utils/host-routes.ts         |   1 +
- 23 files changed, 615 insertions(+), 4 deletions(-)
+ 23 files changed, 596 insertions(+), 4 deletions(-)
  create mode 100644 packages/app/src/composer/pull-request-actions.test.ts
  create mode 100644 packages/app/src/composer/pull-request-actions.ts
  create mode 100644 packages/app/src/composer/pull-request-pills.tsx
@@ -53,10 +53,10 @@ Fork-Change: F-10
  create mode 100644 packages/app/src/screens/settings/quick-actions-section.tsx
 
 diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
-index c7fb4c97439f265afbca3c5d25068df6d0e377a1..0399aab5761d4bcfbe67da08824454edf5534c43 100644
+index eaf94e9902abd5e0daf99fe1d3abbe6721cf6157..0f2876b700b655d38241a7369f2ee484099c35b0 100644
 --- a/packages/app/src/components/sidebar-workspace-list.tsx
 +++ b/packages/app/src/components/sidebar-workspace-list.tsx
-@@ -346,7 +346,7 @@ export function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewS
+@@ -349,7 +349,7 @@ export function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewS
        {isHovered ? (
          <ThemedExternalLink size={12} uniProps={foregroundColorMapping} />
        ) : (
@@ -66,10 +66,10 @@ index c7fb4c97439f265afbca3c5d25068df6d0e377a1..0399aab5761d4bcfbe67da08824454ed
        <Text style={textStyle} numberOfLines={1}>
          {hint.number}
 diff --git a/packages/app/src/components/sidebar/workspace-meta-row/index.tsx b/packages/app/src/components/sidebar/workspace-meta-row/index.tsx
-index d539fcf0648d5de7db2e15b5245ff6d2f1987601..f833896d546500ce2da5cc4b0a3d948776e13c96 100644
+index 6ad8cb4c027635f666d72e4abcab7b63df0064dd..4068f270b4c46879b28f1cbd97ea0f46e2285431 100644
 --- a/packages/app/src/components/sidebar/workspace-meta-row/index.tsx
 +++ b/packages/app/src/components/sidebar/workspace-meta-row/index.tsx
-@@ -218,7 +218,11 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
+@@ -246,7 +246,11 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
        {isHovered ? (
          <ThemedExternalLink size={META_ICON_SIZE} uniProps={foregroundMapping} />
        ) : (
@@ -206,10 +206,10 @@ index 0000000000000000000000000000000000000000..6b0413069fcd7072cc97c13586e01bc8
 +}
 diff --git a/packages/app/src/composer/pull-request-pills.tsx b/packages/app/src/composer/pull-request-pills.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..41620b467922157036f4cd2b5cd4de45db25004e
+index 0000000000000000000000000000000000000000..2c9f55610747fd79e3c754c76efd5abaee3adc27
 --- /dev/null
 +++ b/packages/app/src/composer/pull-request-pills.tsx
-@@ -0,0 +1,220 @@
+@@ -0,0 +1,206 @@
 +import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 +import { useTranslation } from "react-i18next";
 +import { Text } from "react-native";
@@ -265,20 +265,6 @@ index 0000000000000000000000000000000000000000..41620b467922157036f4cd2b5cd4de45
 +      ),
 +    };
 +  });
-+}
-+
-+/** Whether `WorkspacePullRequestPills` draws anything, so the track bar knows to show itself. */
-+export function useHasWorkspacePullRequestPills(
-+  serverId: string,
-+  workspaceId: string,
-+  agentId: string,
-+): boolean {
-+  const state = useWorkspacePullRequestState(serverId, workspaceId);
-+  const isAgentIdle = useIsAgentIdle(serverId, agentId);
-+  if (!state) return false;
-+  return (
-+    state.prHint !== null || selectPullRequestQuickActions({ ...state, isAgentIdle }).length > 0
-+  );
 +}
 +
 +function useIsAgentIdle(serverId: string, agentId: string): boolean {
@@ -641,10 +627,10 @@ index 4de297f26cf0b85d66c9c13001c091f1819665d6..b66e57085914395df3bce9bdea7992c8
    return <Icon size={size} strokeWidth={strokeWidth} uniProps={color} />;
  }
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 94165cf1343a26a99d4d81efb86e9189e4611af2..2d7e363bf21d3c987cfdb8d41050e4e7e97f8b5f 100644
+index d84568834d7a29044ad45d3e3c5a01664220d465..f3e47159a7d2b4f3d40119d36ab254bd87179930 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -990,6 +990,7 @@ export const ar: TranslationResources = {
+@@ -1025,6 +1025,7 @@ export const ar: TranslationResources = {
          failedOpen: "فشل في فتح مساحة العمل",
        },
        pr: {
@@ -652,7 +638,7 @@ index 94165cf1343a26a99d4d81efb86e9189e4611af2..2d7e363bf21d3c987cfdb8d41050e4e7
          actions: {
            viewPullRequest: "عرض",
            openOn: "فتح على {{brand}}",
-@@ -2277,7 +2278,9 @@ export const ar: TranslationResources = {
+@@ -2334,7 +2335,9 @@ export const ar: TranslationResources = {
        editProject: "تحرير{{projectName}}",
      },
      groupInfo: "حول{{title}}",
@@ -663,10 +649,10 @@ index 94165cf1343a26a99d4d81efb86e9189e4611af2..2d7e363bf21d3c987cfdb8d41050e4e7
        chat: "الدردشة",
        appearance: "مظهر",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index f11f28052d3b0f5b17a5be2afff671348b8c92ff..e63c774d3f33ec6c7b5f426914043b08a60e7fdd 100644
+index cb21744068c19fcbcd140761c642b66234b1a762..742a4bc8ec914d9cf131fd403952dd891eccf919 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -998,6 +998,22 @@ export const en = {
+@@ -1035,6 +1035,22 @@ export const en = {
          failedOpen: "Failed to open workspace",
        },
        pr: {
@@ -689,7 +675,7 @@ index f11f28052d3b0f5b17a5be2afff671348b8c92ff..e63c774d3f33ec6c7b5f426914043b08
          actions: {
            viewPullRequest: "View",
            openOn: "Open on {{brand}}",
-@@ -2267,7 +2283,14 @@ export const en = {
+@@ -2326,7 +2342,14 @@ export const en = {
        editProject: "Edit {{projectName}}",
      },
      groupInfo: "About {{title}}",
@@ -705,10 +691,10 @@ index f11f28052d3b0f5b17a5be2afff671348b8c92ff..e63c774d3f33ec6c7b5f426914043b08
        chat: "Chat",
        appearance: "Appearance",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..e85d7a97de3c41b6ae14a3b481191e3ba3a734c3 100644
+index 625baf8f797f6df25c1cfa3d4847081e079b1f74..49dd1d94f3580636473015056735564758a17287 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -1023,6 +1023,7 @@ export const es: TranslationResources = {
+@@ -1058,6 +1058,7 @@ export const es: TranslationResources = {
          failedOpen: "No se pudo abrir el espacio de trabajo",
        },
        pr: {
@@ -716,7 +702,7 @@ index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..e85d7a97de3c41b6ae14a3b481191e3b
          actions: {
            viewPullRequest: "Ver",
            openOn: "Abrir en {{brand}}",
-@@ -2290,7 +2291,9 @@ export const es: TranslationResources = {
+@@ -2347,7 +2348,9 @@ export const es: TranslationResources = {
        editProject: "Editar{{projectName}}",
      },
      groupInfo: "Acerca de{{title}}",
@@ -727,10 +713,10 @@ index 293fdfec8e5187aa7d5cec39d64ebd38f8143a32..e85d7a97de3c41b6ae14a3b481191e3b
        chat: "Chat",
        appearance: "Apariencia",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 39967bc20db422ccccc045fd15c9255f8feac6b7..45633d647773b7fd48ed752fda9ae056668cbaf7 100644
+index 1233d91f00373c2a7ce66de1f32394ac35155fad..77d1c467b70e534a93769bc2799d23ff8b0e29ff 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -1016,6 +1016,7 @@ export const fr: TranslationResources = {
+@@ -1051,6 +1051,7 @@ export const fr: TranslationResources = {
          failedOpen: "Impossible d’ouvrir l’espace de travail",
        },
        pr: {
@@ -738,7 +724,7 @@ index 39967bc20db422ccccc045fd15c9255f8feac6b7..45633d647773b7fd48ed752fda9ae056
          actions: {
            viewPullRequest: "Voir",
            openOn: "Ouvrir sur {{brand}}",
-@@ -2291,7 +2292,9 @@ export const fr: TranslationResources = {
+@@ -2348,7 +2349,9 @@ export const fr: TranslationResources = {
        editProject: "Modifier {{projectName}}",
      },
      groupInfo: "À propos de {{title}}",
@@ -749,10 +735,10 @@ index 39967bc20db422ccccc045fd15c9255f8feac6b7..45633d647773b7fd48ed752fda9ae056
        chat: "Discussion",
        appearance: "Apparence",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..51c89a765726bbee44e059e11107debcc0af8909 100644
+index 1b67a365ee7250710abe614880ab6e001430ccca..6d49636ef6998a942134d0abd0020fd8d865719d 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -1003,6 +1003,7 @@ export const ja: TranslationResources = {
+@@ -1038,6 +1038,7 @@ export const ja: TranslationResources = {
          failedOpen: "ワークスペースを開けませんでした",
        },
        pr: {
@@ -760,7 +746,7 @@ index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..51c89a765726bbee44e059e11107debc
          actions: {
            viewPullRequest: "表示",
            openOn: "{{brand}}で開く",
-@@ -2264,7 +2265,9 @@ export const ja: TranslationResources = {
+@@ -2321,7 +2322,9 @@ export const ja: TranslationResources = {
        editProject: "{{projectName}}を編集",
      },
      groupInfo: "{{title}}について",
@@ -771,10 +757,10 @@ index 21affde2f9da37bb7e7f1b34a0b539746f6b7c4b..51c89a765726bbee44e059e11107debc
        chat: "チャット",
        appearance: "外観",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index ad1ba29e67b3938549d90d963f48a8e045141b27..4167eb463b440e361189ae4207ed5c267fca2c70 100644
+index 10f48f38e9d8af605fbcc5b331b5c622c8bafa48..a42a9d5fcdb67c92e9239aecbab2b1473014358b 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -997,6 +997,7 @@ export const ko: TranslationResources = {
+@@ -1032,6 +1032,7 @@ export const ko: TranslationResources = {
          failedOpen: "워크스페이스를 열지 못했습니다",
        },
        pr: {
@@ -782,7 +768,7 @@ index ad1ba29e67b3938549d90d963f48a8e045141b27..4167eb463b440e361189ae4207ed5c26
          actions: {
            viewPullRequest: "보기",
            openOn: "{{brand}}에서 열기",
-@@ -2252,7 +2253,9 @@ export const ko: TranslationResources = {
+@@ -2309,7 +2310,9 @@ export const ko: TranslationResources = {
        editProject: "{{projectName}} 편집",
      },
      groupInfo: "{{title}} 정보",
@@ -793,10 +779,10 @@ index ad1ba29e67b3938549d90d963f48a8e045141b27..4167eb463b440e361189ae4207ed5c26
        chat: "채팅",
        appearance: "모양",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 52d8a2dff18b06abf2309d25750e35bbd3c378be..148ba56bda6ac960ff5bd8dd55c22d7c2e35da12 100644
+index 2184bfe2d2e53ca33eaedcf1859355e5b69d3c59..363b3b13bc9feaae9049098a590fbd57ad2b5df3 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -1013,6 +1013,7 @@ export const ptBR: TranslationResources = {
+@@ -1048,6 +1048,7 @@ export const ptBR: TranslationResources = {
          failedOpen: "Falha ao abrir workspace",
        },
        pr: {
@@ -804,7 +790,7 @@ index 52d8a2dff18b06abf2309d25750e35bbd3c378be..148ba56bda6ac960ff5bd8dd55c22d7c
          actions: {
            viewPullRequest: "Ver",
            openOn: "Abrir no {{brand}}",
-@@ -2275,7 +2276,9 @@ export const ptBR: TranslationResources = {
+@@ -2332,7 +2333,9 @@ export const ptBR: TranslationResources = {
        editProject: "Editar {{projectName}}",
      },
      groupInfo: "Sobre {{title}}",
@@ -815,10 +801,10 @@ index 52d8a2dff18b06abf2309d25750e35bbd3c378be..148ba56bda6ac960ff5bd8dd55c22d7c
        chat: "Chat",
        appearance: "Aparência",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..cfda58db8b78dae20d60b4c025cc6b9421210c4f 100644
+index 43ce118aaac10619c0cb367846927bb4c4101afd..db7cb7333a9fc7caf039c401eaefda56dea4a745 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -1007,6 +1007,7 @@ export const ru: TranslationResources = {
+@@ -1042,6 +1042,7 @@ export const ru: TranslationResources = {
          failedOpen: "Не удалось открыть рабочее пространство",
        },
        pr: {
@@ -826,7 +812,7 @@ index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..cfda58db8b78dae20d60b4c025cc6b94
          actions: {
            viewPullRequest: "Просмотреть",
            openOn: "Открыть на {{brand}}",
-@@ -2276,7 +2277,9 @@ export const ru: TranslationResources = {
+@@ -2333,7 +2334,9 @@ export const ru: TranslationResources = {
        editProject: "Изменить {{projectName}}",
      },
      groupInfo: "О разделе «{{title}}»",
@@ -837,10 +823,10 @@ index b3fff6403cee5313fa0af7b05e68b5bfa1c045ad..cfda58db8b78dae20d60b4c025cc6b94
        chat: "Чат",
        appearance: "Оформление",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..1378206d1543f0145194d5a860e2baae0f1f4896 100644
+index 33c5577087c96079b1920816e99ae56ec2197498..cfdd032b81b3269d8e71b46f2826bc9268b3e9d5 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -982,6 +982,7 @@ export const zhCN: TranslationResources = {
+@@ -1017,6 +1017,7 @@ export const zhCN: TranslationResources = {
          failedOpen: "打开 workspace 失败",
        },
        pr: {
@@ -848,7 +834,7 @@ index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..1378206d1543f0145194d5a860e2baae
          actions: {
            viewPullRequest: "查看",
            openOn: "在 {{brand}} 上打开",
-@@ -2218,7 +2219,9 @@ export const zhCN: TranslationResources = {
+@@ -2275,7 +2276,9 @@ export const zhCN: TranslationResources = {
        editProject: "编辑 {{projectName}}",
      },
      groupInfo: "关于 {{title}}",
@@ -859,37 +845,18 @@ index 29b50c945f2eaabaca8cfd142ed94e45ae1c76b3..1378206d1543f0145194d5a860e2baae
        chat: "聊天",
        appearance: "外观",
 diff --git a/packages/app/src/panels/agent-tracks.tsx b/packages/app/src/panels/agent-tracks.tsx
-index 6984633bcc02e4c2871db7fdb1c8f31a2fc82dc8..d1e0c3748698fdc8c993bbef182800a632f12f8f 100644
+index c4abe7a3fd30d8517fa4663f82ad5f616c4257f1..90e893a4ee142ff95003c0455996ecb33b987855 100644
 --- a/packages/app/src/panels/agent-tracks.tsx
 +++ b/packages/app/src/panels/agent-tracks.tsx
-@@ -2,6 +2,10 @@ import type { AgentAddress } from "@getpaseo/protocol/addresses";
- import { memo, useCallback, type ReactElement } from "react";
+@@ -2,6 +2,7 @@ import type { AgentAddress } from "@getpaseo/protocol/addresses";
+ import { memo, useCallback, useMemo, type ReactElement } from "react";
+ import { BackgroundWorkTrack, createHostBackgroundWorkModel } from "@/background-work";
  import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
- import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
-+import {
-+  useHasWorkspacePullRequestPills,
-+  WorkspacePullRequestPills,
-+} from "@/composer/pull-request-pills";
++import { WorkspacePullRequestPills } from "@/composer/pull-request-pills";
  import { AgentTaskList } from "@/composer/task-list";
  import { ComposerTrackBar } from "@/composer/tracks";
  import { useIsCompactFormFactor } from "@/constants/layout";
-@@ -54,6 +58,7 @@ export const AgentTracks = memo(function AgentTracks({
- }): ReactElement | null {
-   const { tabId } = usePaneContext();
-   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
-+  const hasPullRequestPills = useHasWorkspacePullRequestPills(serverId, workspaceId, agentId);
-   const isCompact = useIsCompactFormFactor();
-   const openInSidePane = useSettings((settings) => settings.openInSidePane);
-   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
-@@ -114,6 +119,7 @@ export const AgentTracks = memo(function AgentTracks({
- 
-   if (
-     !hasWorkspaceDiffStat &&
-+    !hasPullRequestPills &&
-     !hasAgentTracks({
-       parentAgentId,
-       subagentRows,
-@@ -151,6 +157,7 @@ export const AgentTracks = memo(function AgentTracks({
+@@ -146,6 +147,7 @@ export const AgentTracks = memo(function AgentTracks({
          workspaceId={workspaceId}
          onPress={handleOpenChanges}
        />
@@ -898,10 +865,10 @@ index 6984633bcc02e4c2871db7fdb1c8f31a2fc82dc8..d1e0c3748698fdc8c993bbef182800a6
    );
  });
 diff --git a/packages/app/src/screens/settings-screen.tsx b/packages/app/src/screens/settings-screen.tsx
-index c8ff9c3311116fee1e0f295d6e7a4c08ef46cdc5..5b793933a0ff75ac25539f3e8473e8a5cc914d13 100644
+index 9f8de1cb731809c10b4cd3563bf505e121ca9586..d5ad879e12db1e70b6d0ed1f17cbb4adc2e73417 100644
 --- a/packages/app/src/screens/settings-screen.tsx
 +++ b/packages/app/src/screens/settings-screen.tsx
-@@ -42,6 +42,7 @@ import {
+@@ -39,6 +39,7 @@ import {
    Globe,
    PanelLeft,
    MessageSquare,
@@ -909,7 +876,7 @@ index c8ff9c3311116fee1e0f295d6e7a4c08ef46cdc5..5b793933a0ff75ac25539f3e8473e8a5
    ChevronRight,
  } from "lucide-react-native";
  import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
-@@ -54,6 +55,7 @@ import { AppearanceSection } from "@/screens/settings/appearance/appearance-sect
+@@ -51,6 +52,7 @@ import { AppearanceSection } from "@/screens/settings/appearance/appearance-sect
  import { OpenLocationSection } from "@/screens/settings/open-location/open-location-section";
  import { TerminalSection } from "@/screens/settings/terminal/terminal-section";
  import { ChatSection } from "@/screens/settings/chat/chat-section";
@@ -917,7 +884,7 @@ index c8ff9c3311116fee1e0f295d6e7a4c08ef46cdc5..5b793933a0ff75ac25539f3e8473e8a5
  import { SidebarNavSection } from "@/screens/settings/sidebar/sidebar-nav-section";
  import { SendingSection } from "@/screens/settings/general/sending-section";
  import {
-@@ -177,6 +179,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
+@@ -174,6 +176,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
      Content: SidebarNavSection,
    },
    { id: "chat", labelKey: "settings.sections.chat", icon: MessageSquare, Content: ChatSection },
@@ -1025,7 +992,7 @@ index 0000000000000000000000000000000000000000..261f8ee839ddbb521f0bac1814b3aaba
 +  },
 +}));
 diff --git a/packages/app/src/utils/host-routes.ts b/packages/app/src/utils/host-routes.ts
-index c5913366d228b3682eb917d879f224350c0e58c2..401acf6b7f54bcc8a4962302e6cd7db6c485e3c1 100644
+index f258c6ba5b19cacb4e5c8dbce4bf39ccedc65d02..6baf1829c89d8059a6ba753c4bb04117cada423f 100644
 --- a/packages/app/src/utils/host-routes.ts
 +++ b/packages/app/src/utils/host-routes.ts
 @@ -494,6 +494,7 @@ export const SETTINGS_SECTION_SLUGS = [
