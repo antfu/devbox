@@ -6,7 +6,8 @@
 # Pi, Codex) read ~/.agents/skills. It runs again on each start, so new and updated skills arrive with a
 # restart. It does not delay the daemon, and one failed source does not stop the others. It needs the
 # network, which the broker allows. Before that, install-instructions.mjs writes agent-instructions.md into the
-# agents' global CLAUDE.md / AGENTS.md. INSTALL_SKILLS=0 skips both, for a daemon that runs no agents.
+# agents' global CLAUDE.md / AGENTS.md. Before the daemon starts, seed-paseo-providers.mjs adds fx to paseo's
+# agent providers. INSTALL_SKILLS=0 skips all three, for a daemon that runs no agents.
 set -uo pipefail
 
 LIST="${SKILLS_LIST:-/etc/paseo-skills.txt}"
@@ -49,6 +50,8 @@ if [[ "${INSTALL_SKILLS:-1}" != 0 && -f "$LIST" ]]; then
     gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/install-instructions.mjs
     gosu "$RUN_USER" env HOME="$RUN_HOME" "$0" --install
   ) &
+  # The daemon reads its config on start, so this one runs first.
+  gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/seed-paseo-providers.mjs
 fi
 
 exec /usr/local/bin/dev-base-entrypoint.sh "$@"

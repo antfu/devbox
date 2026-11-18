@@ -8,6 +8,8 @@ COPY skills.txt /etc/paseo-skills.txt
 # The shared instructions for every agent, written into their global CLAUDE.md / AGENTS.md on start.
 COPY agent-instructions.md /etc/paseo-agent-instructions.md
 COPY install-instructions.mjs /usr/local/bin/install-instructions.mjs
+# Adds fx to paseo's agent providers on start, unless config.json already has it.
+COPY seed-paseo-providers.mjs /usr/local/bin/seed-paseo-providers.mjs
 COPY install-skills.sh /usr/local/bin/install-skills.sh
 RUN chmod +x /usr/local/bin/install-skills.sh
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/install-skills.sh"]

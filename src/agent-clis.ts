@@ -24,5 +24,9 @@ export function pinnedPackageArgs(args: Map<string, string[]>, versionOf: (name:
 
 export function resolveAgentCliArgs(): string[] {
   const args = parsePackageArgs(readFileSync(DEV_BASE_DOCKERFILE, 'utf8'))
-  return pinnedPackageArgs(args, name => capture('npm', ['view', name, 'version']))
+  return [
+    ...pinnedPackageArgs(args, name => capture('npm', ['view', name, 'version'])),
+    // fx is not on npm; its stage downloads the release this names.
+    `FX_VERSION=${capture('curl', ['-fsSL', 'https://releases.fx.sh/latest.txt'])}`,
+  ]
 }
