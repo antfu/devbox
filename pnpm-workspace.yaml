@@ -9,6 +9,9 @@ update:
 
 shellEmulator: true
 
+packages:
+  - .
+
 allowBuilds:
   esbuild: true
   simple-git-hooks: true
