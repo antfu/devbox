@@ -36,6 +36,17 @@ FROM agent-cli AS pi
 ARG PI_PACKAGES="@mariozechner/pi-coding-agent"
 RUN --mount=type=cache,target=/root/.npm npm install -g ${PI_PACKAGES}
 
+# fx (fx.sh) is one binary from its own release server, not npm. FX_VERSION is a release tag such as v0.0.17;
+# CI pins it to the current release like the packages above, and without it the build takes the latest.
+FROM paseo-toolchain AS fx
+ARG FX_VERSION=latest
+RUN set -eu; \
+  version="$FX_VERSION"; \
+  if [ "$version" = latest ]; then version="$(curl -fsSL https://releases.fx.sh/latest.txt | tr -d '[:space:]')"; fi; \
+  case "$(uname -m)" in aarch64|arm64) arch=aarch64 ;; *) arch=x86_64 ;; esac; \
+  mkdir -p /opt/fx; \
+  curl -fsSL "https://releases.fx.sh/${version}/fx-linux-${arch}.tar.gz" | tar -xz -C /opt/fx fx
+
 # The small tools share one layer.
 FROM agent-cli AS tools
 ARG TOOLS_PACKAGES="agent-browser skills taze @antfu/ni vercel"
@@ -51,6 +62,7 @@ COPY --link --from=codex /opt/agents /opt/agents
 COPY --link --from=opencode /opt/agents /opt/agents
 COPY --link --from=pi /opt/agents /opt/agents
 COPY --link --from=tools /opt/agents /opt/agents
+COPY --link --from=fx /opt/fx /opt/fx
 
 # The commands go in /usr/local/bin, where an `npm install -g` would have put them, so they stay on the PATH
 # of login shells too, which reset PATH. Then `jup enable`, which replaces the npm, npx and yarn shims with
@@ -58,6 +70,10 @@ COPY --link --from=tools /opt/agents /opt/agents
 # the base image's unless a project pins one.
 RUN ln -sf /opt/agents/bin/* /usr/local/bin/ \
   && jup enable
+
+# `fx` is a wrapper that runs /opt/fx/fx with its AI Gateway traffic relayed through the broker's proxy, which
+# fx ignores. See fx-relay.mjs.
+COPY --chmod=755 fx-relay.mjs /usr/local/bin/fx
 
 # The GPG keyring lives on the container's own filesystem, not in /home/paseo. gpg-agent puts its socket
 # in the keyring folder, and the home is a host mount that cannot hold unix sockets (on macOS hosts),
