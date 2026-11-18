@@ -71,6 +71,18 @@ COPY --link --from=fx /opt/fx /opt/fx
 RUN ln -sf /opt/agents/bin/* /usr/local/bin/ \
   && jup enable
 
+# What agents install at run time goes in the home, which the stack persists (dev-container.config.ts), so it
+# survives a restart or a new image; /usr/local is the image's and is not writable. Commands land in
+# ~/.local/bin: `npm install -g` (prefix ~/.local), `cargo install`, `uv tool install` and `pip install --user`.
+# `pnpm add -g` uses PNPM_HOME, and fnm keeps the Node versions it installs in the home too. Login shells reset
+# PATH, so home-path.sh puts the two folders back for them.
+ENV NPM_CONFIG_PREFIX=/home/paseo/.local \
+  CARGO_INSTALL_ROOT=/home/paseo/.local \
+  PNPM_HOME=/home/paseo/.local/share/pnpm \
+  FNM_DIR=/home/paseo/.local/share/fnm \
+  PATH=/home/paseo/.local/bin:/home/paseo/.local/share/pnpm:${PATH}
+COPY home-path.sh /etc/profile.d/home-path.sh
+
 # `fx` is a wrapper that runs /opt/fx/fx with its AI Gateway traffic relayed through the broker's proxy, which
 # fx ignores. See fx-relay.mjs.
 COPY --chmod=755 fx-relay.mjs /usr/local/bin/fx
