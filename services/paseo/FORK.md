@@ -4,7 +4,7 @@ This file lists every change our paseo patch series carries on top of upstream, 
 it are in [AGENTS.md](../../AGENTS.md#the-paseo-patches).
 
 - Upstream: [getpaseo/paseo](https://github.com/getpaseo/paseo), checked out at `vendor/paseo`
-- Base: `v0.15.4`
+- Base: `v0.16.1`
 - Series: [patches/](patches), one `git format-patch` file per change, applied in file name order
 
 ## Changes
@@ -62,8 +62,9 @@ patches refer to them in their `Fork-Change` trailer.
   `agent-types.ts`; server new `agent/host-default-mode.ts`, small hooks in `provider-snapshot-manager.ts`
   and `agent-sdk-types.ts`, the flag in `websocket-server.ts`, `daemon-config-store.test.ts`;
   app new `provider-selection/host-default-mode.ts` and `screens/settings/provider-default-mode-card.tsx`,
-  hooks in `use-agent-form-state.ts` and `host-page.tsx`; one line per non-English locale pointing at the
-  English strings (the locale types require every key); regenerated
+  hooks in `use-agent-form-state.ts` (the form store's `providerPreferences` catalog entry, the resolution
+  preferences and `applyProfileFromUser`) and `host-page.tsx`; one line per non-English locale pointing at
+  the English strings (the locale types require every key); regenerated
   `packages/website/public/schemas/paseo.config.v1.json`.
 - Compatibility: flag `server_info.features.providerDefaultMode`. New optional fields: `defaultModeId` on the
   daemon config's provider entry (null clears) and `hostDefaultModeId` on provider snapshot entries. The daemon
@@ -168,8 +169,8 @@ patches refer to them in their `Fork-Change` trailer.
   in `hosts/appearance.ts` (the legacy `icon` field), `hosts/host-badge.tsx`, `runtime/host-runtime.ts`
   (one `adoptHostIcons` call in `loadFromStorage`),
   `components/hosts/host-picker.tsx` (`HostStatusDotSlot`), `screens/new-workspace/form/index.tsx`,
-  `screens/settings/host-appearance-section.tsx`, `components/sidebar/display-preferences/menu.tsx`
-  (the sidebar's host filter), `screens/settings-screen.tsx` (the settings host switcher),
+  `screens/settings/host-appearance-section.tsx`, `components/hosts/host-menu-item.tsx` (the sidebar's
+  host filter and the usage host menu), `screens/settings-screen.tsx` (the settings host switcher),
   `components/add-project-flow.tsx` (a `leading` slot on rows, used by the Choose host step); a comment
   in `e2e/support/helpers/hosts.ts`; `en.ts` strings and one line per other locale.
 - Compatibility: web UI only; no wire or daemon change, so no feature flag. The icon is per-device, like
@@ -202,11 +203,11 @@ patches refer to them in their `Fork-Change` trailer.
 - Patches: `feat(app): show the pull request and its follow-ups above the composer` (also carries F-14)
 - Touches: app new `composer/pull-request-actions.ts` (which follow-ups apply) and its test,
   `composer/pull-request-pills.tsx`; a small hook in `panels/agent-tracks.tsx` (renders the pills after
-  the diff stat pill, and counts them when deciding whether the row shows); `en.ts` strings
-  (`workspace.git.pr.quickActions`) and one line per other locale. The conflict glyph: `git/pr-hint.ts`
-  (`hasConflicts`) and its test, `git/pull-request-state-icon.tsx` (optional `hasConflicts`), and a one-prop
-  edit at its call sites in `composer/pull-request-pills.tsx`, `components/sidebar-workspace-list.tsx` and
-  `components/sidebar/workspace-meta-row/index.tsx`.
+  the diff stat pill; since v0.16.0 the track bar is always mounted, so there is no visibility count);
+  `en.ts` strings (`workspace.git.pr.quickActions`) and one line per other locale. The conflict glyph:
+  `git/pr-hint.ts` (`hasConflicts`) and its test, `git/pull-request-state-icon.tsx` (optional
+  `hasConflicts`), and a one-prop edit at its call sites in `composer/pull-request-pills.tsx`,
+  `components/sidebar-workspace-list.tsx` and `components/sidebar/workspace-meta-row/index.tsx`.
 - Compatibility: web UI only; no wire or daemon change, so no feature flag. It reads the workspace's
   existing `githubRuntime.pullRequest` (state, `mergeable`, checks, `baseRefName`) and `diffStat`. A
   follow-up sends an ordinary agent message, the same call the composer makes. Follow-ups only show while
@@ -241,7 +242,9 @@ patches refer to them in their `Fork-Change` trailer.
 
 ### F-12: Select a question option by clicking anywhere on its row
 
-- Status: active, ours only
+- Status: upstreamed in v0.16.0 (dropped); [#8525](https://github.com/getpaseo/paseo/pull/8525) lets a click
+  on the description answer, on web and native. Upstream still answers a click that ends a text drag on the
+  description, which our patch skipped.
 - Requested: 2026-11-10, "for the question tool, allow clicking on the entire item to select, not only
   the raido button"
 - Why: a click on an option's description did nothing, because the description claimed every touch so
@@ -327,7 +330,8 @@ patches refer to them in their `Fork-Change` trailer.
 - Touches: app new `composer/send-behavior-switch.tsx` (the button) and
   `composer/send-behavior-switch-model.ts` (`nextSendBehavior`) with its test,
   `send-behavior-switch.test.ts`; a hook in
-  `composer/index.tsx` (`ComposerRightControlsSlot` renders it when there is an agent).
+  `composer/index.tsx` (`beforeVoiceContent` renders it after the context window meter when there is an
+  agent; v0.16.0 moved voice mode into the send disc and removed `ComposerRightControlsSlot`).
 - Compatibility: web UI only; no wire or daemon change, so no feature flag, and no new strings (it reuses
   the `settings.general.defaultSend` labels and descriptions). It writes the existing `sendBehavior` app
   setting, so Settings and the switch stay in sync. It flips queue ↔ steer; interrupt still comes from
@@ -396,7 +400,8 @@ patches refer to them in their `Fork-Change` trailer.
 - Why: a new host showed its hostname and the default look until you opened its settings. The form is app
   code, which no plugin hook reaches.
 - Patches: `feat(app): pick a host's name, color and icon while adding it`
-- Touches: app new `components/add-host-identity-fields.tsx`; hooks in `components/add-host-modal.tsx` (the
+- Touches: app new `hosts/add-host/internal/add-host-identity-fields.tsx`; hooks in
+  `hosts/add-host/internal/add-host-modal.tsx` (the
   fields, applied after a direct or relay connect), `screens/settings/host-appearance-section.tsx`
   (`ColorRow` exported; the formatter split its signature); `en.ts` string and one line per other locale.
 - Compatibility: web UI only; no wire change. The values are saved with the existing rename, color and F-9
@@ -421,7 +426,7 @@ patches refer to them in their `Fork-Change` trailer.
   `authorization/operation-permissions.ts`, the flag in `websocket-server.ts`; client `getAppHostRegistry`
   and `setAppHostRegistry` in `daemon-client.ts`; app new `hosts/serving-daemon.ts`,
   `hosts/host-registry-sync-model.ts` and its test, `hosts/host-registry-sync.ts`; hooks in `app/_layout.tsx`
-  (mounts `HostRegistrySync`), `components/add-host-modal.tsx` (the prefill),
+  (mounts `HostRegistrySync`), `hosts/add-host/internal/add-host-modal.tsx` (the prefill),
   `hosts/host-icon-store.ts` (`subscribeHostIcons`).
 - Compatibility: flag `server_info.features.appHostRegistry`. Two new dotted RPCs, both `daemon.manage`
   because the list holds passwords; no existing message changes. Upstream apps never send them. The daemon
@@ -444,6 +449,16 @@ patches refer to them in their `Fork-Change` trailer.
 
 One line per rebase onto a new upstream base, newest first.
 
+- 2026-11-18: moved to `v0.16.1`; 15 of 16 patches carried. F-12 is upstreamed
+  ([#8525](https://github.com/getpaseo/paseo/pull/8525)) and dropped. Conflicts: F-2 (upstream edited the
+  removed ghost row), F-3 (`use-agent-form-state.ts` moved to a form store; the host default now goes through
+  its `providerPreferences` catalog entry), F-9 (the host filter row became `HostMenuItem`), F-10 (the track
+  bar no longer hides itself, so `useHasWorkspacePullRequestPills` is gone), F-16 (the switch moved to
+  `beforeVoiceContent`), F-19 and F-20 (the add host modal moved to `hosts/add-host/internal/`).
+  F-16's `useKeyboardShortcutsAvailable` is now upstream's `useHardwareKeyboardPresent`.
+  [#8529](https://github.com/getpaseo/paseo/pull/8529) is still open. Checked: upstream's format, lint,
+  typecheck (protocol, client, server, app) and the touched unit tests; the conflicted commits typecheck on
+  their own. Not checked: `pnpm build` and an upstream client, since this session had no Docker.
 - 2026-11-12: no base change; merged F-4 into F-3, F-13 into F-11 and F-14 into F-10, which took the series
   from 16 patches to 13. Two fixes came with it: F-13's Setup shows only for online hosts, and F-17 no longer
   renames `trailingSlot` in `host-picker.tsx`.

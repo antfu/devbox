@@ -23,8 +23,8 @@ Fork-Change: F-9
  packages/app/e2e/support/helpers/hosts.ts     |  2 +-
  .../app/src/components/add-project-flow.tsx   |  7 +-
  .../components/hosts/host-identity-icon.tsx   | 48 ++++++++++
+ .../src/components/hosts/host-menu-item.tsx   |  4 +-
  .../app/src/components/hosts/host-picker.tsx  |  4 +-
- .../sidebar/display-preferences/menu.tsx      |  4 +-
  packages/app/src/hosts/appearance.ts          |  4 +
  packages/app/src/hosts/host-badge.tsx         | 12 +--
  .../app/src/hosts/host-icon-store.test.ts     | 74 +++++++++++++++
@@ -52,10 +52,10 @@ Fork-Change: F-9
  create mode 100644 packages/app/src/screens/settings/host-icon-row.tsx
 
 diff --git a/packages/app/e2e/support/helpers/hosts.ts b/packages/app/e2e/support/helpers/hosts.ts
-index 95b1d17d5bba0393adcd40186baa29b71f7be062..08648ada09b79d0367fa37f92badad80769d8ea7 100644
+index 0e0a9f56fe4ab077698969c61bb8b3f206c98104..300f9ecf38b458b3c6fd2be0d690751c7566fb45 100644
 --- a/packages/app/e2e/support/helpers/hosts.ts
 +++ b/packages/app/e2e/support/helpers/hosts.ts
-@@ -137,7 +137,7 @@ export async function openSidebarHostFilter(page: Page): Promise<void> {
+@@ -151,7 +151,7 @@ export async function openSidebarHostFilter(page: Page): Promise<void> {
    await page.getByTestId("sidebar-display-host-filter").click();
  }
  
@@ -65,10 +65,10 @@ index 95b1d17d5bba0393adcd40186baa29b71f7be062..08648ada09b79d0367fa37f92badad80
    await expect(page.getByTestId(`sidebar-host-filter-${serverId}`)).toBeVisible();
    await expect(page.getByTestId(`sidebar-host-filter-status-${serverId}`)).toBeVisible();
 diff --git a/packages/app/src/components/add-project-flow.tsx b/packages/app/src/components/add-project-flow.tsx
-index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be17b767b8 100644
+index 36f3cb00c035da71ebd34f9c50fd2ff6ae7abb49..830c2ffdfdb2f2e580ff5ddaef79c44c76daa73f 100644
 --- a/packages/app/src/components/add-project-flow.tsx
 +++ b/packages/app/src/components/add-project-flow.tsx
-@@ -21,6 +21,7 @@ import {
+@@ -23,6 +23,7 @@ import {
    useRef,
    useState,
    type ComponentType,
@@ -76,7 +76,7 @@ index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be
    type RefObject,
  } from "react";
  import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
-@@ -30,6 +31,7 @@ import {
+@@ -32,6 +33,7 @@ import {
  } from "@/components/ui/text-input";
  import { StyleSheet, withUnistyles } from "react-native-unistyles";
  import { GitHubIcon } from "@/components/icons/github-icon";
@@ -84,7 +84,7 @@ index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be
  import {
    applyAvailableAddProjectHosts,
    backAddProjectPage,
-@@ -110,6 +112,8 @@ interface FlowRowOption {
+@@ -108,6 +110,8 @@ interface FlowRowOption {
    title: string;
    subtitle: string | null;
    icon: ComponentType<{ size?: number; color?: string }>;
@@ -93,7 +93,7 @@ index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be
    disabled?: boolean;
    testID: string;
    select: () => void;
-@@ -303,7 +307,7 @@ function FlowRow({
+@@ -301,7 +305,7 @@ function FlowRow({
        testID={option.testID}
      >
        <View style={styles.iconSlot}>
@@ -102,7 +102,7 @@ index 53196b82b6604fc99f951dd665783204fb86a6f5..0c23cb3cd9a9d8496d02c247021366be
        </View>
        <View style={styles.rowText}>
          <Text style={styles.rowTitle} numberOfLines={1}>
-@@ -685,6 +689,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -681,6 +685,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
            title: choice.label,
            subtitle: choice.serverId,
            icon: Server,
@@ -164,6 +164,27 @@ index 0000000000000000000000000000000000000000..0495734c43e4654f1e65db3850447a57
 +    transform: [{ scale: 0.75 }],
 +  },
 +});
+diff --git a/packages/app/src/components/hosts/host-menu-item.tsx b/packages/app/src/components/hosts/host-menu-item.tsx
+index 6c88152d2a78364df3a1f9de9bf0f5d16d8c0733..5507a41aa382a50e08a21614bae8294cad634bd2 100644
+--- a/packages/app/src/components/hosts/host-menu-item.tsx
++++ b/packages/app/src/components/hosts/host-menu-item.tsx
+@@ -1,6 +1,6 @@
+ import { useCallback, useMemo, type ReactElement } from "react";
+ import { View } from "react-native";
+-import { HostStatusDot } from "@/components/host-status-dot";
++import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
+ import { MenuItem } from "@/components/ui/menu";
+ 
+ interface HostMenuItemProps {
+@@ -28,7 +28,7 @@ export function HostMenuItem({
+   const leading = useMemo(
+     () => (
+       <View testID={statusTestID}>
+-        <HostStatusDot serverId={serverId} />
++        <HostIdentityIcon serverId={serverId} />
+       </View>
+     ),
+     [serverId, statusTestID],
 diff --git a/packages/app/src/components/hosts/host-picker.tsx b/packages/app/src/components/hosts/host-picker.tsx
 index ced0be3d55d58c0242e1d70566a2aa563d6afcfa..7bd6d48a462a56d92dee0305bace207c8325de94 100644
 --- a/packages/app/src/components/hosts/host-picker.tsx
@@ -186,28 +207,6 @@ index ced0be3d55d58c0242e1d70566a2aa563d6afcfa..7bd6d48a462a56d92dee0305bace207c
      </View>
    );
  }
-diff --git a/packages/app/src/components/sidebar/display-preferences/menu.tsx b/packages/app/src/components/sidebar/display-preferences/menu.tsx
-index d6483a551907b88c4130253b423c2132c35bfc9b..a6398c94b65763c9c232c5ce89c114d387723af6 100644
---- a/packages/app/src/components/sidebar/display-preferences/menu.tsx
-+++ b/packages/app/src/components/sidebar/display-preferences/menu.tsx
-@@ -35,7 +35,7 @@ import {
-   MenuTrigger,
-   type MenuPageDefinition,
- } from "@/components/ui/menu";
--import { HostStatusDot } from "@/components/host-status-dot";
-+import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
- import { isWeb } from "@/constants/platform";
- import { useHosts } from "@/runtime/host-runtime";
- import { useSidebarModel } from "@/components/sidebar/sidebar-model";
-@@ -801,7 +801,7 @@ function HostFilterItem({
-   const leading = useMemo(
-     () => (
-       <View testID={`sidebar-host-filter-status-${serverId}`}>
--        <HostStatusDot serverId={serverId} />
-+        <HostIdentityIcon serverId={serverId} />
-       </View>
-     ),
-     [serverId],
 diff --git a/packages/app/src/hosts/appearance.ts b/packages/app/src/hosts/appearance.ts
 index e51f4410dcf8babc4ba4c4dfe249780a30f9e64a..c7e56b838baadb6314c301f50c067c1629cde920 100644
 --- a/packages/app/src/hosts/appearance.ts
@@ -547,10 +546,10 @@ index 0000000000000000000000000000000000000000..8296a5276e2aa73ece40a43f7eb98139
 +  return THEMED_HOST_ICONS[name ?? DEFAULT_HOST_ICON];
 +}
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index a30cdb3977571ca770bef9dad2fc4cf10582b0aa..94165cf1343a26a99d4d81efb86e9189e4611af2 100644
+index 1605aa3671c12f1cf49bf01ff4ace008b7c96846..d84568834d7a29044ad45d3e3c5a01664220d465 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -2749,6 +2749,7 @@ export const ar: TranslationResources = {
+@@ -2812,6 +2812,7 @@ export const ar: TranslationResources = {
              blue: "أزرق",
            },
          },
@@ -559,10 +558,10 @@ index a30cdb3977571ca770bef9dad2fc4cf10582b0aa..94165cf1343a26a99d4d81efb86e9189
            label: "شارة الشريط الجانبي",
            accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index c1d01ba0216d065c7356fc5545530f2af98faa16..f11f28052d3b0f5b17a5be2afff671348b8c92ff 100644
+index 02140b259fd89824aaf18ac79c5ddb1b7514b6d9..cb21744068c19fcbcd140761c642b66234b1a762 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -2838,6 +2838,28 @@ export const en = {
+@@ -2906,6 +2906,28 @@ export const en = {
              blue: "Blue",
            },
          },
@@ -592,10 +591,10 @@ index c1d01ba0216d065c7356fc5545530f2af98faa16..f11f28052d3b0f5b17a5be2afff67134
            label: "Sidebar badge",
            accessibilityLabel: "Sidebar badge, {{value}}",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 70220438995bda74f140b7c2a470b4cad06690ab..293fdfec8e5187aa7d5cec39d64ebd38f8143a32 100644
+index 0caec9757361055adb6fb3777081b01223ee4d16..625baf8f797f6df25c1cfa3d4847081e079b1f74 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -2771,6 +2771,7 @@ export const es: TranslationResources = {
+@@ -2835,6 +2835,7 @@ export const es: TranslationResources = {
              blue: "Azul",
            },
          },
@@ -604,10 +603,10 @@ index 70220438995bda74f140b7c2a470b4cad06690ab..293fdfec8e5187aa7d5cec39d64ebd38
            label: "Insignia de la barra lateral",
            accessibilityLabel: "Insignia de la barra lateral, {{value}}",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 91287cee016947e562f8a2067ea1ed847b96cc2a..39967bc20db422ccccc045fd15c9255f8feac6b7 100644
+index 715a31e663cd00278bbbf6327a8bf7397061d3d0..1233d91f00373c2a7ce66de1f32394ac35155fad 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -2775,6 +2775,7 @@ export const fr: TranslationResources = {
+@@ -2839,6 +2839,7 @@ export const fr: TranslationResources = {
              blue: "Bleu",
            },
          },
@@ -616,10 +615,10 @@ index 91287cee016947e562f8a2067ea1ed847b96cc2a..39967bc20db422ccccc045fd15c9255f
            label: "Badge de la barre latérale",
            accessibilityLabel: "Badge de la barre latérale, {{value}}",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index b114634b86c62efb5b81efece0d45ce73290d73c..21affde2f9da37bb7e7f1b34a0b539746f6b7c4b 100644
+index e06cd882953ab95afc17901e7fcf16e18a2d8870..1b67a365ee7250710abe614880ab6e001430ccca 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -2739,6 +2739,7 @@ export const ja: TranslationResources = {
+@@ -2803,6 +2803,7 @@ export const ja: TranslationResources = {
              blue: "ブルー",
            },
          },
@@ -628,10 +627,10 @@ index b114634b86c62efb5b81efece0d45ce73290d73c..21affde2f9da37bb7e7f1b34a0b53974
            label: "サイドバーのバッジ",
            accessibilityLabel: "サイドバーのバッジ、{{value}}",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index 350a648ad2f32cba2d666cd5e754573cfb24393f..ad1ba29e67b3938549d90d963f48a8e045141b27 100644
+index 45432fb26e7b0d3456434fc4dd0abc8e965679c3..10f48f38e9d8af605fbcc5b331b5c622c8bafa48 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -2726,6 +2726,7 @@ export const ko: TranslationResources = {
+@@ -2790,6 +2790,7 @@ export const ko: TranslationResources = {
              blue: "파란색",
            },
          },
@@ -640,10 +639,10 @@ index 350a648ad2f32cba2d666cd5e754573cfb24393f..ad1ba29e67b3938549d90d963f48a8e0
            label: "사이드바 배지",
            accessibilityLabel: "사이드바 배지, {{value}}",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index db550ce10bb2f1be92f7385ae90b9c8fc3ef4a19..52d8a2dff18b06abf2309d25750e35bbd3c378be 100644
+index c741b532fff3e0dd86e490b5dccc0828a5f91b7d..2184bfe2d2e53ca33eaedcf1859355e5b69d3c59 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -2752,6 +2752,7 @@ export const ptBR: TranslationResources = {
+@@ -2816,6 +2816,7 @@ export const ptBR: TranslationResources = {
              blue: "Azul",
            },
          },
@@ -652,10 +651,10 @@ index db550ce10bb2f1be92f7385ae90b9c8fc3ef4a19..52d8a2dff18b06abf2309d25750e35bb
            label: "Selo da barra lateral",
            accessibilityLabel: "Selo da barra lateral, {{value}}",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 9d82aefc8e390c838ffc94ae64564ca7a27897bd..b3fff6403cee5313fa0af7b05e68b5bfa1c045ad 100644
+index be21a1a648577a794a590e7fa513201213fca1f0..43ce118aaac10619c0cb367846927bb4c4101afd 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -2760,6 +2760,7 @@ export const ru: TranslationResources = {
+@@ -2823,6 +2823,7 @@ export const ru: TranslationResources = {
              blue: "Синий",
            },
          },
@@ -664,10 +663,10 @@ index 9d82aefc8e390c838ffc94ae64564ca7a27897bd..b3fff6403cee5313fa0af7b05e68b5bf
            label: "Значок на боковой панели",
            accessibilityLabel: "Значок на боковой панели, {{value}}",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index b61fad78c00f75ce758c85e7a0b4705738457979..29b50c945f2eaabaca8cfd142ed94e45ae1c76b3 100644
+index 0564e1464a5b4634529a8b8bc8d59a3ea7aa52e9..33c5577087c96079b1920816e99ae56ec2197498 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -2683,6 +2683,7 @@ export const zhCN: TranslationResources = {
+@@ -2746,6 +2746,7 @@ export const zhCN: TranslationResources = {
              blue: "蓝色",
            },
          },
@@ -676,10 +675,10 @@ index b61fad78c00f75ce758c85e7a0b4705738457979..29b50c945f2eaabaca8cfd142ed94e45
            label: "侧边栏徽章",
            accessibilityLabel: "侧边栏徽章，{{value}}",
 diff --git a/packages/app/src/runtime/host-runtime.ts b/packages/app/src/runtime/host-runtime.ts
-index 0c7c9f466037b9c2f98c056faf957b483e327a44..33997465bc9f8588945e8de4b3a2793c7e16324c 100644
+index b2d6871f0cbcc3f283c78dc68a022514476e7f23..42ebf9f85b28884b4b9b1655bd98959813a92a70 100644
 --- a/packages/app/src/runtime/host-runtime.ts
 +++ b/packages/app/src/runtime/host-runtime.ts
-@@ -26,6 +26,7 @@ import {
+@@ -27,6 +27,7 @@ import {
    type HostProfile,
  } from "@/types/host-connection";
  import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
@@ -687,7 +686,7 @@ index 0c7c9f466037b9c2f98c056faf957b483e327a44..33997465bc9f8588945e8de4b3a2793c
  import {
    buildDaemonWebSocketUrl,
    buildRelayWebSocketUrl,
-@@ -1762,6 +1763,7 @@ export class HostRuntimeStore {
+@@ -1828,6 +1829,7 @@ export class HostRuntimeStore {
            shouldPersistHosts = true;
          }
        }
@@ -696,7 +695,7 @@ index 0c7c9f466037b9c2f98c056faf957b483e327a44..33997465bc9f8588945e8de4b3a2793c
        this.replicaCache.setHosts(profiles.map((profile) => profile.serverId));
        projectIconCache.setHosts(profiles.map((profile) => profile.serverId));
 diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
-index c1cf1e2482705408fe7b0f672faf7a32a8bda3b6..9baccb02a156bdf73f33ed0242117f6d3b01d0bf 100644
+index da9368a6a7934f828b4682547bf48ca1e66f7984..c22c244abfebc3267c990355ea616f603fece2e6 100644
 --- a/packages/app/src/screens/new-workspace/form/index.tsx
 +++ b/packages/app/src/screens/new-workspace/form/index.tsx
 @@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
@@ -708,7 +707,7 @@ index c1cf1e2482705408fe7b0f672faf7a32a8bda3b6..9baccb02a156bdf73f33ed0242117f6d
  import { HostPicker } from "@/components/hosts/host-picker";
  import type { LaunchTarget } from "@/new-workspace-launch/target";
  import type { HostProjectListItem } from "@/projects/host-projects";
-@@ -191,7 +191,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+@@ -193,7 +193,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
      [selectedProject, selectedProjectIconUri],
    );
    const hostIcon = useMemo(
@@ -718,10 +717,10 @@ index c1cf1e2482705408fe7b0f672faf7a32a8bda3b6..9baccb02a156bdf73f33ed0242117f6d
    );
    const isWorktree = isolation.effectiveIsolation === "worktree";
 diff --git a/packages/app/src/screens/settings-screen.tsx b/packages/app/src/screens/settings-screen.tsx
-index fa87c28cfa479d705bd9d9bcd291d8b64c9736d2..c8ff9c3311116fee1e0f295d6e7a4c08ef46cdc5 100644
+index 7fc6dbe2487e14480cbf8707b939c1f4bb3e4754..9f8de1cb731809c10b4cd3563bf505e121ca9586 100644
 --- a/packages/app/src/screens/settings-screen.tsx
 +++ b/packages/app/src/screens/settings-screen.tsx
-@@ -48,7 +48,7 @@ import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
+@@ -45,7 +45,7 @@ import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
  import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
  import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
  import { HostPicker as SharedHostPicker } from "@/components/hosts/host-picker";
@@ -730,7 +729,7 @@ index fa87c28cfa479d705bd9d9bcd291d8b64c9736d2..c8ff9c3311116fee1e0f295d6e7a4c08
  import { SettingsSection } from "@/components/settings/headings/settings-section";
  import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
  import { OpenLocationSection } from "@/screens/settings/open-location/open-location-section";
-@@ -919,7 +919,7 @@ function HostPicker({
+@@ -921,7 +921,7 @@ function HostPicker({
        >
          {activeHost ? (
            <View style={sidebarStyles.pickerTriggerDot}>
@@ -740,7 +739,7 @@ index fa87c28cfa479d705bd9d9bcd291d8b64c9736d2..c8ff9c3311116fee1e0f295d6e7a4c08
          ) : null}
          <Text style={sidebarStyles.pickerTriggerLabel} numberOfLines={1}>
 diff --git a/packages/app/src/screens/settings/host-appearance-section.tsx b/packages/app/src/screens/settings/host-appearance-section.tsx
-index 585be1cfda815859326ac224f60580ddf0047dc3..c63c29833246e4332a73931953761ea54b1f52cc 100644
+index d5462f9cb9986fc229e68b67904ea331cc1bbf7d..d6a6363c8e7b7522e287257e63d9f6aafac464d2 100644
 --- a/packages/app/src/screens/settings/host-appearance-section.tsx
 +++ b/packages/app/src/screens/settings/host-appearance-section.tsx
 @@ -19,6 +19,9 @@ import {
@@ -753,7 +752,7 @@ index 585be1cfda815859326ac224f60580ddf0047dc3..c63c29833246e4332a73931953761ea5
  import { identityColor } from "@/styles/identity-colors";
  import { settingsStyles } from "@/styles/settings";
  import { ICON_SIZE, type Theme } from "@/styles/theme";
-@@ -244,6 +247,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+@@ -245,6 +248,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
    const { t } = useTranslation();
    const toast = useToast();
    const { setHostColor, setHostBadgeDisplay } = useHostMutations();
@@ -761,7 +760,7 @@ index 585be1cfda815859326ac224f60580ddf0047dc3..c63c29833246e4332a73931953761ea5
    const localDaemon = useLocalDaemonServerIdState();
    const isLocalHost = localDaemon.status === "resolved" && localDaemon.serverId === host.serverId;
    const badgeDisplay = resolveHostBadgeDisplay({
-@@ -262,6 +266,16 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+@@ -263,6 +267,16 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
      },
      [host.serverId, setHostColor, t, toast],
    );
@@ -778,7 +777,7 @@ index 585be1cfda815859326ac224f60580ddf0047dc3..c63c29833246e4332a73931953761ea5
    const handleBadgeDisplayChange = useCallback(
      async (next: HostBadgeDisplay) => {
        try {
-@@ -288,6 +302,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
+@@ -289,6 +303,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
            </View>
          </View>
          <ColorRow color={host.appearance.color} onChange={handleColorChange} />

@@ -12,46 +12,53 @@ interrupt can still be picked in Settings and the switch shows it.
 
 Fork-Change: F-16
 ---
- packages/app/src/composer/index.tsx           |  11 +-
+ packages/app/src/composer/index.tsx           |  13 ++-
  .../composer/send-behavior-switch-model.ts    |   6 +
  .../src/composer/send-behavior-switch.test.ts |  13 +++
  .../app/src/composer/send-behavior-switch.tsx | 110 ++++++++++++++++++
- 4 files changed, 138 insertions(+), 2 deletions(-)
+ 4 files changed, 141 insertions(+), 1 deletion(-)
  create mode 100644 packages/app/src/composer/send-behavior-switch-model.ts
  create mode 100644 packages/app/src/composer/send-behavior-switch.test.ts
  create mode 100644 packages/app/src/composer/send-behavior-switch.tsx
 
 diff --git a/packages/app/src/composer/index.tsx b/packages/app/src/composer/index.tsx
-index d6b4bae63fb0296e539023795e23bbb994fdd6bc..567f4e8c5e5793a2ce93456b56fb3cfd91505717 100644
+index 4b31c4e0c6abe577be9ea091b98418f2352cbf9c..feccba5b3ada8038be2a6d956b1afe8eaa7cbf0a 100644
 --- a/packages/app/src/composer/index.tsx
 +++ b/packages/app/src/composer/index.tsx
-@@ -118,6 +118,7 @@ import {
- import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
+@@ -130,6 +130,7 @@ import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
  import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
+ import { useIsInputLive } from "./input/use-input-live";
  import { resolveActiveSendBehavior } from "./input/state";
 +import { SendBehaviorSwitch } from "./send-behavior-switch";
  import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
  import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
  import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
-@@ -1161,10 +1162,16 @@ function ComposerRightControlsSlot({
-   const hideVoiceForCompactInput = isCompact && hasSendableContent;
-   const showVoiceModeButton =
-     showVoice && !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
--  if (!showVoiceModeButton) return null;
-+  if (!showVoiceModeButton && !hasAgent) return null;
-   return (
-     <View style={styles.rightControls}>
--      <ComposerVoiceModeButton {...voiceProps} />
-+      {showVoiceModeButton ? <ComposerVoiceModeButton {...voiceProps} /> : null}
-+      {hasAgent ? (
-+        <SendBehaviorSwitch
-+          iconSize={voiceProps.buttonIconSize}
-+          disabled={!voiceProps.isConnected}
-+        />
-+      ) : null}
-     </View>
+@@ -2220,6 +2221,16 @@ function ComposerContentImpl({
+       controlSizing,
+     ],
    );
- }
++  const beforeVoiceWithSendBehavior = useMemo(
++    () =>
++      hasAgent ? (
++        <>
++          {beforeVoiceContent}
++          <SendBehaviorSwitch iconSize={toolbarGlyph.size} disabled={!isConnected} />
++        </>
++      ) : null,
++    [beforeVoiceContent, hasAgent, isConnected, toolbarGlyph.size],
++  );
+ 
+   const hasGithubAttachment = useMemo(
+     () =>
+@@ -2611,7 +2622,7 @@ function ComposerContentImpl({
+                   autoFocusKey={`${serverId}:${agentId}:${autoFocusKey ?? ""}`}
+                   disabled={isSubmitLoading}
+                   leftContent={leftContent}
+-                  beforeVoiceContent={beforeVoiceContent}
++                  beforeVoiceContent={beforeVoiceWithSendBehavior}
+                   voiceModeContent={voiceModeContent}
+                   activeActionContent={activeActionContent}
+                   voiceServerId={serverId}
 diff --git a/packages/app/src/composer/send-behavior-switch-model.ts b/packages/app/src/composer/send-behavior-switch-model.ts
 new file mode 100644
 index 0000000000000000000000000000000000000000..b6f5fd1928aea70a4306204c77207ca75ab64560
@@ -85,7 +92,7 @@ index 0000000000000000000000000000000000000000..01d52854ad4bbd9e4776852cf8f3fd98
 +});
 diff --git a/packages/app/src/composer/send-behavior-switch.tsx b/packages/app/src/composer/send-behavior-switch.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..6445e298bcfb5fdc66af611bef20baca39944fe4
+index 0000000000000000000000000000000000000000..dc9b061cf20e08d00008a7544ef86adea37e15af
 --- /dev/null
 +++ b/packages/app/src/composer/send-behavior-switch.tsx
 @@ -0,0 +1,110 @@
@@ -97,7 +104,7 @@ index 0000000000000000000000000000000000000000..6445e298bcfb5fdc66af611bef20baca
 +import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 +import { useAppSettings } from "@/hooks/use-settings";
 +import { nextSendBehavior } from "./send-behavior-switch-model";
-+import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
++import { useHardwareKeyboardPresent } from "@/keyboard";
 +import { getShortcutOs } from "@/utils/shortcut-platform";
 +import type { Theme } from "@/styles/theme";
 +
@@ -118,7 +125,7 @@ index 0000000000000000000000000000000000000000..6445e298bcfb5fdc66af611bef20baca
 +}) {
 +  const { t } = useTranslation();
 +  const { settings, updateSettings } = useAppSettings();
-+  const shortcutsAvailable = useKeyboardShortcutsAvailable();
++  const shortcutsAvailable = useHardwareKeyboardPresent();
 +  const modifier = getShortcutOs() === "mac" ? "⌘" : "Ctrl";
 +  const behavior = settings.sendBehavior;
 +  const toggle = useCallback(

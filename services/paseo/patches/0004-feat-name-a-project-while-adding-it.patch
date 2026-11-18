@@ -46,10 +46,10 @@ Fork-Change: F-6
  create mode 100644 packages/server/src/server/project-clone-directory.ts
 
 diff --git a/packages/app/e2e/browser/add-project-flow.spec.ts b/packages/app/e2e/browser/add-project-flow.spec.ts
-index 5770c3be9d55a4cac022d10592b2e95faaa8e751..d82e038d6b1171bee046e71a147c380f55255940 100644
+index bce5adcaafb6e0c5532876805d46d013557e1e3d..e5db0abf27fbd4133ce72ffd023ccfcaa98a8895 100644
 --- a/packages/app/e2e/browser/add-project-flow.spec.ts
 +++ b/packages/app/e2e/browser/add-project-flow.spec.ts
-@@ -10,6 +10,7 @@ import {
+@@ -11,6 +11,7 @@ import {
    addProjectFlowInput,
    addProjectFlowMethod,
    chooseAddProjectMethod,
@@ -57,7 +57,7 @@ index 5770c3be9d55a4cac022d10592b2e95faaa8e751..d82e038d6b1171bee046e71a147c380f
    expectAddProjectPage,
    expectNewWorkspaceForAddedProject,
    expectAddProjectResultVisible,
-@@ -286,6 +287,7 @@ test.describe("Add Project command-center flow", () => {
+@@ -305,6 +306,7 @@ test.describe("Add Project command-center flow", () => {
        timeout: 30_000,
      });
      await page.keyboard.press("Enter");
@@ -65,7 +65,7 @@ index 5770c3be9d55a4cac022d10592b2e95faaa8e751..d82e038d6b1171bee046e71a147c380f
  
      const projectId = await expectOpenedProject(page, projectPickerFixture.projectName);
      projectPickerFixture.rememberProjectId(projectId);
-@@ -298,6 +300,36 @@ test.describe("Add Project command-center flow", () => {
+@@ -317,6 +319,36 @@ test.describe("Add Project command-center flow", () => {
      await expectProjectHasNoWorkspaces(projectId);
    });
  
@@ -102,7 +102,7 @@ index 5770c3be9d55a4cac022d10592b2e95faaa8e751..d82e038d6b1171bee046e71a147c380f
    test("keyboard navigation keeps the selected row inside the visible results", async ({
      page,
    }) => {
-@@ -338,6 +370,7 @@ test.describe("Add Project command-center flow", () => {
+@@ -357,6 +389,7 @@ test.describe("Add Project command-center flow", () => {
        await navigateAddProjectResults(page, "ArrowDown", 12);
        await expectAddProjectResultVisible(page, rowPath(11));
        await page.keyboard.press("Enter");
@@ -110,7 +110,7 @@ index 5770c3be9d55a4cac022d10592b2e95faaa8e751..d82e038d6b1171bee046e71a147c380f
        projectId = await expectOpenedProject(page, "scroll-probe-11");
        await expectNewWorkspaceForAddedProject(page, {
          serverId: getServerId(),
-@@ -446,6 +479,7 @@ test.describe("Compact Add project context", () => {
+@@ -465,6 +498,7 @@ test.describe("Compact Add project context", () => {
      await addProjectFlowInput(page).fill(projectPickerFixture.fuzzyQuery);
      await expect(addProjectFlow(page)).toContainText(projectPickerFixture.projectName);
      await page.keyboard.press("Enter");
@@ -184,7 +184,7 @@ index 0732ec67320d9dee505378e2e15b4beee14b44dd..787b8175d8fd0f71b15766c47a7e8f03
    const projectRow = page
      .locator('[data-testid^="sidebar-project-row-"]')
 diff --git a/packages/app/e2e/support/helpers/add-project-flow.ts b/packages/app/e2e/support/helpers/add-project-flow.ts
-index 666469540e804b337677590bd959c9ff3ea920ab..ac0bf40fe27abbe12068f4f6dc952de73fc96277 100644
+index 1190bf0676e9d91d7e42b34841e7cd4704cf2d5d..5fd39ffc7c18ab1e1d256229b3aa8bf66529d854 100644
 --- a/packages/app/e2e/support/helpers/add-project-flow.ts
 +++ b/packages/app/e2e/support/helpers/add-project-flow.ts
 @@ -7,7 +7,8 @@ export type AddProjectFlowPage =
@@ -531,10 +531,10 @@ index 0000000000000000000000000000000000000000..3d1ab008b2cb344682dcdac04873ebed
 +  };
 +}
 diff --git a/packages/app/src/components/add-project-flow.tsx b/packages/app/src/components/add-project-flow.tsx
-index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204fb86a6f5 100644
+index 038e026c760de2265c10d6d9d7f266262d273745..36f3cb00c035da71ebd34f9c50fd2ff6ae7abb49 100644
 --- a/packages/app/src/components/add-project-flow.tsx
 +++ b/packages/app/src/components/add-project-flow.tsx
-@@ -42,6 +42,7 @@ import {
+@@ -44,6 +44,7 @@ import {
    openGithubSearchPage,
    openNewDirectoryNamePage,
    openNewDirectoryParentPage,
@@ -542,7 +542,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    setAddProjectActiveIndex,
    setAddProjectPageInput,
    setNewDirectoryName,
-@@ -51,6 +52,11 @@ import {
+@@ -53,6 +54,11 @@ import {
    type AddProjectPage,
    type GithubRepositoryChoice,
  } from "@/add-project-flow/model";
@@ -554,7 +554,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
  import {
    buildAddProjectMethods,
    addProjectMethodEmptyText,
-@@ -111,6 +117,14 @@ interface FlowRowOption {
+@@ -109,6 +115,14 @@ interface FlowRowOption {
  
  type GithubLocationPage = Extract<AddProjectPage, { kind: "github-location" }>;
  
@@ -569,7 +569,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
  interface FlowIconProps {
    icon: ComponentType<{ size?: number; color?: string }>;
    size?: number;
-@@ -173,6 +187,7 @@ function directoryOptionSubtitle(option: ProjectPickerOption, shortPath: string)
+@@ -171,6 +185,7 @@ function directoryOptionSubtitle(option: ProjectPickerOption, shortPath: string)
  
  function progressText(page: AddProjectPage): string {
    if (page.kind === "github-location") return "Cloning project...";
@@ -577,7 +577,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    if (page.kind === "new-directory-name") return "Creating directory...";
    return "Adding project...";
  }
-@@ -220,6 +235,8 @@ function pageTitle(page: AddProjectPage): string {
+@@ -218,6 +233,8 @@ function pageTitle(page: AddProjectPage): string {
        return "Choose parent directory";
      case "new-directory-name":
        return "Name directory";
@@ -586,7 +586,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    }
  }
  
-@@ -238,11 +255,13 @@ function pagePlaceholder(page: AddProjectInputPage): string {
+@@ -236,11 +253,13 @@ function pagePlaceholder(page: AddProjectInputPage): string {
        return "Search parent directories or enter a path...";
      case "new-directory-name":
        return "Directory name";
@@ -601,7 +601,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
  }
  
  function pathTestId(path: string): string {
-@@ -333,6 +352,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -332,6 +351,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
    const stableProjectIdentityByHost = useHostFeatureMap(hostIds, "stableProjectIdentity");
    // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
    const githubCloneByHost = useHostFeatureMap(hostIds, "projectGithubClone");
@@ -610,7 +610,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
    const githubSearchByHost = useHostFeatureMap(hostIds, "workspaceGithubRepositorySearch");
    // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
-@@ -352,12 +373,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -351,12 +372,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
              canAddProject,
              canBrowse: canAddProject && getIsElectronRuntime() && localServerId === host.serverId,
              canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
@@ -625,7 +625,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
        connectionStatuses,
        createDirectoryByHost,
        githubCloneByHost,
-@@ -396,7 +419,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -395,7 +418,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
    const resultsRef = useRef<ScrollView>(null);
    const submissionInFlightRef = useRef(false);
    const browseInFlightRef = useRef(false);
@@ -634,7 +634,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    const pageInputValueRef = useRef(page.kind === "method" ? "" : pageInput(page));
    pageInputValueRef.current = page.kind === "method" ? "" : pageInput(page);
    const [debouncedQuery, setDebouncedQuery] = useState(query);
-@@ -483,27 +506,32 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -479,27 +502,32 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
    );
  
    const openAddedProject = useCallback(
@@ -673,7 +673,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
              isSubmitting: false,
              error: "Unable to add project",
            }),
-@@ -512,7 +540,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -508,7 +536,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
          submissionInFlightRef.current = false;
        }
      },
@@ -682,7 +682,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    );
  
    const browse = useCallback(async () => {
-@@ -520,7 +548,15 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -516,7 +544,15 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
      browseInFlightRef.current = true;
      try {
        const path = await pickDirectory();
@@ -699,7 +699,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
      } catch {
        setState((current) =>
          setPageStatus(current, "method", { error: "Unable to browse for a directory" }),
-@@ -528,7 +564,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -524,7 +560,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
      } finally {
        browseInFlightRef.current = false;
      }
@@ -708,7 +708,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
  
    const selectMethod = useCallback(
      (method: AddProjectMethodId) => {
-@@ -560,32 +596,34 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -556,32 +592,34 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
      [directoryPaths, query, recommendedPaths],
    );
    const cloneRepository = useCallback(
@@ -754,7 +754,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
              isSubmitting: false,
              error: error instanceof Error ? error.message : "Unable to clone repository",
            }),
-@@ -596,6 +634,49 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -592,6 +630,49 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
      },
      [cloneGithubProject, openNewWorkspaceForProject],
    );
@@ -804,7 +804,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
    const rows = useMemo<FlowRowOption[]>(() => {
      if (page.kind === "host") {
        const choices = filterAddProjectHosts(state.hosts, page.query).map<FlowRowOption>(
-@@ -645,7 +726,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -641,7 +722,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
            subtitle: directoryOptionSubtitle(option, shortPath),
            icon: Folder,
            testID: pathTestId(option.path),
@@ -820,7 +820,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
          };
        });
      }
-@@ -695,9 +783,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -691,9 +779,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
          title: shortenPath(option.displayPath),
          subtitle: option.secondaryText,
          icon: HardDrive,
@@ -833,7 +833,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
        }));
      }
      if (page.kind === "new-directory-parent") {
-@@ -713,15 +802,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -709,16 +798,15 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
      }
      return [];
    }, [
@@ -841,6 +841,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
      directoryPaths,
      githubQuery.data,
      host,
+     addHost,
      onClose,
 -    openAddedProject,
      page,
@@ -850,7 +851,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
      selectMethod,
      state.hosts,
    ]);
-@@ -786,9 +874,13 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -783,9 +871,13 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
        void createDirectory();
        return;
      }
@@ -865,7 +866,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
  
    const handleKey = useCallback(
      (key: string): boolean => {
-@@ -860,10 +952,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -849,10 +941,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
      githubAvailable: currentGithubSearch?.available ?? null,
      githubError: currentGithubSearch?.error ?? null,
    });
@@ -878,7 +879,7 @@ index 7fdf21dd83b68df19bedc3ea89343d1af5c532a7..53196b82b6604fc99f951dd665783204
  
    const modal = (
      <Modal visible transparent animationType="fade" onRequestClose={isWeb ? undefined : handleBack}>
-@@ -976,7 +1069,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
+@@ -947,7 +1040,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
                !loading &&
                !queryError &&
                rows.length === 0 &&
@@ -995,10 +996,10 @@ index 18dc5064f3fbe64452edc37772f26de9b01d03c3..30d88a283364ffe5d049969f98a0348c
          client,
          upsertProject,
 diff --git a/packages/client/src/daemon-client.test.ts b/packages/client/src/daemon-client.test.ts
-index 4fa7d5723ce3eaabc0f1eddf5c51178528880ba8..ef9a1a2e1afd2ca680e72437e1c842d8dadc012c 100644
+index af1f2edd1f7cdb7af20b971765c83c7b9fba4e70..95243ef8616f1040a988f7e7759f6cb65c606c92 100644
 --- a/packages/client/src/daemon-client.test.ts
 +++ b/packages/client/src/daemon-client.test.ts
-@@ -4168,6 +4168,58 @@ test("creates and registers a project directory through the dotted RPC", async (
+@@ -4806,6 +4806,58 @@ test("creates and registers a project directory through the dotted RPC", async (
    });
  });
  
@@ -1058,10 +1059,10 @@ index 4fa7d5723ce3eaabc0f1eddf5c51178528880ba8..ef9a1a2e1afd2ca680e72437e1c842d8
    const logger = createMockLogger();
    const mock = createMockTransport();
 diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
-index 49d3d13af52b9144bffc17ef766f3b61dd2e8589..53eb63f712cb2fb710ab096d1ab1f46b4d6840b3 100644
+index 7843e59e60f9bc3d8c2a6f8aadb9788ea3a128cd..86d8d43dad757fad103842cc955883a66105cca7 100644
 --- a/packages/client/src/daemon-client.ts
 +++ b/packages/client/src/daemon-client.ts
-@@ -3050,7 +3050,12 @@ export class DaemonClient {
+@@ -3223,7 +3223,12 @@ export class DaemonClient {
    }
  
    async cloneGithubProject(
@@ -1075,7 +1076,7 @@ index 49d3d13af52b9144bffc17ef766f3b61dd2e8589..53eb63f712cb2fb710ab096d1ab1f46b
      requestId?: string,
    ): Promise<ProjectGithubClonePayload> {
      const message = {
-@@ -3058,6 +3063,7 @@ export class DaemonClient {
+@@ -3231,6 +3236,7 @@ export class DaemonClient {
        repo: input.repo,
        targetDirectory: input.targetDirectory,
        ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
@@ -1096,10 +1097,10 @@ index e316b0421d93de2258de0dccb806c0907143f31e..43a92520a0f6277db7fdd7f54251b7b3
    });
  
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index e10617889d3c3b38726ff953d7bb7a7f811a1798..201a13532fe27b73e348cf063bddb13d393c1457 100644
+index e62cf8357ecd04d661a0aa5f4ce7823681b6a3ff..e752304541e3434bd6c1098b88a70d039f1eaac2 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
-@@ -2703,6 +2703,8 @@ export const ProjectGithubCloneRequestSchema = z.object({
+@@ -2922,6 +2922,8 @@ export const ProjectGithubCloneRequestSchema = z.object({
    repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
    cloneProtocol: ProjectGithubCloneProtocolSchema.optional(),
    targetDirectory: z.string().trim().min(1),
@@ -1108,7 +1109,7 @@ index e10617889d3c3b38726ff953d7bb7a7f811a1798..201a13532fe27b73e348cf063bddb13d
    requestId: z.string(),
  });
  
-@@ -3819,6 +3821,8 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -4077,6 +4079,8 @@ export const ServerInfoStatusPayloadSchema = z
          relayProtectedSecurity: z.boolean().optional(),
          // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
          projectGithubClone: z.boolean().optional(),
@@ -1118,7 +1119,7 @@ index e10617889d3c3b38726ff953d7bb7a7f811a1798..201a13532fe27b73e348cf063bddb13d
          workspaceGithubRepositorySearch: z.boolean().optional(),
          // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
 diff --git a/packages/protocol/src/messages.workspaces.test.ts b/packages/protocol/src/messages.workspaces.test.ts
-index 3cb9b0d5bdf396925459151e183fd817bbbc4866..08d4d28231a11528f2e2e0dc36370718f192e01e 100644
+index c056f68733750081e328d9b46388f753e4e92b45..cd267be77664242f8d5096be1aa72dbafc379f41 100644
 --- a/packages/protocol/src/messages.workspaces.test.ts
 +++ b/packages/protocol/src/messages.workspaces.test.ts
 @@ -482,6 +482,40 @@ describe("workspace message schemas", () => {
@@ -1224,10 +1225,10 @@ index 0000000000000000000000000000000000000000..adbcaca362b1d6f1eaeffc04f546a93f
 +  return name;
 +}
 diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
-index efa0c9e3bd9b12dee8f0403f0927aa4346a14077..5a4961b37b770997360087519a7cd02c9ce4f42d 100644
+index fcdbbae1edb3cffaefe76495f5725f3d2f61daf4..04213e367a90fa8986ec38775f96e3a1f261d603 100644
 --- a/packages/server/src/server/session.ts
 +++ b/packages/server/src/server/session.ts
-@@ -275,6 +275,7 @@ import {
+@@ -309,6 +309,7 @@ import {
    createProjectDirectory,
    ProjectDirectoryRequestError,
  } from "./project-directory-service.js";
@@ -1235,7 +1236,7 @@ index efa0c9e3bd9b12dee8f0403f0927aa4346a14077..5a4961b37b770997360087519a7cd02c
  import { runGitCommand } from "../utils/run-git-command.js";
  import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
  import { resolveWorktreeSourceCwd } from "./workspace-source.js";
-@@ -7270,7 +7271,13 @@ export class Session {
+@@ -7748,7 +7749,13 @@ export class Session {
        });
        normalizedRepo = repo.displayName;
        const targetParent = resolve(expandTilde(request.targetDirectory.trim()));
@@ -1251,10 +1252,10 @@ index efa0c9e3bd9b12dee8f0403f0927aa4346a14077..5a4961b37b770997360087519a7cd02c
          throw new Error("Resolved checkout path must stay inside the target directory");
        }
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index 43b7153cab5a08097273515186f08310067e282f..5f43a5e3b27b62f3ca64b597f15ef4a4fcc797ce 100644
+index cbbdd9685d4c6aa47a9c8bf0fd53ce5e1da45658..3672768c5e33b24f908abba95d6eea7e48b33450 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2137,6 +2137,8 @@ export class VoiceAssistantWebSocketServer {
+@@ -2178,6 +2178,8 @@ export class VoiceAssistantWebSocketServer {
          hubRelationship: true,
          // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
          projectGithubClone: true,

@@ -22,10 +22,10 @@ Fork-Change: F-5
  delete mode 100644 packages/app/src/components/worktree-setup-callout-source.tsx
 
 diff --git a/packages/app/src/app/_layout.tsx b/packages/app/src/app/_layout.tsx
-index 29817847758e49ffaedb0b004b0eec20196846e3..35295aa53bdc044fff062618ad2add6efd6156f2 100644
+index c9d9bf4ebb636e74bdc93c3cb5b847fe326c0a0d..13868bb1a2e8e0cd108fb7008bce4ae5a952c26a 100644
 --- a/packages/app/src/app/_layout.tsx
 +++ b/packages/app/src/app/_layout.tsx
-@@ -30,7 +30,6 @@ import { CommandCenterProvider } from "@/command-center/provider";
+@@ -41,7 +41,6 @@ import { CommandCenterProvider } from "@/command-center/provider";
  import { CommandCenterWorkspaceActions } from "@/command-center/workspace-registration";
  import { PluginCommandCenterActions } from "@/plugins/command-center/registration";
  import { AddProjectFlowHost } from "@/components/add-project-flow-host";
@@ -33,7 +33,7 @@ index 29817847758e49ffaedb0b004b0eec20196846e3..35295aa53bdc044fff062618ad2add6e
  import { DownloadToast } from "@/components/download-toast";
  import { QuittingOverlay } from "@/components/quitting-overlay";
  import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
-@@ -517,7 +516,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
+@@ -563,7 +562,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
          <RosettaCalloutSource />
          <UpdateCalloutSource />
          <LegacyAgentSkillsMigration />

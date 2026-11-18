@@ -96,10 +96,10 @@ index fb2f98841e0ccefee8befa33fe6dbad39040fa78..ef8b174554c9ba937913749b9e343474
        ).toBeVisible({ timeout: 30_000 });
      } finally {
 diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
-index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6d0e377a1 100644
+index 8b7489f5f02e7927470f208987e232ff8471f55c..eaf94e9902abd5e0daf99fe1d3abbe6721cf6157 100644
 --- a/packages/app/src/components/sidebar-workspace-list.tsx
 +++ b/packages/app/src/components/sidebar-workspace-list.tsx
-@@ -30,7 +30,7 @@ import {
+@@ -31,7 +31,7 @@ import {
    type ActiveWorkspaceSelection,
  } from "@/stores/navigation-active-workspace-store";
  import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -116,7 +116,7 @@ index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6
  import { PressHighlight } from "@/components/ui/press-highlight";
  import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
  import { Shortcut } from "@/components/ui/shortcut";
-@@ -782,73 +781,6 @@ function NewWorktreeButton({
+@@ -789,73 +788,6 @@ function NewWorktreeButton({
    );
  }
  
@@ -147,7 +147,6 @@ index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6
 -    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
 -      styles.newWorkspaceGhostRow,
 -      hovered && !pressed && styles.newWorkspaceGhostRowHovered,
--      pressed && styles.newWorkspaceGhostRowPressed,
 -    ],
 -    [],
 -  );
@@ -160,6 +159,7 @@ index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6
 -      })}
 -      onPress={handlePress}
 -      style={rowStyle}
+-      highlightStyle={styles.newWorkspaceGhostRowPressed}
 -      testID={`sidebar-project-new-workspace-row-${project.viewKey}`}
 -    >
 -      {({ hovered, pressed }) => (
@@ -190,7 +190,7 @@ index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6
  function ProjectHeaderRow({
    project,
    displayName,
-@@ -1805,15 +1737,6 @@ function ProjectBlock({
+@@ -1792,15 +1724,6 @@ function ProjectBlock({
            ) : null}
          </>
        );
@@ -206,7 +206,7 @@ index 8697a4b27bde8ccfd73b503f93b59fbce426cc44..c7fb4c97439f265afbca3c5d25068df6
      }
    }
  
-@@ -2604,51 +2527,6 @@ const styles = StyleSheet.create((theme) => ({
+@@ -2613,51 +2536,6 @@ const styles = StyleSheet.create((theme) => ({
      paddingBottom: theme.spacing[3],
    },
    workspaceListContainer: {},
