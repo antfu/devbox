@@ -38,21 +38,23 @@ they never send, two optional server_info.features flags
 Fork-Change: F-21
 Fork-Change: F-22
 ---
- .../src/composer/agent-pull-requests.test.ts  | 124 ++++
+ .../src/composer/agent-pull-requests.test.ts  | 124 +++
  .../app/src/composer/agent-pull-requests.ts   | 110 +++
  .../src/composer/pull-request-actions.test.ts |  13 +
  .../app/src/composer/pull-request-actions.ts  |   8 +-
- .../app/src/composer/pull-request-pills.tsx   | 160 ++++-
- .../src/composer/quick-action-prompt-sync.ts  |  49 ++
+ .../app/src/composer/pull-request-pills.tsx   | 168 +++-
+ .../composer/quick-action-prompt-sync.test.ts |  20 +
+ .../src/composer/quick-action-prompt-sync.tsx |  68 ++
  .../app/src/composer/quick-action-prompts.ts  |   2 +
  packages/app/src/i18n/resources/en.ts         |  12 +-
+ .../settings/quick-actions-section.tsx        |   2 +
  packages/client/src/daemon-client.ts          |  25 +
  packages/protocol/src/agent-labels.ts         |   9 +
- packages/protocol/src/messages.ts             |  77 ++
- .../server/agent-pull-requests/index.test.ts  | 338 +++++++++
- .../src/server/agent-pull-requests/index.ts   | 680 ++++++++++++++++++
+ packages/protocol/src/messages.ts             |  78 ++
+ .../server/agent-pull-requests/index.test.ts  | 397 ++++++++++
+ .../src/server/agent-pull-requests/index.ts   | 720 ++++++++++++++++++
  .../server/agent-pull-requests/links.test.ts  | 103 +++
- .../src/server/agent-pull-requests/links.ts   |  84 +++
+ .../src/server/agent-pull-requests/links.ts   |  84 ++
  .../agent-pull-requests/reactions.test.ts     | 198 +++++
  .../server/agent-pull-requests/reactions.ts   | 141 ++++
  .../src/server/agent-pull-requests/store.ts   | 132 ++++
@@ -60,10 +62,11 @@ Fork-Change: F-22
  packages/server/src/server/bootstrap.ts       |  12 +
  packages/server/src/server/session.ts         |   5 +
  .../server/src/server/websocket-server.ts     |   4 +
- 22 files changed, 2264 insertions(+), 26 deletions(-)
+ 24 files changed, 2411 insertions(+), 28 deletions(-)
  create mode 100644 packages/app/src/composer/agent-pull-requests.test.ts
  create mode 100644 packages/app/src/composer/agent-pull-requests.ts
- create mode 100644 packages/app/src/composer/quick-action-prompt-sync.ts
+ create mode 100644 packages/app/src/composer/quick-action-prompt-sync.test.ts
+ create mode 100644 packages/app/src/composer/quick-action-prompt-sync.tsx
  create mode 100644 packages/server/src/server/agent-pull-requests/index.test.ts
  create mode 100644 packages/server/src/server/agent-pull-requests/index.ts
  create mode 100644 packages/server/src/server/agent-pull-requests/links.test.ts
@@ -375,11 +378,12 @@ index 6b0413069fcd7072cc97c13586e01bc823d4367d..68badf63ca1e6ed6a4ad9308acf300a2
  }
  
 diff --git a/packages/app/src/composer/pull-request-pills.tsx b/packages/app/src/composer/pull-request-pills.tsx
-index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246d533eab1 100644
+index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5e8f1a61d188b8e8fda4d1c5b428638c68ec5282 100644
 --- a/packages/app/src/composer/pull-request-pills.tsx
 +++ b/packages/app/src/composer/pull-request-pills.tsx
 @@ -1,23 +1,31 @@
- import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
+-import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
++import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
  import { useTranslation } from "react-i18next";
  import { Text } from "react-native";
 -import { Zap } from "lucide-react-native";
@@ -486,7 +490,7 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246
        // A prompt set in Settings → Quick actions wins over the default.
        const customPrompt = useQuickActionPromptsStore.getState().prompts[action];
        const text = customPrompt
-@@ -110,20 +145,94 @@ export const WorkspacePullRequestPills = memo(function WorkspacePullRequestPills
+@@ -110,20 +145,98 @@ export const WorkspacePullRequestPills = memo(function WorkspacePullRequestPills
          toast.error(error instanceof Error ? error.message : String(error));
        }
      },
@@ -494,7 +498,7 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246
 +    [agentId, client, serverId, t, toast],
    );
  
-   if (!state) return null;
+-  if (!state) return null;
    return (
      <>
 -      {state.prHint ? <PullRequestPill hint={state.prHint} /> : null}
@@ -544,11 +548,16 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246
 +    setPending(next);
 +    client
 +      .updateAgent(agentId, { labels: { [PULL_REQUEST_AUTO_LISTEN_LABEL]: next ? "on" : "off" } })
++      // The label normally comes back first; this only frees the pill if that update is missed.
++      .then(() => setTimeout(() => setPending(null), 2_000))
 +      .catch((error: unknown) => {
++        setPending(null);
 +        toast.error(error instanceof Error ? error.message : String(error));
-+      })
-+      .finally(() => setPending(null));
++      });
 +  }, [agentId, client, isOn, t, toast]);
++  useEffect(() => {
++    if (pending === isStoredOn) setPending(null);
++  }, [isStoredOn, pending]);
 +  const handleHoverIn = useCallback(() => setIsHovered(true), []);
 +  const handleHoverOut = useCallback(() => setIsHovered(false), []);
 +  const bodyStyle = useMemo(
@@ -585,7 +594,7 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246
  function PullRequestPill({ hint }: { hint: PrHint }) {
    const { t } = useTranslation();
    const [isHovered, setIsHovered] = useState(false);
-@@ -164,19 +273,23 @@ function PullRequestPill({ hint }: { hint: PrHint }) {
+@@ -164,19 +277,23 @@ function PullRequestPill({ hint }: { hint: PrHint }) {
  }
  
  function QuickActionPill({
@@ -614,7 +623,7 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246
    const handleHoverIn = useCallback(() => setIsHovered(true), []);
    const handleHoverOut = useCallback(() => setIsHovered(false), []);
    const bodyStyle = useMemo(
-@@ -200,6 +313,9 @@ function QuickActionPill({
+@@ -200,6 +317,9 @@ function QuickActionPill({
          numberOfLines={1}
        >
          {t(`workspace.git.pr.quickActions.${action}.label`)}
@@ -624,34 +633,71 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..5abadd5190a6a93ee67796a5ec4dd246
        </Text>
      </PressHighlight>
    );
-diff --git a/packages/app/src/composer/quick-action-prompt-sync.ts b/packages/app/src/composer/quick-action-prompt-sync.ts
+diff --git a/packages/app/src/composer/quick-action-prompt-sync.test.ts b/packages/app/src/composer/quick-action-prompt-sync.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..1ce4aa40d7e35fcf0fe2a16e252c948fc822fe61
+index 0000000000000000000000000000000000000000..e31d7ecb51ded3f14c411c80ad338f557d877d0e
 --- /dev/null
-+++ b/packages/app/src/composer/quick-action-prompt-sync.ts
-@@ -0,0 +1,49 @@
++++ b/packages/app/src/composer/quick-action-prompt-sync.test.ts
+@@ -0,0 +1,20 @@
++import { describe, expect, it } from "vitest";
++import { selectQuickActionPromptPatch } from "./quick-action-prompt-sync";
++
++describe("selectQuickActionPromptPatch", () => {
++  it("sends only the prompts this device changed", () => {
++    expect(selectQuickActionPromptPatch({}, {})).toEqual({});
++    expect(selectQuickActionPromptPatch({ fixCi: "Fix it" }, {})).toEqual({ fixCi: "Fix it" });
++  });
++
++  it("sends nothing for a prompt the host already has", () => {
++    expect(selectQuickActionPromptPatch({ fixCi: "Fix it" }, { fixCi: "Fix it" })).toEqual({});
++  });
++
++  it("sends an empty prompt for one that went back to its default", () => {
++    expect(selectQuickActionPromptPatch({ addressReview: "Reply" }, { fixCi: "Fix it" })).toEqual({
++      fixCi: "",
++      addressReview: "Reply",
++    });
++  });
++});
+diff --git a/packages/app/src/composer/quick-action-prompt-sync.tsx b/packages/app/src/composer/quick-action-prompt-sync.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6ef8c9ec2e5833c45f9b2fc92185103bfa02d90
+--- /dev/null
++++ b/packages/app/src/composer/quick-action-prompt-sync.tsx
+@@ -0,0 +1,68 @@
 +import { useEffect } from "react";
-+import { useTranslation } from "react-i18next";
-+import {
-+  QUICK_ACTION_PROMPT_PLACEHOLDERS,
-+  useQuickActionPromptsStore,
-+} from "@/composer/quick-action-prompts";
++import { useShallow } from "zustand/shallow";
++import { useQuickActionPromptsStore } from "@/composer/quick-action-prompts";
 +import { useHostFeature } from "@/runtime/host-features";
 +import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
++import { useSessionStore } from "@/stores/session-store";
 +
 +/** The quick actions a host sends on its own when it listens to a pull request. */
 +const HOST_ACTIONS = ["resolveConflicts", "fixCi", "addressReview"] as const;
 +
-+// What each host was last sent, so a prompt goes out once per change, not once per pane.
-+const sentByServerId = new Map<string, string>();
++type HostPrompts = Partial<Record<(typeof HOST_ACTIONS)[number], string>>;
++
++// The custom prompts each host was last sent, so a prompt goes out once per change.
++const sentByServerId = new Map<string, HostPrompts>();
++
++/**
++ * What to send a host: each custom prompt it does not have yet, and an empty one for each prompt
++ * that went back to its default. Prompts this device never changed are left out, so they do not
++ * replace what another device saved on the host.
++ */
++export function selectQuickActionPromptPatch(prompts: HostPrompts, sent: HostPrompts): HostPrompts {
++  const patch: HostPrompts = {};
++  for (const action of HOST_ACTIONS) {
++    if (prompts[action] !== sent[action]) patch[action] = prompts[action] ?? "";
++  }
++  return patch;
++}
 +
 +/**
 + * Gives the host this device's quick action prompts, so the follow-ups it sends on its own read
-+ * the same as the ones sent from here. A device that never changed a prompt sends nothing at
-+ * first: it would only replace what another device saved on the host.
++ * the same as the ones sent from here.
 + */
 +export function useSyncQuickActionPrompts(serverId: string): void {
-+  const { t } = useTranslation();
 +  const client = useHostRuntimeClient(serverId);
 +  const isConnected = useHostRuntimeIsConnected(serverId);
 +  const isSupported = useHostFeature(serverId, "pullRequestAutoListen");
@@ -659,25 +705,33 @@ index 0000000000000000000000000000000000000000..1ce4aa40d7e35fcf0fe2a16e252c948f
 +
 +  useEffect(() => {
 +    if (!client || !isConnected || !isSupported) return;
-+    const effective = Object.fromEntries(
-+      HOST_ACTIONS.map((action) => [
-+        action,
-+        prompts[action] ??
-+          t(`workspace.git.pr.quickActions.${action}.prompt`, QUICK_ACTION_PROMPT_PLACEHOLDERS),
-+      ]),
-+    );
-+    const body = JSON.stringify(effective);
-+    const previous = sentByServerId.get(serverId);
-+    if (previous === body) return;
-+    sentByServerId.set(serverId, body);
-+    const hasCustomPrompt = HOST_ACTIONS.some((action) => prompts[action] !== undefined);
-+    if (previous === undefined && !hasCustomPrompt) return;
-+    client.setPullRequestPrompts(effective).catch(() => {
-+      // Try again on the next change or the next pane.
-+      if (previous === undefined) sentByServerId.delete(serverId);
-+      else sentByServerId.set(serverId, previous);
++    const sent = sentByServerId.get(serverId) ?? {};
++    const patch = selectQuickActionPromptPatch(prompts, sent);
++    if (Object.keys(patch).length === 0) return;
++    const next: HostPrompts = {};
++    for (const action of HOST_ACTIONS) {
++      if (prompts[action] !== undefined) next[action] = prompts[action];
++    }
++    sentByServerId.set(serverId, next);
++    client.setPullRequestPrompts(patch).catch((error: unknown) => {
++      console.warn("[QuickActionPrompts] Failed to send the prompts to the host", { error });
++      // Send it again on the next change or the next mount.
++      sentByServerId.set(serverId, sent);
 +    });
-+  }, [client, isConnected, isSupported, prompts, serverId, t]);
++  }, [client, isConnected, isSupported, prompts, serverId]);
++}
++
++function HostQuickActionPromptSync({ serverId }: { serverId: string }) {
++  useSyncQuickActionPrompts(serverId);
++  return null;
++}
++
++/** Sends a changed prompt to every connected host, for the screen where prompts are edited. */
++export function QuickActionPromptSync() {
++  const serverIds = useSessionStore(useShallow((state) => Object.keys(state.sessions)));
++  return serverIds.map((serverId) => (
++    <HostQuickActionPromptSync key={serverId} serverId={serverId} />
++  ));
 +}
 diff --git a/packages/app/src/composer/quick-action-prompts.ts b/packages/app/src/composer/quick-action-prompts.ts
 index 06f4b8336bf2c923d7b6526888c16ce058d32f09..cda4f643bfcc1a6b36014274746b81ff171f2b7b 100644
@@ -733,6 +787,26 @@ index 50c81dc562785b8fe116baeb072edab13316cf03..3f469bd8053f3c426b627a74bb80f45c
        promptLabel: "{{action}} prompt",
        reset: "Reset to default",
      },
+diff --git a/packages/app/src/screens/settings/quick-actions-section.tsx b/packages/app/src/screens/settings/quick-actions-section.tsx
+index 261f8ee839ddbb521f0bac1814b3aabab8c12834..5914df33bf4e7546b89cc6f6a2b69ea3d0996f20 100644
+--- a/packages/app/src/screens/settings/quick-actions-section.tsx
++++ b/packages/app/src/screens/settings/quick-actions-section.tsx
+@@ -6,6 +6,7 @@ import { SettingsSection } from "@/components/settings";
+ import { SettingsTextAreaCard } from "@/components/settings-textarea";
+ import { Button } from "@/components/ui/button";
+ import type { PullRequestQuickAction } from "@/composer/pull-request-actions";
++import { QuickActionPromptSync } from "@/composer/quick-action-prompt-sync";
+ import {
+   PULL_REQUEST_QUICK_ACTIONS,
+   QUICK_ACTION_PROMPT_PLACEHOLDERS,
+@@ -18,6 +19,7 @@ export function QuickActionsSection() {
+   const { t } = useTranslation();
+   return (
+     <View>
++      <QuickActionPromptSync />
+       <Text style={[settingsStyles.rowHint, styles.intro]}>
+         {t("settings.quickActions.description", QUICK_ACTION_PROMPT_PLACEHOLDERS)}
+       </Text>
 diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
 index 96721a4308230e3d402a8a5299d3155033fb43aa..a3ff0093ad537b7d8e783442a2cd3494610fe590 100644
 --- a/packages/client/src/daemon-client.ts
@@ -794,10 +868,10 @@ index e2eb0080936642171b85ee2693d36363babbfb6a..6a1ecba1bfdf3269ceba26778f2647e0
 +  return labels?.[PULL_REQUEST_AUTO_LISTEN_LABEL] !== "off";
 +}
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea0c9fadd8 100644
+index e8949a484fbada7f40d3dae43fa56e1368c235bf..26d1162ad9f98b4bd12bfc20459be126bf58bbf1 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
-@@ -1564,6 +1564,24 @@ export const DaemonAppHostRegistrySetRequestSchema = z.object({
+@@ -1564,6 +1564,25 @@ export const DaemonAppHostRegistrySetRequestSchema = z.object({
    baseRevision: z.number(),
  });
  
@@ -808,7 +882,8 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
 +  agentId: z.string(),
 +});
 +
-+// Gated on features.pullRequestAutoListen. An absent prompt goes back to the daemon's default.
++// Gated on features.pullRequestAutoListen. An absent prompt is left as it is; an empty one goes
++// back to the daemon's default.
 +export const AgentPullRequestsSetPromptsRequestSchema = z.object({
 +  type: z.literal("agent.pull_requests.set_prompts.request"),
 +  requestId: z.string(),
@@ -822,7 +897,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
  export const DaemonGetPairingOfferRequestSchema = z.object({
    type: z.literal("daemon.get_pairing_offer.request"),
    requestId: z.string(),
-@@ -3597,6 +3615,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+@@ -3597,6 +3616,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
    DaemonGetHostStatsRequestSchema,
    DaemonAppHostRegistryGetRequestSchema,
    DaemonAppHostRegistrySetRequestSchema,
@@ -831,7 +906,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
    DaemonGetPairingOfferRequestSchema,
    DaemonConfigReloadRequestSchema,
    HubManagementDaemonConnectRequestSchema,
-@@ -4187,6 +4207,10 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -4187,6 +4208,10 @@ export const ServerInfoStatusPayloadSchema = z
          hostStats: z.boolean().optional(),
          // COMPAT(appHostRegistry): added in v0.15.4, remove gate after 2027-05-16.
          appHostRegistry: z.boolean().optional(),
@@ -842,7 +917,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
        })
        .optional(),
    })
-@@ -5577,6 +5601,55 @@ export const DaemonAppHostRegistrySetResponseSchema = z.object({
+@@ -5577,6 +5602,55 @@ export const DaemonAppHostRegistrySetResponseSchema = z.object({
      .passthrough(),
  });
  
@@ -898,7 +973,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
  export const DaemonGetStatusResponseSchema = z.object({
    type: z.literal("daemon.get_status.response"),
    payload: z
-@@ -7624,6 +7697,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+@@ -7624,6 +7698,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
    DaemonGetHostStatsResponseSchema,
    DaemonAppHostRegistryGetResponseSchema,
    DaemonAppHostRegistrySetResponseSchema,
@@ -907,7 +982,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
    DaemonGetPairingOfferResponseSchema,
    DaemonConfigReloadResponseSchema,
    HubManagementDaemonConnectResponseSchema,
-@@ -7896,6 +7971,8 @@ export type DaemonAppHostRegistryGetResponse = z.infer<
+@@ -7896,6 +7972,8 @@ export type DaemonAppHostRegistryGetResponse = z.infer<
  export type DaemonAppHostRegistrySetResponse = z.infer<
    typeof DaemonAppHostRegistrySetResponseSchema
  >;
@@ -918,10 +993,10 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..01ff2a8e854a38af2ba5f9769ba62cea
  export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
 diff --git a/packages/server/src/server/agent-pull-requests/index.test.ts b/packages/server/src/server/agent-pull-requests/index.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..643f58887f5827e5d812ef600bf4d8b194ae2e6a
+index 0000000000000000000000000000000000000000..bda23a845cb51d8563ba060bd974c29f36716c12
 --- /dev/null
 +++ b/packages/server/src/server/agent-pull-requests/index.test.ts
-@@ -0,0 +1,338 @@
+@@ -0,0 +1,397 @@
 +import { mkdtemp, rm } from "node:fs/promises";
 +import { tmpdir } from "node:os";
 +import path from "node:path";
@@ -1002,6 +1077,7 @@ index 0000000000000000000000000000000000000000..643f58887f5827e5d812ef600bf4d8b1
 +  reviews: Map<number, PullRequestTimelineItem[]>;
 +  live: Map<string, Partial<ManagedAgent>>;
 +  sent: Array<{ agentId: string; prompt: string }>;
++  failSend: boolean;
 +  emit: (event: AgentManagerEvent) => void;
 +}
 +
@@ -1013,6 +1089,7 @@ index 0000000000000000000000000000000000000000..643f58887f5827e5d812ef600bf4d8b1
 +    reviews: new Map(),
 +    live: new Map(),
 +    sent: [],
++    failSend: false,
 +    emit: () => undefined,
 +  };
 +  const forgeService = {
@@ -1053,6 +1130,7 @@ index 0000000000000000000000000000000000000000..643f58887f5827e5d812ef600bf4d8b1
 +      resolveForge: async () => ({ forge: "github", host: "github.com", service: forgeService }),
 +    },
 +    sendPrompt: async (agentId: string, prompt: string) => {
++      if (world.failSend) throw new Error("agent unavailable");
 +      world.sent.push({ agentId, prompt });
 +    },
 +    logger: pino({ level: "silent" }),
@@ -1235,6 +1313,62 @@ index 0000000000000000000000000000000000000000..643f58887f5827e5d812ef600bf4d8b1
 +    expect(world.sent.map((entry) => entry.agentId)).toEqual(["parent"]);
 +  });
 +
++  test("a parent's checkbox also covers its subagents", async () => {
++    world.records = [
++      record("parent", { labels: { "paseo.pr-auto-listen": "off" } }),
++      record("child", { labels: { "paseo.parent-agent-id": "parent" } }),
++    ];
++    world.checkouts.set("/work/child", status(2));
++    await service.poll();
++    world.checkouts.set("/work/child", failing(2));
++    await service.poll();
++    expect(world.sent).toEqual([]);
++  });
++
++  test("keeps what is waiting when one read of the pull request fails", async () => {
++    world.records = [record("agent")];
++    world.checkouts.set("/work/agent", status(1));
++    await service.poll();
++    world.live.set("agent", { ...liveAgent("agent", "/work/agent"), lifecycle: "running" });
++    world.checkouts.set("/work/agent", failing(1));
++    await service.poll();
++    world.checkouts.delete("/work/agent");
++    await service.poll();
++    world.checkouts.set("/work/agent", failing(1));
++    world.live.set("agent", liveAgent("agent", "/work/agent"));
++    await service.poll();
++    expect(world.sent.map((entry) => entry.agentId)).toEqual(["agent"]);
++  });
++
++  test("sends again next round when the follow-up could not be delivered", async () => {
++    world.records = [record("agent")];
++    world.checkouts.set("/work/agent", status(1));
++    await service.poll();
++    world.checkouts.set("/work/agent", failing(1));
++    world.failSend = true;
++    await service.poll();
++    world.failSend = false;
++    await service.poll();
++    await service.poll();
++    expect(world.sent.map((entry) => entry.agentId)).toEqual(["agent"]);
++  });
++
++  test("a device's prompts leave the ones it did not send alone", async () => {
++    world.records = [record("agent")];
++    world.checkouts.set("/work/agent", status(1));
++    service.setPrompts({ fixCi: "Fix {{url}}." });
++    service.setPrompts({ addressReview: "Review {{url}}." });
++    await service.poll();
++    world.checkouts.set("/work/agent", failing(1));
++    await service.poll();
++    expect(world.sent.map((entry) => entry.prompt)).toEqual([`Fix ${REPO}/pull/1.`]);
++
++    service.setPrompts({ fixCi: "" });
++    world.checkouts.set("/work/agent", { ...failing(1), headSha: "sha-next" });
++    await service.poll();
++    expect(world.sent[1].prompt).toContain("CI is failing on the pull request");
++  });
++
 +  test("sends Address review for a new review with the saved prompt", async () => {
 +    world.records = [record("agent")];
 +    world.checkouts.set("/work/agent", status(1));
@@ -1262,10 +1396,10 @@ index 0000000000000000000000000000000000000000..643f58887f5827e5d812ef600bf4d8b1
 +});
 diff --git a/packages/server/src/server/agent-pull-requests/index.ts b/packages/server/src/server/agent-pull-requests/index.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4becdf975
+index 0000000000000000000000000000000000000000..dd75ff86a048cfb4201cc395efd1a838b41948f7
 --- /dev/null
 +++ b/packages/server/src/server/agent-pull-requests/index.ts
-@@ -0,0 +1,680 @@
+@@ -0,0 +1,720 @@
 +import { resolve } from "node:path";
 +import type { Logger } from "pino";
 +import {
@@ -1327,6 +1461,9 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +const LINK_STATUS_TTL_MS = 30_000;
 +// A merged or closed change request rarely changes again.
 +const SETTLED_LINK_STATUS_TTL_MS = 30 * 60_000;
++const UNREADABLE_LINK_RETRY_MS = 10 * 60_000;
++// About a quarter of an hour of rounds before a change request nobody holds is forgotten.
++const MAX_MISSED_ROUNDS = 10;
 +const MAX_TURN_SPANS = 20;
 +const REFRESH_REASON = "agent-pull-requests";
 +
@@ -1404,6 +1541,9 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +  private readonly turns = new Map<string, AgentTurnSpan[]>();
 +  private readonly scannedAgents = new Set<string>();
 +  private hasPolled = false;
++  private stopped = false;
++  /** Rounds in a row that did not see a remembered change request. */
++  private readonly misses = new Map<string, number>();
 +  private round = 0;
 +  private polling: Promise<void> | null = null;
 +  private firstPoll: NodeJS.Timeout | null = null;
@@ -1431,14 +1571,17 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +  }
 +
 +  /** Stops watching; resolves once the links found so far are on disk. */
-+  stop(): Promise<void> {
++  async stop(): Promise<void> {
++    this.stopped = true;
 +    this.unsubscribe?.();
 +    this.unsubscribe = null;
 +    if (this.firstPoll) clearTimeout(this.firstPoll);
 +    if (this.timer) clearInterval(this.timer);
 +    this.firstPoll = null;
 +    this.timer = null;
-+    return this.store.flush();
++    // A round in flight must not send a follow-up to agents that are closing.
++    await this.polling;
++    await this.store.flush();
 +  }
 +
 +  setPrompts(prompts: Parameters<AgentPullRequestStore["setPrompts"]>[0]): void {
@@ -1495,7 +1638,7 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +    const holders = records.filter((record) => {
 +      if (record.archivedAt && this.store.linksOf(record.id).length === 0) return false;
 +      const answering = nearestUnarchived(record, byId);
-+      return answering !== null && isPullRequestAutoListenOn(answering.labels);
++      return answering !== null && isListening(answering, byId);
 +    });
 +    const held = await this.collectHeld(holders, { force: true });
 +
@@ -1521,12 +1664,21 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +      });
 +    }
 +    this.hasPolled = true;
++    // One failed forge read looks the same as a change request that is gone. Forgetting on it
++    // would take the next look as the first one and drop what was waiting to be sent.
 +    for (const key of this.memories.keys()) {
-+      if (!byUrl.has(key)) this.forget(key);
++      if (byUrl.has(key)) {
++        this.misses.delete(key);
++        continue;
++      }
++      const missed = (this.misses.get(key) ?? 0) + 1;
++      this.misses.set(key, missed);
++      if (missed >= MAX_MISSED_ROUNDS) this.forget(key);
 +    }
 +  }
 +
 +  private forget(key: string): void {
++    this.misses.delete(key);
 +    this.memories.delete(key);
 +    this.owners.delete(key);
 +    this.freshLinks.delete(key);
@@ -1546,7 +1698,7 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +    for (const entry of entries) {
 +      const holder = byId.get(entry.agentId);
 +      const record = holder ? nearestUnarchived(holder, byId) : null;
-+      if (!record || !isPullRequestAutoListenOn(record.labels)) continue;
++      if (!record || !isListening(record, byId)) continue;
 +      const viaLink = entry.viaLink && record.id === entry.agentId;
 +      const existing = candidates.get(record.id);
 +      candidates.set(record.id, { record, viaLink: viaLink || existing?.viaLink === true });
@@ -1585,8 +1737,9 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +      agentBusy: activity.busy || input.prompted.has(owner.id),
 +      agentTurns: activity.turns,
 +    });
++    const previous = this.memories.get(key);
 +    this.memories.set(key, result.memory);
-+    if (!result.reaction) return;
++    if (!result.reaction || this.stopped) return;
 +
 +    input.prompted.add(owner.id);
 +    const prompt = fillPullRequestPrompt(this.store.promptFor(result.reaction), {
@@ -1604,6 +1757,8 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +        { err: error, agentId: owner.id, url: entry.status.url },
 +        "Could not send a pull request follow-up",
 +      );
++      // Not delivered: look at it again next round, as if this one had not happened.
++      if (previous) this.memories.set(key, previous);
 +    }
 +  }
 +
@@ -1796,7 +1951,7 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +    const cached = this.linkStatuses.get(key);
 +    if (cached && this.isLinkStatusFresh(cached, options)) return cached;
 +    const link = parsePullRequestUrl(url);
-+    const candidates = [...new Set([...(cached?.cwd ? [cached.cwd] : []), ...cwds])];
++    const candidates = link ? [...new Set([...(cached?.cwd ? [cached.cwd] : []), ...cwds])] : [];
 +    let next: CachedLinkStatus = {
 +      status: cached?.status ?? unknownStatus(url),
 +      forge: cached?.forge,
@@ -1804,8 +1959,8 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +      fetchedAt: this.now(),
 +      round: options.round,
 +    };
-+    for (const cwd of link ? candidates : []) {
-+      const read = await this.readLinkIn(link!, cwd, force);
++    for (const cwd of candidates) {
++      const read = await this.readLinkIn(url, cwd, force);
 +      if (read) {
 +        next = { ...read, fetchedAt: this.now(), round: options.round };
 +        break;
@@ -1821,16 +1976,20 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +  ): boolean {
 +    const age = this.now() - cached.fetchedAt;
 +    if (isSettled(cached.status)) return age < SETTLED_LINK_STATUS_TTL_MS;
++    // No checkout's forge knew it. Asking every checkout again each round would only burn calls.
++    if (cached.cwd === null) return age < UNREADABLE_LINK_RETRY_MS;
 +    // A poll reads each open link once per round, however many agents hold it.
 +    if (options.force) return cached.round === options.round;
 +    return age < LINK_STATUS_TTL_MS;
 +  }
 +
 +  private async readLinkIn(
-+    link: NonNullable<ReturnType<typeof parsePullRequestUrl>>,
++    url: string,
 +    cwd: string,
 +    force: boolean,
 +  ): Promise<Omit<CachedLinkStatus, "fetchedAt" | "round"> | null> {
++    const link = parsePullRequestUrl(url);
++    if (!link) return null;
 +    try {
 +      const resolution = await this.options.workspaceGitService.resolveForge(cwd);
 +      if (!resolution) return null;
@@ -1865,6 +2024,21 @@ index 0000000000000000000000000000000000000000..44821f9cdca65dc968f387a773e812c4
 +      return null;
 +    }
 +  }
++}
++
++/** A session listens when its checkbox and those of all its parents are on. */
++function isListening(
++  record: StoredAgentRecord,
++  byId: ReadonlyMap<string, StoredAgentRecord>,
++): boolean {
++  const seen = new Set<string>();
++  let current: StoredAgentRecord | undefined = record;
++  while (current && !seen.has(current.id)) {
++    if (!isPullRequestAutoListenOn(current.labels)) return false;
++    seen.add(current.id);
++    current = byId.get(getParentAgentIdFromLabels(current.labels) ?? "");
++  }
++  return true;
 +}
 +
 +function lastUsedAt(record: StoredAgentRecord): number {
@@ -2498,7 +2672,7 @@ index 0000000000000000000000000000000000000000..cbd5beb798d7d8d3969c12b329f9c8bc
 +}
 diff --git a/packages/server/src/server/agent-pull-requests/store.ts b/packages/server/src/server/agent-pull-requests/store.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..68f47eb41e33018eb071ea855ccfa9f446ee1a9f
+index 0000000000000000000000000000000000000000..9ec35fd42d1435e7f64bf1840b702b92f5d0f0ff
 --- /dev/null
 +++ b/packages/server/src/server/agent-pull-requests/store.ts
 @@ -0,0 +1,132 @@
@@ -2583,10 +2757,6 @@ index 0000000000000000000000000000000000000000..68f47eb41e33018eb071ea855ccfa9f4
 +    return this.state.links[agentId] ?? [];
 +  }
 +
-+  linkedAgentIds(): string[] {
-+    return Object.keys(this.state.links);
-+  }
-+
 +  /** Returns false when the agent already had the link. */
 +  addLink(agentId: string, link: StoredPullRequestLink): boolean {
 +    const links = this.state.links[agentId] ?? [];
@@ -2606,11 +2776,15 @@ index 0000000000000000000000000000000000000000..68f47eb41e33018eb071ea855ccfa9f4
 +    return this.state.prompts[reaction] ?? DEFAULT_PULL_REQUEST_PROMPTS[reaction];
 +  }
 +
-+  setPrompts(prompts: PullRequestPrompts): void {
++  /**
++   * Saves the prompts named in the patch and keeps the others, so a device only replaces what it
++   * changed itself. A blank prompt goes back to the default.
++   */
++  setPrompts(patch: PullRequestPrompts): void {
 +    const next: PullRequestPrompts = {};
 +    for (const reaction of Object.keys(DEFAULT_PULL_REQUEST_PROMPTS) as PullRequestReaction[]) {
-+      const prompt = prompts[reaction];
-+      if (prompt === undefined || prompt.trim().length === 0) continue;
++      const prompt = patch[reaction] ?? this.state.prompts[reaction] ?? "";
++      if (prompt.trim().length === 0) continue;
 +      if (prompt.length > MAX_PROMPT_LENGTH) throw new Error("The prompt is too long to save.");
 +      // The built-in text is not stored, so a later default reaches hosts that never changed it.
 +      if (prompt !== DEFAULT_PULL_REQUEST_PROMPTS[reaction]) next[reaction] = prompt;

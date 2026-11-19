@@ -474,9 +474,10 @@ patches refer to them in their `Fork-Change` trailer.
   forge of a checkout on the same repository; a link into a repository none of the agents has checked out
   is listed with state `unknown` and shown as an open pill without checks. The app refetches every 30
   seconds; the workspace's own change request still arrives by push and is shown first. With more than one
-  change request, a follow-up pill names its number ("Fix CI #12"). Checked: typecheck (protocol, client,
-  server, app), lint, format and the unit tests only; not checked in a browser or against an upstream
-  client yet.
+  change request, a follow-up pill names its number ("Fix CI #12"). A link no checkout's forge knows is
+  asked again every 10 minutes, not every round. Checked: typecheck (protocol, client, server, app), lint,
+  format, the unit tests, and the builds upstream's Dockerfile runs (`build` for server and CLI,
+  `build:daemon-web-ui`), outside Docker; not checked in a browser or against an upstream client yet.
 - Drop when: upstream shows the change requests of an agent's subagents. F-22 goes with it.
 
 ### F-22: Listen to an agent's pull requests and answer reviews, failed CI and conflicts
@@ -494,7 +495,8 @@ patches refer to them in their `Fork-Change` trailer.
 - Touches: protocol `agent-labels.ts` (`paseo.pr-auto-listen`), `messages.ts`
   (`agent.pull_requests.set_prompts`, the flag); server `agent-pull-requests/reactions.ts` and its test,
   the poll in `index.ts`, the prompts in `store.ts`; client `setPullRequestPrompts`; app new
-  `composer/quick-action-prompt-sync.ts`, the checkbox pill in `composer/pull-request-pills.tsx`, the
+  `composer/quick-action-prompt-sync.tsx` and its test (also mounted in
+  `screens/settings/quick-actions-section.tsx`, F-14's file), the checkbox pill in `composer/pull-request-pills.tsx`, the
   `addressReview` action in `composer/pull-request-actions.ts` and `composer/quick-action-prompts.ts`
   (F-10's and F-14's files), `en.ts` strings under `workspace.git.pr.quickActions` (the other locales
   already point at that object).
@@ -509,15 +511,19 @@ patches refer to them in their `Fork-Change` trailer.
   Fix CI once per failing head commit, Address review for a new review that requests changes, a review
   with a body, or a comment in an unresolved review thread. Approvals and plain conversation comments do
   not count. One agent answers each change request: the one that created it, else the one last written to;
-  an archived subagent's go to its nearest unarchived parent. Guards: the first look after a daemon start
+  an archived subagent's go to its nearest unarchived parent. A session listens only while its own
+  checkbox and those of all its parents are on, so unchecking a parent also covers its subagents. Guards: the first look after a daemon start
   only notes what is there; Fix CI stops after three failed heads in a row until the checks pass; review
   comments posted during the agent's own turn count as its replies, because the daemon cannot tell the
   agent's forge account from a reviewer's (so a review that arrives mid-turn is not answered on its own;
-  the Address review pill still shows for requested changes). What was reacted to is in memory only.
-  Prompts: the daemon's defaults equal `en.ts`; the app sends its effective prompts on connect when the
-  device has a custom one, and on every change, and the host keeps the last ones it got in
-  `agent-pull-requests.json`. Checked: typecheck, lint, format and the unit tests only; not checked in a
-  browser, against a real forge or against an upstream client yet.
+  the Address review pill still shows for requested changes). What was reacted to is in memory only, so
+  events that arrive while the daemon is down are not answered. A follow-up that could not be delivered is
+  tried again next round, and one failed forge read does not reset what was waiting (a change request is
+  forgotten after 10 rounds without it). Prompts: the daemon's defaults equal `en.ts`. The app sends only
+  the prompts this device customized, and an empty one for a prompt reset to its default; the host keeps
+  the rest, so devices do not overwrite each other's prompts, and saves them in
+  `agent-pull-requests.json`. Checked: typecheck, lint, format, the unit tests and the Dockerfile's builds
+  outside Docker; not checked in a browser, against a real forge or against an upstream client yet.
 - Config: the Auto-listen checkbox pill above the composer (shown while the session has an open change
   request); prompts in Settings → Quick actions.
 - Drop when: upstream reacts to change request events on its own; drop together with F-21.
