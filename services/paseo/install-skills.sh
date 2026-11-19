@@ -6,8 +6,9 @@
 # Pi, Codex) read ~/.agents/skills. It runs again on each start, so new and updated skills arrive with a
 # restart. It does not delay the daemon, and one failed source does not stop the others. It needs the
 # network, which the broker allows. Before that, install-instructions.mjs writes agent-instructions.md into the
-# agents' global CLAUDE.md / AGENTS.md. Before the daemon starts, seed-paseo-providers.mjs adds fx to paseo's
-# agent providers. INSTALL_SKILLS=0 skips all three, for a daemon that runs no agents.
+# agents' global CLAUDE.md / AGENTS.md. INSTALL_SKILLS=0 skips both, for a daemon that runs no agents. Before the
+# daemon starts, seed-paseo-defaults.mjs seeds our default host settings and paseo's orchestration skills on every
+# daemon, and fx as an agent provider on those that run agents.
 set -uo pipefail
 
 LIST="${SKILLS_LIST:-/etc/paseo-skills.txt}"
@@ -40,9 +41,12 @@ if [[ "${1:-}" == --install ]]; then
   exit 0
 fi
 
+RUN_USER="$(getent passwd 1000 | cut -d: -f1)"
+RUN_HOME="$(getent passwd 1000 | cut -d: -f6)"
+seed_args=()
+
 if [[ "${INSTALL_SKILLS:-1}" != 0 && -f "$LIST" ]]; then
-  RUN_USER="$(getent passwd 1000 | cut -d: -f1)"
-  RUN_HOME="$(getent passwd 1000 | cut -d: -f6)"
+  seed_args+=(--providers)
   # The home is a host mount that the base entrypoint may still be chowning.
   (
     until gosu "$RUN_USER" test -w "$RUN_HOME"; do sleep 1; done
@@ -50,8 +54,9 @@ if [[ "${INSTALL_SKILLS:-1}" != 0 && -f "$LIST" ]]; then
     gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/install-instructions.mjs
     gosu "$RUN_USER" env HOME="$RUN_HOME" "$0" --install
   ) &
-  # The daemon reads its config on start, so this one runs first.
-  gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/seed-paseo-providers.mjs
 fi
+
+# The daemon reads its config on start, so this runs first.
+gosu "$RUN_USER" env HOME="$RUN_HOME" node /usr/local/bin/seed-paseo-defaults.mjs "${seed_args[@]}"
 
 exec /usr/local/bin/dev-base-entrypoint.sh "$@"
