@@ -445,6 +445,89 @@ patches refer to them in their `Fork-Change` trailer.
   browser or against an upstream client yet.
 - Drop when: upstream syncs hosts between devices.
 
+### F-21: Every pull request of an agent and its subagents above the composer
+
+- Status: active, ours only
+- Requested: 2026-11-19, "support detecting and displaying multiple prs if the agent or its sub agents is
+  working on mutiple prs." (confirmed: the PRs of the workspaces its subagents run in, plus the PR links the
+  agent or a subagent created with `gh pr create` or the like)
+- Why: F-10 shows the one change request of the workspace's branch. An agent that opens several, or hands
+  work to subagents in other worktrees, had the rest out of sight. Which change requests an agent created is
+  only in its tool calls, which the daemon sees and no plugin composer pill can read.
+- Patches: `feat: show every pull request of an agent and react to their reviews and CI` (also carries F-22,
+  from the same request)
+- Touches: protocol `messages.ts` (`agent.pull_requests.list` request and response, the flag); server new
+  `server/agent-pull-requests/` (`links.ts`, `store.ts`, `index.ts` and tests), one case in `session.ts`
+  (`dispatchMiscMessage`), two lines in `authorization/operation-permissions.ts`, the setup and stop in
+  `bootstrap.ts`, the flag in `websocket-server.ts`; client `listAgentPullRequests` in `daemon-client.ts`;
+  app new `composer/agent-pull-requests.ts` and its test, and `composer/pull-request-pills.tsx` (F-10's
+  file) now renders one pill per change request.
+- Compatibility: flag `server_info.features.agentPullRequests`. One new dotted request/response pair
+  (`workspace.read`); no existing message changes and the daemon never sends anything unasked, so upstream
+  apps and the CLI see no difference. An agent holds the change request of the branch checked out where it
+  runs (upstream's own snapshot) and every change request a finished tool call of its created: a shell
+  command matching `gh|glab|tea|fj|berg pr|mr|pulls create|new`, or an MCP tool named like
+  `create_pull_request`. Links a command only read (`gh pr list`) do not count. Claude, Codex and OpenCode
+  provider subagents count as their parent. Links are kept in `$PASEO_HOME/agent-pull-requests.json`, since
+  an archived subagent's timeline is not loaded again, and are dropped when the agent is deleted. The list
+  for an agent covers all of its subagents, archived ones included. A link's status is read through the
+  forge of a checkout on the same repository; a link into a repository none of the agents has checked out
+  is listed with state `unknown` and shown as an open pill without checks. The app refetches every 30
+  seconds; the workspace's own change request still arrives by push and is shown first. With more than one
+  change request, a follow-up pill names its number ("Fix CI #12"). A link no checkout's forge knows is
+  asked again every 10 minutes, not every round. Checked: typecheck (protocol, client, server, app), lint,
+  format, the unit tests, and the builds upstream's Dockerfile runs (`build` for server and CLI,
+  `build:daemon-web-ui`), outside Docker; not checked in a browser or against an upstream client yet.
+- Drop when: upstream shows the change requests of an agent's subagents. F-22 goes with it.
+
+### F-22: Listen to an agent's pull requests and answer reviews, failed CI and conflicts
+
+- Status: active, ours only
+- Requested: 2026-11-19, "support auto listening to PR (a checkbox per session, default on), to auto react to
+  reviews and CI reports. prompts reuse the quick actions and respect the customization" (confirmed: it runs
+  in the daemon, and reacts to failed CI, new reviews or review comments, and merge conflicts); the same
+  day, "make sure the deamon response is backward compatible, as we might using clients without patches
+  (paseo's official ios app for example)"
+- Why: every review, failed check or conflict needed someone to notice it and click F-10's follow-up. It
+  has to work with no client open, so it lives in the daemon; a plugin cannot read forge status or reviews.
+- Patches: none of its own; F-21's `feat: show every pull request of an agent and react to their reviews
+  and CI` carries it.
+- Touches: protocol `agent-labels.ts` (`paseo.pr-auto-listen`), `messages.ts`
+  (`agent.pull_requests.set_prompts`, the flag); server `agent-pull-requests/reactions.ts` and its test,
+  the poll in `index.ts`, the prompts in `store.ts`; client `setPullRequestPrompts`; app new
+  `composer/quick-action-prompt-sync.tsx` and its test (also mounted in
+  `screens/settings/quick-actions-section.tsx`, F-14's file), the checkbox pill in `composer/pull-request-pills.tsx`, the
+  `addressReview` action in `composer/pull-request-actions.ts` and `composer/quick-action-prompts.ts`
+  (F-10's and F-14's files), `en.ts` strings under `workspace.git.pr.quickActions` (the other locales
+  already point at that object).
+- Compatibility: flag `server_info.features.pullRequestAutoListen`. One new dotted request/response pair
+  (`workspace.write`). The checkbox is the agent label `paseo.pr-auto-listen` (`off` turns it off; absent
+  or anything else is on), written with upstream's existing `update_agent_request`, so there is no new
+  message for it and other clients only see one more label. **It is on by default for every session,
+  including ones started from upstream apps, which have no checkbox**: there, turn it off with the label.
+  The follow-up arrives as an ordinary user message, which every client shows. Every 90 seconds the daemon
+  reads the open change requests of sessions that listen (F-21's set) and sends at most one follow-up per
+  agent per round, only to an idle agent: Resolve conflicts when a change request becomes `CONFLICTING`,
+  Fix CI once per failing head commit, Address review for a new review that requests changes, a review
+  with a body, or a comment in an unresolved review thread. Approvals and plain conversation comments do
+  not count. One agent answers each change request: the one that created it, else the one last written to;
+  an archived subagent's go to its nearest unarchived parent. A session listens only while its own
+  checkbox and those of all its parents are on, so unchecking a parent also covers its subagents. Guards: the first look after a daemon start
+  only notes what is there; Fix CI stops after three failed heads in a row until the checks pass; review
+  comments posted during the agent's own turn count as its replies, because the daemon cannot tell the
+  agent's forge account from a reviewer's (so a review that arrives mid-turn is not answered on its own;
+  the Address review pill still shows for requested changes). What was reacted to is in memory only, so
+  events that arrive while the daemon is down are not answered. A follow-up that could not be delivered is
+  tried again next round, and one failed forge read does not reset what was waiting (a change request is
+  forgotten after 10 rounds without it). Prompts: the daemon's defaults equal `en.ts`. The app sends only
+  the prompts this device customized, and an empty one for a prompt reset to its default; the host keeps
+  the rest, so devices do not overwrite each other's prompts, and saves them in
+  `agent-pull-requests.json`. Checked: typecheck, lint, format, the unit tests and the Dockerfile's builds
+  outside Docker; not checked in a browser, against a real forge or against an upstream client yet.
+- Config: the Auto-listen checkbox pill above the composer (shown while the session has an open change
+  request); prompts in Settings → Quick actions.
+- Drop when: upstream reacts to change request events on its own; drop together with F-21.
+
 ## Sync log
 
 One line per rebase onto a new upstream base, newest first.
