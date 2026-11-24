@@ -101,9 +101,15 @@ function paseo({ name, port, githubToken, npmToken, identity, client = false }: 
     ...identity && { git: identities[identity] },
     // The home folder (logins, models, caches) lives on the host, where it is easy to back up.
     // The signing key is the identity's, made by `pnpm keys:setup`; dev-base's entrypoint imports it on every start.
-    volumes: identity
-      ? [`./keys/gpg/${identity}:/etc/signing:ro`]
-      : [],
+    // Checkouts live in volumes instead: git over a macOS host mount starves the daemon.
+    volumes: [
+      ...identity
+        ? [`./keys/gpg/${identity}:/etc/signing:ro`]
+        : [],
+      ...!client
+        ? [`${name}-projects:/home/paseo/projects`, `${name}-worktrees:/home/paseo/.paseo/worktrees`]
+        : [],
+    ],
     persist: ['/home/paseo'],
     tailscale: { hostname },
   }
