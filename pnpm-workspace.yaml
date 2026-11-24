@@ -19,22 +19,22 @@ allowBuilds:
 catalogs:
   agentic:
     '@antfu/skills': ^0.1.3
-    skills: ^1.7.4
+    skills: ^1.9.0
   cli:
     '@antfu/eslint-config': ^10.0.0
-    eslint: ^10.14.0
+    eslint: ^10.15.0
     eslint-plugin-slop: ^0.1.3
     eslint-plugin-sonarjs: ^4.2.2
-    knip: ^6.44.1
+    knip: ^6.48.0
     nano-staged: ^1.0.2
     simple-git-hooks: ^2.14.0
     taze: ^21.3.0
     tsx: ^4.23.15
     typescript: ^6.0.3
-    vite: ^8.3.5
+    vite: ^8.3.8
   inlined:
     '@antfu/utils': ^9.3.0
   testing:
-    vitest: ^5.0.5
+    vitest: ^5.1.1
   types:
     '@types/node': ^26.6.6
