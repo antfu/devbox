@@ -454,8 +454,7 @@ patches refer to them in their `Fork-Change` trailer.
 - Why: F-10 shows the one change request of the workspace's branch. An agent that opens several, or hands
   work to subagents in other worktrees, had the rest out of sight. Which change requests an agent created is
   only in its tool calls, which the daemon sees and no plugin composer pill can read.
-- Patches: `feat: show every pull request of an agent and react to their reviews and CI` (also carries F-22,
-  from the same request)
+- Patches: `feat: show every pull request of an agent and its subagents`
 - Touches: protocol `messages.ts` (`agent.pull_requests.list` request and response, the flag); server new
   `server/agent-pull-requests/` (`links.ts`, `store.ts`, `index.ts` and tests), one case in `session.ts`
   (`dispatchMiscMessage`), two lines in `authorization/operation-permissions.ts`, the setup and stop in
@@ -475,14 +474,18 @@ patches refer to them in their `Fork-Change` trailer.
   is listed with state `unknown` and shown as an open pill without checks. The app refetches every 30
   seconds; the workspace's own change request still arrives by push and is shown first. With more than one
   change request, a follow-up pill names its number ("Fix CI #12"). A link no checkout's forge knows is
-  asked again every 10 minutes, not every round. Checked: typecheck (protocol, client, server, app), lint,
-  format, the unit tests, and the builds upstream's Dockerfile runs (`build` for server and CLI,
-  `build:daemon-web-ui`), outside Docker; not checked in a browser or against an upstream client yet.
-- Drop when: upstream shows the change requests of an agent's subagents. F-22 goes with it.
+  asked again every 10 minutes, not on every list request. Checked: typecheck (protocol, client, server,
+  app), lint, format, the unit tests, and the builds upstream's Dockerfile runs (`build` for server and
+  CLI, `build:daemon-web-ui`), outside Docker; not checked in a browser or against an upstream client yet.
+  After F-22 was taken out on 2026-11-24: typecheck (protocol, client, server, app), lint, format and the
+  touched unit tests again; no `pnpm build`, since that session had no Docker.
+- Drop when: upstream shows the change requests of an agent's subagents.
 
 ### F-22: Listen to an agent's pull requests and answer reviews, failed CI and conflicts
 
-- Status: active, ours only
+- Status: dropped on 2026-11-24 ("remove auto listen feature patch"); its parts, including the Address
+  review quick action and the prompt sync, are gone from F-21's patch. Saved prompts in
+  `agent-pull-requests.json` are ignored on read.
 - Requested: 2026-11-19, "support auto listening to PR (a checkbox per session, default on), to auto react to
   reviews and CI reports. prompts reuse the quick actions and respect the customization" (confirmed: it runs
   in the daemon, and reacts to failed CI, new reviews or review comments, and merge conflicts); the same
@@ -490,8 +493,8 @@ patches refer to them in their `Fork-Change` trailer.
   (paseo's official ios app for example)"
 - Why: every review, failed check or conflict needed someone to notice it and click F-10's follow-up. It
   has to work with no client open, so it lives in the daemon; a plugin cannot read forge status or reviews.
-- Patches: none of its own; F-21's `feat: show every pull request of an agent and react to their reviews
-  and CI` carries it.
+- Patches: none (it was carried by F-21's patch, then named `feat: show every pull request of an agent
+  and react to their reviews and CI`).
 - Touches: protocol `agent-labels.ts` (`paseo.pr-auto-listen`), `messages.ts`
   (`agent.pull_requests.set_prompts`, the flag); server `agent-pull-requests/reactions.ts` and its test,
   the poll in `index.ts`, the prompts in `store.ts`; client `setPullRequestPrompts`; app new
