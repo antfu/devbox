@@ -22,10 +22,10 @@ Fork-Change: F-16
  create mode 100644 packages/app/src/composer/send-behavior-switch.tsx
 
 diff --git a/packages/app/src/composer/index.tsx b/packages/app/src/composer/index.tsx
-index 4b31c4e0c6abe577be9ea091b98418f2352cbf9c..feccba5b3ada8038be2a6d956b1afe8eaa7cbf0a 100644
+index 5a495cd4703831f8cc1b6f65232f151001e4f495..450de7dee4c309438b9c309baa8acc982ef88088 100644
 --- a/packages/app/src/composer/index.tsx
 +++ b/packages/app/src/composer/index.tsx
-@@ -130,6 +130,7 @@ import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
+@@ -132,6 +132,7 @@ import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
  import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
  import { useIsInputLive } from "./input/use-input-live";
  import { resolveActiveSendBehavior } from "./input/state";
@@ -33,7 +33,7 @@ index 4b31c4e0c6abe577be9ea091b98418f2352cbf9c..feccba5b3ada8038be2a6d956b1afe8e
  import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
  import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
  import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
-@@ -2220,6 +2221,16 @@ function ComposerContentImpl({
+@@ -2245,6 +2246,16 @@ function ComposerContentImpl({
        controlSizing,
      ],
    );
@@ -50,7 +50,7 @@ index 4b31c4e0c6abe577be9ea091b98418f2352cbf9c..feccba5b3ada8038be2a6d956b1afe8e
  
    const hasGithubAttachment = useMemo(
      () =>
-@@ -2611,7 +2622,7 @@ function ComposerContentImpl({
+@@ -2640,7 +2651,7 @@ function ComposerContentImpl({
                    autoFocusKey={`${serverId}:${agentId}:${autoFocusKey ?? ""}`}
                    disabled={isSubmitLoading}
                    leftContent={leftContent}

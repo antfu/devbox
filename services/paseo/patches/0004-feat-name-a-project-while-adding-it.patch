@@ -996,10 +996,10 @@ index 18dc5064f3fbe64452edc37772f26de9b01d03c3..30d88a283364ffe5d049969f98a0348c
          client,
          upsertProject,
 diff --git a/packages/client/src/daemon-client.test.ts b/packages/client/src/daemon-client.test.ts
-index af1f2edd1f7cdb7af20b971765c83c7b9fba4e70..95243ef8616f1040a988f7e7759f6cb65c606c92 100644
+index d242205974804d6623f5ff4600af6fb84538f54a..5502e939fd87d969c988be58ef25e95ffaad0c03 100644
 --- a/packages/client/src/daemon-client.test.ts
 +++ b/packages/client/src/daemon-client.test.ts
-@@ -4806,6 +4806,58 @@ test("creates and registers a project directory through the dotted RPC", async (
+@@ -4907,6 +4907,58 @@ test("creates and registers a project directory through the dotted RPC", async (
    });
  });
  
@@ -1059,10 +1059,10 @@ index af1f2edd1f7cdb7af20b971765c83c7b9fba4e70..95243ef8616f1040a988f7e7759f6cb6
    const logger = createMockLogger();
    const mock = createMockTransport();
 diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
-index 7843e59e60f9bc3d8c2a6f8aadb9788ea3a128cd..86d8d43dad757fad103842cc955883a66105cca7 100644
+index 91c888aee7be721414e8330817aab1cc0579fbe3..212957e9d6b4f372d478509c03c78804c5972a4a 100644
 --- a/packages/client/src/daemon-client.ts
 +++ b/packages/client/src/daemon-client.ts
-@@ -3223,7 +3223,12 @@ export class DaemonClient {
+@@ -3246,7 +3246,12 @@ export class DaemonClient {
    }
  
    async cloneGithubProject(
@@ -1076,7 +1076,7 @@ index 7843e59e60f9bc3d8c2a6f8aadb9788ea3a128cd..86d8d43dad757fad103842cc955883a6
      requestId?: string,
    ): Promise<ProjectGithubClonePayload> {
      const message = {
-@@ -3231,6 +3236,7 @@ export class DaemonClient {
+@@ -3254,6 +3259,7 @@ export class DaemonClient {
        repo: input.repo,
        targetDirectory: input.targetDirectory,
        ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
@@ -1097,10 +1097,10 @@ index e316b0421d93de2258de0dccb806c0907143f31e..43a92520a0f6277db7fdd7f54251b7b3
    });
  
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index e62cf8357ecd04d661a0aa5f4ce7823681b6a3ff..e752304541e3434bd6c1098b88a70d039f1eaac2 100644
+index 679774f660a16d3b0793d6fd7a9d0565811c07c9..2487650b1934af3c92d47288bc4ca3dadc505345 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
-@@ -2922,6 +2922,8 @@ export const ProjectGithubCloneRequestSchema = z.object({
+@@ -2978,6 +2978,8 @@ export const ProjectGithubCloneRequestSchema = z.object({
    repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
    cloneProtocol: ProjectGithubCloneProtocolSchema.optional(),
    targetDirectory: z.string().trim().min(1),
@@ -1109,7 +1109,7 @@ index e62cf8357ecd04d661a0aa5f4ce7823681b6a3ff..e752304541e3434bd6c1098b88a70d03
    requestId: z.string(),
  });
  
-@@ -4077,6 +4079,8 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -4148,6 +4150,8 @@ export const ServerInfoStatusPayloadSchema = z
          relayProtectedSecurity: z.boolean().optional(),
          // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
          projectGithubClone: z.boolean().optional(),
@@ -1225,10 +1225,10 @@ index 0000000000000000000000000000000000000000..adbcaca362b1d6f1eaeffc04f546a93f
 +  return name;
 +}
 diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
-index fcdbbae1edb3cffaefe76495f5725f3d2f61daf4..04213e367a90fa8986ec38775f96e3a1f261d603 100644
+index c6812e334dd4b9ab657b7ef0bae7fbb69aac2dff..f16a66dacbd4232e45c1d447462e0dd3a774f221 100644
 --- a/packages/server/src/server/session.ts
 +++ b/packages/server/src/server/session.ts
-@@ -309,6 +309,7 @@ import {
+@@ -326,6 +326,7 @@ import {
    createProjectDirectory,
    ProjectDirectoryRequestError,
  } from "./project-directory-service.js";
@@ -1236,7 +1236,7 @@ index fcdbbae1edb3cffaefe76495f5725f3d2f61daf4..04213e367a90fa8986ec38775f96e3a1
  import { runGitCommand } from "../utils/run-git-command.js";
  import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
  import { resolveWorktreeSourceCwd } from "./workspace-source.js";
-@@ -7748,7 +7749,13 @@ export class Session {
+@@ -7940,7 +7941,13 @@ export class Session {
        });
        normalizedRepo = repo.displayName;
        const targetParent = resolve(expandTilde(request.targetDirectory.trim()));
@@ -1252,10 +1252,10 @@ index fcdbbae1edb3cffaefe76495f5725f3d2f61daf4..04213e367a90fa8986ec38775f96e3a1
          throw new Error("Resolved checkout path must stay inside the target directory");
        }
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index cbbdd9685d4c6aa47a9c8bf0fd53ce5e1da45658..3672768c5e33b24f908abba95d6eea7e48b33450 100644
+index 252ea81f543373fbe244b400ff86adb5dde5e47c..9c469f1cddaf1d13a823c05769030d10441561b6 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2178,6 +2178,8 @@ export class VoiceAssistantWebSocketServer {
+@@ -2229,6 +2229,8 @@ export class VoiceAssistantWebSocketServer {
          hubRelationship: true,
          // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
          projectGithubClone: true,

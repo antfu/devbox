@@ -440,10 +440,10 @@ index 2c9f55610747fd79e3c754c76efd5abaee3adc27..d469bfd15c0d40dbf03b23ad7965f840
      </PressHighlight>
    );
 diff --git a/packages/client/src/daemon-client.ts b/packages/client/src/daemon-client.ts
-index 96721a4308230e3d402a8a5299d3155033fb43aa..635329c5640faada613e39e933c3b13a486232da 100644
+index c7834c4019335aba2d4ec8f231277f5e282c7f51..e9b9383ba99bdd4fb149a3ee856a423f18128ee9 100644
 --- a/packages/client/src/daemon-client.ts
 +++ b/packages/client/src/daemon-client.ts
-@@ -123,6 +123,7 @@ import type {
+@@ -126,6 +126,7 @@ import type {
    DaemonGetHostStatsResponse,
    DaemonAppHostRegistryGetResponse,
    DaemonAppHostRegistrySetResponse,
@@ -451,7 +451,7 @@ index 96721a4308230e3d402a8a5299d3155033fb43aa..635329c5640faada613e39e933c3b13a
    DaemonGetPairingOfferResponse,
    DaemonConfigReloadResponse,
    DiagnosticsResponse,
-@@ -6095,6 +6096,16 @@ export class DaemonClient {
+@@ -6174,6 +6175,16 @@ export class DaemonClient {
      }
    }
  
@@ -469,10 +469,10 @@ index 96721a4308230e3d402a8a5299d3155033fb43aa..635329c5640faada613e39e933c3b13a
      this.requireDaemonConfigReloadSupport();
      return this.sendNamespacedCorrelatedSessionRequest({
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index e8949a484fbada7f40d3dae43fa56e1368c235bf..48ea7f8d0be6b460c3f82729512bbe2d58c681f0 100644
+index 534674d354e07fa0b2c3706743fd7667d5ffba8d..373455c4e0831fb0492bd4c3e37112c6bfdafb04 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
-@@ -1564,6 +1564,13 @@ export const DaemonAppHostRegistrySetRequestSchema = z.object({
+@@ -1586,6 +1586,13 @@ export const DaemonAppHostRegistrySetRequestSchema = z.object({
    baseRevision: z.number(),
  });
  
@@ -486,7 +486,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..48ea7f8d0be6b460c3f82729512bbe2d
  export const DaemonGetPairingOfferRequestSchema = z.object({
    type: z.literal("daemon.get_pairing_offer.request"),
    requestId: z.string(),
-@@ -3597,6 +3604,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+@@ -3656,6 +3663,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
    DaemonGetHostStatsRequestSchema,
    DaemonAppHostRegistryGetRequestSchema,
    DaemonAppHostRegistrySetRequestSchema,
@@ -494,7 +494,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..48ea7f8d0be6b460c3f82729512bbe2d
    DaemonGetPairingOfferRequestSchema,
    DaemonConfigReloadRequestSchema,
    HubManagementDaemonConnectRequestSchema,
-@@ -4187,6 +4195,8 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -4264,6 +4272,8 @@ export const ServerInfoStatusPayloadSchema = z
          hostStats: z.boolean().optional(),
          // COMPAT(appHostRegistry): added in v0.15.4, remove gate after 2027-05-16.
          appHostRegistry: z.boolean().optional(),
@@ -503,7 +503,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..48ea7f8d0be6b460c3f82729512bbe2d
        })
        .optional(),
    })
-@@ -5577,6 +5587,50 @@ export const DaemonAppHostRegistrySetResponseSchema = z.object({
+@@ -5660,6 +5670,50 @@ export const DaemonAppHostRegistrySetResponseSchema = z.object({
      .passthrough(),
  });
  
@@ -554,7 +554,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..48ea7f8d0be6b460c3f82729512bbe2d
  export const DaemonGetStatusResponseSchema = z.object({
    type: z.literal("daemon.get_status.response"),
    payload: z
-@@ -7624,6 +7678,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+@@ -7878,6 +7932,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
    DaemonGetHostStatsResponseSchema,
    DaemonAppHostRegistryGetResponseSchema,
    DaemonAppHostRegistrySetResponseSchema,
@@ -562,7 +562,7 @@ index e8949a484fbada7f40d3dae43fa56e1368c235bf..48ea7f8d0be6b460c3f82729512bbe2d
    DaemonGetPairingOfferResponseSchema,
    DaemonConfigReloadResponseSchema,
    HubManagementDaemonConnectResponseSchema,
-@@ -7896,6 +7951,8 @@ export type DaemonAppHostRegistryGetResponse = z.infer<
+@@ -8157,6 +8212,8 @@ export type DaemonAppHostRegistryGetResponse = z.infer<
  export type DaemonAppHostRegistrySetResponse = z.infer<
    typeof DaemonAppHostRegistrySetResponseSchema
  >;
@@ -1475,7 +1475,7 @@ index 0000000000000000000000000000000000000000..f9be6fce3618894271b73368d43538da
 +  }
 +}
 diff --git a/packages/server/src/server/authorization/operation-permissions.ts b/packages/server/src/server/authorization/operation-permissions.ts
-index 512034839f6a6b5ab218f3f67cc17ffc0b15c115..03a505bdd7ca3cbcaa50b67b2fa3f486bd54aefd 100644
+index def44a13cd411d8186a37d5679cc6f0fc9632ca2..8445b5a98e604c478d2af5ae89315f96e32113e2 100644
 --- a/packages/server/src/server/authorization/operation-permissions.ts
 +++ b/packages/server/src/server/authorization/operation-permissions.ts
 @@ -20,6 +20,7 @@ const INBOUND_PERMISSION = {
@@ -1486,7 +1486,7 @@ index 512034839f6a6b5ab218f3f67cc17ffc0b15c115..03a505bdd7ca3cbcaa50b67b2fa3f486
    "agent.background_work.list.request": "workspace.read",
    "agent.background_work.stop.request": ["workspace.write", "hub.execute"],
    "agent.provider_subagents.timeline.get.request": "workspace.read",
-@@ -262,6 +263,7 @@ const OUTBOUND_PERMISSION = {
+@@ -268,6 +269,7 @@ const OUTBOUND_PERMISSION = {
    "agent.detach.response": "workspace.write",
    "agent.fork_context.response": "workspace.read",
    "agent.provider_subagents.list.response": "workspace.read",
@@ -1495,18 +1495,18 @@ index 512034839f6a6b5ab218f3f67cc17ffc0b15c115..03a505bdd7ca3cbcaa50b67b2fa3f486
    "agent.provider_subagents.update": "workspace.read",
    "agent.background_work.list.response": "workspace.read",
 diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
-index a39a20de7ab410dc30f09a50cb01269544cf29ca..2ee35c7eed61eff97b4b49f5b109146e58cdd37c 100644
+index ccd5c7542ed1bcf3dbf98837252ef26cc1f8956b..a41105a933ada695087a5bae2877956ccc416b83 100644
 --- a/packages/server/src/server/bootstrap.ts
 +++ b/packages/server/src/server/bootstrap.ts
-@@ -181,6 +181,7 @@ import {
-   type ActiveWorkspaceRef,
+@@ -188,6 +188,7 @@ import {
  } from "./workspace-archive-service.js";
+ import { WorkspaceArchiveOperations } from "./workspace-archive-operations.js";
  import { setupAutoArchiveOnMerge } from "./auto-archive-on-merge/index.js";
 +import { setupAgentPullRequests } from "./agent-pull-requests/index.js";
  import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
  import type { TerminalManager } from "../terminal/terminal-manager.js";
  import { startWorkerTerminalManager } from "../terminal/worker-terminal-manager.js";
-@@ -1241,6 +1242,14 @@ export async function createPaseoDaemon(
+@@ -1263,6 +1264,14 @@ export async function createPaseoDaemon(
      emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
    });
  
@@ -1521,7 +1521,7 @@ index a39a20de7ab410dc30f09a50cb01269544cf29ca..2ee35c7eed61eff97b4b49f5b109146e
    const createPaseoWorktreeForTools = async (
      input: Parameters<typeof createPaseoWorktreeWorkflow>[1],
      serviceOptions?: Parameters<typeof createPaseoWorktreeWorkflow>[2],
-@@ -2008,6 +2017,7 @@ export async function createPaseoDaemon(
+@@ -2061,6 +2070,7 @@ export async function createPaseoDaemon(
      await finishSubscriptions.close();
      await wsServer?.agentMessages.close();
      agentManager.prepareForShutdown();
@@ -1530,10 +1530,10 @@ index a39a20de7ab410dc30f09a50cb01269544cf29ca..2ee35c7eed61eff97b4b49f5b109146e
      await closeAllAgents(logger, agentManager);
      await withTimeout({
 diff --git a/packages/server/src/server/session.ts b/packages/server/src/server/session.ts
-index e91e8660ace9c0accaef636bbbf418d0b11fef11..d8615255a5190713a094c40dcb158d7974b76bb8 100644
+index 73e85b602be3ecc3810e00f56431e9e1408d852b..da807c710eb9108dde41cd9cbc131df321267be2 100644
 --- a/packages/server/src/server/session.ts
 +++ b/packages/server/src/server/session.ts
-@@ -315,6 +315,7 @@ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dis
+@@ -332,6 +332,7 @@ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dis
  import { resolveWorktreeSourceCwd } from "./workspace-source.js";
  import { readHostStats } from "./host-stats.js";
  import { handleAppHostRegistryRequest } from "./app-host-registry.js";
@@ -1541,7 +1541,7 @@ index e91e8660ace9c0accaef636bbbf418d0b11fef11..d8615255a5190713a094c40dcb158d79
  
  type ProviderSubagentManagerEvent = Extract<
    AgentManagerEvent,
-@@ -3565,6 +3566,9 @@ export class Session {
+@@ -3686,6 +3687,9 @@ export class Session {
        case "daemon.app_host_registry.set.request":
          this.emit(await handleAppHostRegistryRequest(this.paseoHome, msg));
          return;
@@ -1552,10 +1552,10 @@ index e91e8660ace9c0accaef636bbbf418d0b11fef11..d8615255a5190713a094c40dcb158d79
          this.pushNotifications.revoke(msg.token);
          if (this.currentClientMetadata().pushToken?.trim() === msg.token.trim()) {
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index ba1f47d5e177eba26e95e21dd6eb53af6c34f9f1..82f383ffaf05b948b8871e2b0bb55c0e49fea087 100644
+index 924a93f034652726af0ebf91c5e17029a2d11ba2..4f2b2ddb02b60f76f40e21d8f06fe83809df7615 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2235,6 +2235,8 @@ export class VoiceAssistantWebSocketServer {
+@@ -2292,6 +2292,8 @@ export class VoiceAssistantWebSocketServer {
          hostStats: true,
          // COMPAT(appHostRegistry): added in v0.15.4, remove gate after 2027-05-16.
          appHostRegistry: true,

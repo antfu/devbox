@@ -26,7 +26,7 @@ Fork-Change: F-11
  .../other-host-projects.test.ts               | 103 +++++++++++++
  .../add-project-flow/other-host-projects.ts   | 138 ++++++++++++++++++
  .../app/src/components/add-project-flow.tsx   |  56 ++++++-
- .../app/src/components/hosts/host-picker.tsx  |  37 ++++-
+ .../app/src/components/hosts/host-picker.tsx  |  33 ++++-
  packages/app/src/i18n/resources/ar.ts         |   1 +
  packages/app/src/i18n/resources/en.ts         |   4 +
  packages/app/src/i18n/resources/es.ts         |   1 +
@@ -38,7 +38,7 @@ Fork-Change: F-11
  packages/app/src/i18n/resources/zh-CN.ts      |   1 +
  .../src/screens/new-workspace/form/index.tsx  |  31 +++-
  .../app/src/stores/add-project-flow-store.ts  |  13 +-
- 17 files changed, 422 insertions(+), 9 deletions(-)
+ 17 files changed, 418 insertions(+), 9 deletions(-)
  create mode 100644 packages/app/src/add-project-flow/other-host-projects.test.ts
  create mode 100644 packages/app/src/add-project-flow/other-host-projects.ts
 
@@ -539,10 +539,10 @@ index 830c2ffdfdb2f2e580ff5ddaef79c44c76daa73f..1fa40117a81a3a2329b3a2b7957389f8
      pathOptions,
      recommendedPaths,
 diff --git a/packages/app/src/components/hosts/host-picker.tsx b/packages/app/src/components/hosts/host-picker.tsx
-index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fabbd1a228 100644
+index 9bfdff8dcb9aaaf3f3f7b73e57828f4bd255aaed..35bc094aadd53efa94468b3e67da32b421783384 100644
 --- a/packages/app/src/components/hosts/host-picker.tsx
 +++ b/packages/app/src/components/hosts/host-picker.tsx
-@@ -4,6 +4,7 @@ import type { GestureResponderEvent } from "react-native";
+@@ -3,6 +3,7 @@ import { Pressable, View } from "react-native";
  import { Plus, Server, Settings } from "lucide-react-native";
  import { StyleSheet, useUnistyles } from "react-native-unistyles";
  import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
@@ -550,7 +550,7 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
  import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
  import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
  import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
-@@ -52,9 +53,16 @@ function formatActiveConnectionLabel(connection: ActiveConnection): string {
+@@ -51,9 +52,16 @@ function formatActiveConnectionLabel(connection: ActiveConnection): string {
    return formatConnectionEndpoint(connection.endpoint);
  }
  
@@ -567,7 +567,7 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
    showActiveConnection: boolean;
    selected?: boolean;
    active: boolean;
-@@ -66,6 +74,7 @@ export interface HostPickerOptionProps {
+@@ -65,6 +73,7 @@ export interface HostPickerOptionProps {
  export function HostPickerOption({
    serverId,
    label,
@@ -575,19 +575,15 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
    showActiveConnection,
    selected,
    active,
-@@ -87,7 +96,27 @@ export function HostPickerOption({
-     },
-     [onOpenHostSettings, serverId],
-   );
+@@ -82,7 +91,23 @@ export function HostPickerOption({
+   const handleSettingsPress = useCallback(() => {
+     onOpenHostSettings?.(serverId);
+   }, [onOpenHostSettings, serverId]);
 +  const extraAction = extras?.action;
-+  const handleExtraActionPress = useCallback(
-+    (event: GestureResponderEvent) => {
-+      event.stopPropagation();
-+      extraAction?.onPress();
-+    },
-+    [extraAction],
-+  );
-   const trailingSlot = useMemo(() => {
++  const handleExtraActionPress = useCallback(() => {
++    extraAction?.onPress();
++  }, [extraAction]);
+   const trailingAction = useMemo(() => {
 +    if (extraAction) {
 +      return (
 +        <Button
@@ -603,7 +599,7 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
      if (!onOpenHostSettings) return undefined;
      return (
        <Pressable
-@@ -100,6 +129,8 @@ export function HostPickerOption({
+@@ -95,6 +120,8 @@ export function HostPickerOption({
        </Pressable>
      );
    }, [
@@ -612,16 +608,16 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
      handleSettingsPress,
      label,
      onOpenHostSettings,
-@@ -110,7 +141,7 @@ export function HostPickerOption({
+@@ -105,7 +132,7 @@ export function HostPickerOption({
    return (
      <ComboboxItem
        label={label}
 -      description={connectionLabel}
 +      description={extras?.description ?? connectionLabel}
        leadingSlot={leadingSlot}
-       trailingSlot={trailingSlot}
+       trailingAction={trailingAction}
        selected={selected}
-@@ -180,6 +211,7 @@ export interface HostPickerProps {
+@@ -175,6 +202,7 @@ export interface HostPickerProps {
    desktopMinWidth?: number;
    addHostTestID?: string;
    hostOptionTestID?: (serverId: string) => string;
@@ -629,7 +625,7 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
    children: ReactNode;
  }
  
-@@ -203,6 +235,7 @@ export function HostPicker({
+@@ -198,6 +226,7 @@ export function HostPicker({
    desktopMinWidth,
    addHostTestID,
    hostOptionTestID,
@@ -637,7 +633,7 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
    children,
  }: HostPickerProps): ReactElement {
    const localServerId = useLocalDaemonServerId();
-@@ -279,6 +312,7 @@ export function HostPicker({
+@@ -274,6 +303,7 @@ export function HostPicker({
          <HostPickerOption
            serverId={option.id}
            label={option.label}
@@ -645,7 +641,7 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
            showActiveConnection={showActiveConnection === true}
            selected={selected}
            active={active}
-@@ -290,6 +324,7 @@ export function HostPicker({
+@@ -285,6 +315,7 @@ export function HostPicker({
      },
      [
        addHostTestID,
@@ -654,10 +650,10 @@ index 7bd6d48a462a56d92dee0305bace207c8325de94..4a0fbfcd52ece098dc347200922253fa
        onOpenHostSettings,
        showActiveConnection,
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index f3e47159a7d2b4f3d40119d36ab254bd87179930..6c3caba234efdb1506157c1b5848d6e6c0d2e4ec 100644
+index 6af50aa6756bc815a68be69395c85746b3d90764..7d7bcc5f290e67954781e815a2e11183a2704f56 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -1391,6 +1391,7 @@ export const ar: TranslationResources = {
+@@ -1399,6 +1399,7 @@ export const ar: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -666,10 +662,10 @@ index f3e47159a7d2b4f3d40119d36ab254bd87179930..6c3caba234efdb1506157c1b5848d6e6
      create: "يخلق",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index 742a4bc8ec914d9cf131fd403952dd891eccf919..63c4c77433b21da3d196da7fa67d2217c0feb704 100644
+index 44c15725d9e732bca8c4a3073129a095a25fd2f1..db4ed59cc4887e60df4713a6a873d804acf5b5b4 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -1417,6 +1417,10 @@ export const en = {
+@@ -1426,6 +1426,10 @@ export const en = {
    },
    newWorkspace: {
      title: "New workspace",
@@ -679,12 +675,12 @@ index 742a4bc8ec914d9cf131fd403952dd891eccf919..63c4c77433b21da3d196da7fa67d2217
 +    },
      create: "Create",
      isolation: {
-       local: "Local",
+       local: "Project directory",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 49dd1d94f3580636473015056735564758a17287..bf7f88c48b5f794d045f084d706b35f794313aab 100644
+index 6b8d98e9cafc3ea2bbd91a60cc5bdcd72b05a087..bee530d8d700f8040f22c773d8108d94986d5f3e 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -1427,6 +1427,7 @@ export const es: TranslationResources = {
+@@ -1436,6 +1436,7 @@ export const es: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -693,10 +689,10 @@ index 49dd1d94f3580636473015056735564758a17287..bf7f88c48b5f794d045f084d706b35f7
      create: "Crear",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 77d1c467b70e534a93769bc2799d23ff8b0e29ff..24a39d62d3c7346f0efe297a7f704f9529301427 100644
+index aac9621ea5908f5108584ac861e848bce2d52529..ecb20e8abd83e385e57f743944674c50455cd58a 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -1421,6 +1421,7 @@ export const fr: TranslationResources = {
+@@ -1429,6 +1429,7 @@ export const fr: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -705,10 +701,10 @@ index 77d1c467b70e534a93769bc2799d23ff8b0e29ff..24a39d62d3c7346f0efe297a7f704f95
      create: "Créer",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 6d49636ef6998a942134d0abd0020fd8d865719d..567f8388d435f320129b1cbf91476fd743d4ae61 100644
+index 5ef6c60b2a3373c03aa560cdfd27a3a6e3fe31fa..ae323b5336572889801c056f5b80f8dfc750f6de 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -1405,6 +1405,7 @@ export const ja: TranslationResources = {
+@@ -1414,6 +1414,7 @@ export const ja: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -717,10 +713,10 @@ index 6d49636ef6998a942134d0abd0020fd8d865719d..567f8388d435f320129b1cbf91476fd7
      create: "作成",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index a42a9d5fcdb67c92e9239aecbab2b1473014358b..d0c6b267caba5531a5fac2294fb35547a0bd13aa 100644
+index 8f6fe50270caefae6efa5ba5d8b6079407f76156..8af587264a82bf4d47f01ef052b97d2d8c3476fd 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -1398,6 +1398,7 @@ export const ko: TranslationResources = {
+@@ -1406,6 +1406,7 @@ export const ko: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -729,10 +725,10 @@ index a42a9d5fcdb67c92e9239aecbab2b1473014358b..d0c6b267caba5531a5fac2294fb35547
      create: "생성",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 363b3b13bc9feaae9049098a590fbd57ad2b5df3..184350f79d1303c90a02821424ab3c1fbce139b3 100644
+index f0de40da5ef0313b64c1171120bd7203a8a067a4..31ef4d270479241a12de054c615d906653b0bdc6 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -1417,6 +1417,7 @@ export const ptBR: TranslationResources = {
+@@ -1426,6 +1426,7 @@ export const ptBR: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -741,10 +737,10 @@ index 363b3b13bc9feaae9049098a590fbd57ad2b5df3..184350f79d1303c90a02821424ab3c1f
      create: "Criar",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index db7cb7333a9fc7caf039c401eaefda56dea4a745..7f3a419f0494427bdc8c81c2929dc5dd3ab61276 100644
+index 3dae4e2fa9657cc0c60766990d6beca5f64c34e6..e7ab17a74bf06755ffedf28382229331455f2ef9 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -1409,6 +1409,7 @@ export const ru: TranslationResources = {
+@@ -1419,6 +1419,7 @@ export const ru: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -753,10 +749,10 @@ index db7cb7333a9fc7caf039c401eaefda56dea4a745..7f3a419f0494427bdc8c81c2929dc5dd
      create: "Создать",
      isolation: {
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index cfdd032b81b3269d8e71b46f2826bc9268b3e9d5..35e4ef4a7be8239d59bf760181e487ca69f8f41b 100644
+index d74f1046d3b53edae3d17411c6a4e15e57bceba1..b3604a39f3b55962e155912351b78eef47ee109f 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -1380,6 +1380,7 @@ export const zhCN: TranslationResources = {
+@@ -1388,6 +1388,7 @@ export const zhCN: TranslationResources = {
      },
    },
    newWorkspace: {
@@ -765,11 +761,11 @@ index cfdd032b81b3269d8e71b46f2826bc9268b3e9d5..35e4ef4a7be8239d59bf760181e487ca
      create: "创建",
      isolation: {
 diff --git a/packages/app/src/screens/new-workspace/form/index.tsx b/packages/app/src/screens/new-workspace/form/index.tsx
-index c22c244abfebc3267c990355ea616f603fece2e6..32f1a7926db7ee81c7d945129ff10381f8b342ff 100644
+index 3920878717a2ac4de04a1f0d1157f7efd0b40a61..d5c055f2635553b6181c9c4856eabdbf9d0db426 100644
 --- a/packages/app/src/screens/new-workspace/form/index.tsx
 +++ b/packages/app/src/screens/new-workspace/form/index.tsx
-@@ -5,7 +5,9 @@ import { StyleSheet } from "react-native-unistyles";
- import type { TerminalProfile } from "@getpaseo/protocol/messages";
+@@ -13,7 +13,9 @@ import { StyleSheet } from "react-native-unistyles";
+ import type { CheckoutWorktree, TerminalProfile } from "@getpaseo/protocol/messages";
  import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
  import { HostIdentityIcon } from "@/components/hosts/host-identity-icon";
 -import { HostPicker } from "@/components/hosts/host-picker";
@@ -779,7 +775,7 @@ index c22c244abfebc3267c990355ea616f603fece2e6..32f1a7926db7ee81c7d945129ff10381
  import type { LaunchTarget } from "@/new-workspace-launch/target";
  import type { HostProjectListItem } from "@/projects/host-projects";
  import type { HostProfile } from "@/types/host-connection";
-@@ -192,6 +194,32 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+@@ -403,6 +405,32 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
        ),
      [selectedProject, selectedProjectIconUri],
    );
@@ -812,7 +808,7 @@ index c22c244abfebc3267c990355ea616f603fece2e6..32f1a7926db7ee81c7d945129ff10381
    const hostIcon = useMemo(
      () => <HostIdentityIcon serverId={host.selectedServerId} />,
      [host.selectedServerId],
-@@ -233,6 +261,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
+@@ -440,6 +468,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement
        desktopPlacement="bottom-start"
        desktopMinWidth={200}
        hostOptionTestID={hostOptionTestID}

@@ -4,7 +4,7 @@ This file lists every change our paseo patch series carries on top of upstream, 
 it are in [AGENTS.md](../../AGENTS.md#the-paseo-patches).
 
 - Upstream: [getpaseo/paseo](https://github.com/getpaseo/paseo), checked out at `vendor/paseo`
-- Base: `v0.16.1`
+- Base: `v0.17.4`
 - Series: [patches/](patches), one `git format-patch` file per change, applied in file name order
 
 ## Changes
@@ -144,8 +144,8 @@ patches refer to them in their `Fork-Change` trailer.
   the origins listed in `PASEO_CORS_ORIGINS`, matched exactly. The other choice, `*`, lets any website reach
   the daemon from the browser. The check lives in the daemon, which no plugin hook reaches.
 - Patches: `feat(server): accept subdomain wildcards in CORS allowed origins`
-- Touches: server new `server/cors-origins.ts` and its test; one-line hooks in `websocket-server.ts`
-  `verifyWsUpgrade` and in the CORS middleware in `bootstrap.ts`
+- Touches: server new `server/cors-origins.ts` and its test; a one-line hook in `websocket-server.ts`
+  `isDaemonOriginAllowed`, which the WebSocket upgrade and the CORS middleware both use since `v0.17.4`
 - Compatibility: daemon-only; no wire or client change, no feature flag. Exact entries and `*` behave as
   before. `https://*.<domain>` matches any subdomain of `<domain>` on that scheme and port, not the domain
   itself. Config: `PASEO_CORS_ORIGINS=https://*.<tailnet>` in `dev-container.config.ts`.
@@ -535,6 +535,16 @@ patches refer to them in their `Fork-Change` trailer.
 
 One line per rebase onto a new upstream base, newest first.
 
+- 2026-11-24: moved to `v0.17.4`; all 16 patches carried, none upstreamed
+  ([#8529](https://github.com/getpaseo/paseo/pull/8529) is still open). Conflicts: F-3 (imports only), F-8
+  (upstream moved both origin checks into `isDaemonOriginAllowed`, so the patch now hooks that one function
+  and no longer touches `bootstrap.ts`), F-9 (`loadFromStorage` now sets hosts through `setHostsAndSync`), F-11
+  and F-17 (a host row's buttons moved from `trailingSlot` to upstream's new `trailingAction`, which sits
+  beside the row instead of inside it: F-11's action no longer stops propagation, and F-17's stats label is
+  the row's `trailingSlot`). Bumped the `node:22-bookworm-slim` digest in `services/toolchain`. Checked:
+  upstream's format, lint, typecheck (protocol, client, server, app) and the touched unit tests on the
+  whole series; F-3 and F-8 also typecheck on their own commits, while F-9, F-11 and F-17 were not checked
+  alone. Not checked: `pnpm build` and an upstream client, since this session had no Docker.
 - 2026-11-18: moved to `v0.16.1`; 15 of 16 patches carried. F-12 is upstreamed
   ([#8525](https://github.com/getpaseo/paseo/pull/8525)) and dropped. Conflicts: F-2 (upstream edited the
   removed ghost row), F-3 (`use-agent-form-state.ts` moved to a form store; the host default now goes through

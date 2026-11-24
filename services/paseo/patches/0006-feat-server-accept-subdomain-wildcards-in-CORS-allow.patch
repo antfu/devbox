@@ -13,35 +13,13 @@ websocket upgrade and the HTTP CORS headers.
 
 Fork-Change: F-8
 ---
- packages/server/src/server/bootstrap.ts       |  3 +-
  .../server/src/server/cors-origins.test.ts    | 37 +++++++++++++++++++
  packages/server/src/server/cors-origins.ts    | 32 ++++++++++++++++
- .../server/src/server/websocket-server.ts     |  3 +-
- 4 files changed, 73 insertions(+), 2 deletions(-)
+ .../server/src/server/websocket-server.ts     |  7 +---
+ 3 files changed, 71 insertions(+), 5 deletions(-)
  create mode 100644 packages/server/src/server/cors-origins.test.ts
  create mode 100644 packages/server/src/server/cors-origins.ts
 
-diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
-index 183f22a655b233b35d8c1f06f5fd3d88a21a94cf..a39a20de7ab410dc30f09a50cb01269544cf29ca 100644
---- a/packages/server/src/server/bootstrap.ts
-+++ b/packages/server/src/server/bootstrap.ts
-@@ -220,6 +220,7 @@ import {
- import { terminateWithTreeKill } from "../utils/tree-kill.js";
- import { withTimeout } from "../utils/promise-timeout.js";
- import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
-+import { isOriginAllowed } from "./cors-origins.js";
- import {
-   createRequireBearerMiddleware,
-   isAgentMcpRequestAuthorized,
-@@ -820,7 +821,7 @@ export async function createPaseoDaemon(
- 
-   app.use((req, res, next) => {
-     const origin = req.headers.origin;
--    if (origin && (allowedOrigins.has("*") || allowedOrigins.has(origin))) {
-+    if (origin && isOriginAllowed(origin, allowedOrigins)) {
-       res.setHeader("Access-Control-Allow-Origin", origin);
-       res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 diff --git a/packages/server/src/server/cors-origins.test.ts b/packages/server/src/server/cors-origins.test.ts
 new file mode 100644
 index 0000000000000000000000000000000000000000..17914a2d71cfd7a88f2fc5621384db8843218d89
@@ -124,7 +102,7 @@ index 0000000000000000000000000000000000000000..8f93da8403665acf7c56d690d30503cf
 +  return false;
 +}
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index b22216e0e801f9f3f3ce218cd5566aea0162c3ef..709333e8ceb81901343b7e0556de9961ac3d73e2 100644
+index 11924e40e634a645b419e69f97788ebffd2c07af..e1e994ea55eb037f9b4ee809a1465ed2cbea3d3e 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
 @@ -60,6 +60,7 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
@@ -135,12 +113,16 @@ index b22216e0e801f9f3f3ce218cd5566aea0162c3ef..709333e8ceb81901343b7e0556de9961
  import {
    Session,
    type SessionLifecycleIntent,
-@@ -984,7 +985,7 @@ export class VoiceAssistantWebSocketServer {
-     }
-     const sameOrigin = isWebSocketSameOrigin(origin, requestHost);
+@@ -3347,11 +3348,7 @@ export function isDaemonOriginAllowed(
+   requestHost: string | null,
+   allowedOrigins: Set<string>,
+ ): boolean {
+-  return (
+-    allowedOrigins.has("*") ||
+-    allowedOrigins.has(origin) ||
+-    isWebSocketSameOrigin(origin, requestHost)
+-  );
++  return isOriginAllowed(origin, allowedOrigins) || isWebSocketSameOrigin(origin, requestHost);
+ }
  
--    if (!origin || allowedOrigins.has("*") || allowedOrigins.has(origin) || sameOrigin) {
-+    if (!origin || isOriginAllowed(origin, allowedOrigins) || sameOrigin) {
-       callback(true);
-     } else {
-       this.incrementRuntimeCounter("originRejected");
+ export function isWebSocketSameOrigin(

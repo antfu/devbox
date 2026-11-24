@@ -80,10 +80,10 @@ Fork-Change: F-3
  create mode 100644 packages/server/src/utils/worktree-default-setup.ts
 
 diff --git a/packages/app/src/hooks/use-agent-form-state.ts b/packages/app/src/hooks/use-agent-form-state.ts
-index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0ae48a18d 100644
+index 496e9f116d8b58d938d859a4a7eebe71ea4e6c2d..bbe2cb7aa4c02f769b5f81df57e34cd4e1586f53 100644
 --- a/packages/app/src/hooks/use-agent-form-state.ts
 +++ b/packages/app/src/hooks/use-agent-form-state.ts
-@@ -35,6 +35,12 @@ import {
+@@ -36,6 +36,12 @@ import {
    type ProviderModelsByProvider,
  } from "@/provider-selection/resolve-agent-form";
  import { openAgentForm, type AgentFormCatalog } from "@/provider-selection/agent-form-store";
@@ -96,7 +96,7 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
  import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
  import type { MaterializedAgentProfile } from "@/agent-profiles";
  
-@@ -200,6 +206,15 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+@@ -201,6 +207,15 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
    } = useProvidersSnapshot(serverId, { cwd: workingDir });
  
    const isConnected = useHostRuntimeIsConnected(serverId ?? "");
@@ -112,7 +112,7 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
  
    const allProviderEntries = useMemo(() => snapshotEntries ?? [], [snapshotEntries]);
    const snapshotProviderDefinitions = useMemo(
-@@ -262,7 +277,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+@@ -267,7 +282,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
      selectableProviders: selectableProviderDefinitionMap,
      models: allProviderModels,
      providerPreferences: (provider) =>
@@ -124,7 +124,7 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
    };
    const modelSelectorProviders = snapshotModelSelectorProviders;
    const availableModels = snapshotSelectedProviderModels;
-@@ -281,7 +299,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+@@ -286,7 +304,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
        isPreferencesLoading,
        hasSnapshot: snapshotEntries !== undefined,
        initialValues,
@@ -133,7 +133,7 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
        providerModelsByProvider: snapshotProviderModelsByProvider,
        allowedProviderMap: snapshotResolvableProviderDefinitionMap,
      });
-@@ -292,7 +310,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+@@ -297,7 +315,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
      isPreferencesLoading,
      snapshotEntries,
      initialValues,
@@ -142,7 +142,7 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
      snapshotProviderModelsByProvider,
      snapshotResolvableProviderDefinitionMap,
      dispatch,
-@@ -333,7 +351,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+@@ -338,7 +356,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
        const previousProvider = formBefore.form.provider;
        const providerDef = selectableProviderDefinitionMap.get(provider);
        const providerModels = allProviderModels.get(provider) ?? null;
@@ -154,7 +154,7 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
        const action = {
          type: "APPLY_PROFILE_FROM_USER" as const,
          provider,
-@@ -370,6 +391,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+@@ -375,6 +396,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
        allProviderModels,
        dispatch,
        formStore,
@@ -163,10 +163,10 @@ index 03de6b680631c4353387bd56d7a46b51b54d5176..783ca6fc5ff42f5e066e83606b7c76a0
        selectableProviderDefinitionMap,
        updateCurrentPreferences,
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 51250d04b19b668c8e8b945e486e973e8f3e59f3..1605aa3671c12f1cf49bf01ff4ace008b7c96846 100644
+index cf35f8293975bde1db38dbe71a09a9f490e6bd81..7adf6a4b876baca97b1e962b69921f873d6a646e 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -2918,9 +2918,11 @@ export const ar: TranslationResources = {
+@@ -2965,9 +2965,11 @@ export const ar: TranslationResources = {
            hint: "تحرير الذاكرة بعد ساعة من الخمول.",
            info: "يوقف عملية الوكيل مع الاحتفاظ بمحادثته. أرسل رسالة لاستئنافها.\n\nيمنع العمل النشط والإشعارات المعلّقة وفحوصات أمان المزوّد عملية التنظيف.",
          },
@@ -179,10 +179,10 @@ index 51250d04b19b668c8e8b945e486e973e8f3e59f3..1605aa3671c12f1cf49bf01ff4ace008
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index f7452c2fc30dc7f774c08a105df3b99aa05389f5..02140b259fd89824aaf18ac79c5ddb1b7514b6d9 100644
+index eee3ac578a97540ccaf169862de9c2a562815ae2..27865cf5ba8f43a835c50e13e94806152c293132 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -3016,9 +3016,25 @@ export const en = {
+@@ -3063,9 +3063,25 @@ export const en = {
            hint: "Free up memory after an hour of inactivity.",
            info: "Stops the agent's process while keeping its conversation. Send a message to resume.\n\nActive work, pending notifications, and provider safety checks prevent cleanup.",
          },
@@ -209,10 +209,10 @@ index f7452c2fc30dc7f774c08a105df3b99aa05389f5..02140b259fd89824aaf18ac79c5ddb1b
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 6f3c051837e98efc3be06abc9cbc881a8f4267e1..0caec9757361055adb6fb3777081b01223ee4d16 100644
+index 630119dfacc6486a19274831db0493810856489b..b8a26134515a7b6ab26eb0bf6a81325d5b9e42ce 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -2943,9 +2943,11 @@ export const es: TranslationResources = {
+@@ -2990,9 +2990,11 @@ export const es: TranslationResources = {
            hint: "Libera memoria tras una hora de inactividad.",
            info: "Detiene el proceso del agente y conserva la conversación. Envía un mensaje para reanudarla.\n\nEl trabajo activo, las notificaciones pendientes y las comprobaciones de seguridad del proveedor impiden la limpieza.",
          },
@@ -225,10 +225,10 @@ index 6f3c051837e98efc3be06abc9cbc881a8f4267e1..0caec9757361055adb6fb3777081b012
        terminalProfiles: {
          unavailable: "Connect to this host to manage terminal profiles",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 022bc3dd4cdfaba253b0dfe64607107e6c325fff..715a31e663cd00278bbbf6327a8bf7397061d3d0 100644
+index c96a46dbc5990496c95c2a4f9167679cadf78dc7..0e23954d7207de3756a0d46b8de2888e65b792f2 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -2947,9 +2947,11 @@ export const fr: TranslationResources = {
+@@ -2992,9 +2992,11 @@ export const fr: TranslationResources = {
            hint: "Libère de la mémoire après une heure d’inactivité.",
            info: "Arrête le processus de l’agent tout en conservant sa conversation. Envoyez un message pour la reprendre.\n\nLe travail en cours, les notifications en attente et les vérifications de sécurité du fournisseur empêchent le nettoyage.",
          },
@@ -241,10 +241,10 @@ index 022bc3dd4cdfaba253b0dfe64607107e6c325fff..715a31e663cd00278bbbf6327a8bf739
        terminalProfiles: {
          unavailable: "Connectez-vous à cet hôte pour gérer les profils de terminal",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 75f2d55795a71d5a2cd9848d3f8878afc3515c0e..e06cd882953ab95afc17901e7fcf16e18a2d8870 100644
+index 51c3446819fe5a7c1d272aa1337e72deb5395b16..05c2ded3443d1c3be294ce983f5c54b6c051d3cd 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -2911,9 +2911,11 @@ export const ja: TranslationResources = {
+@@ -2958,9 +2958,11 @@ export const ja: TranslationResources = {
            hint: "1 時間のアイドル状態の後にメモリを解放します。",
            info: "会話を保持したままエージェントのプロセスを停止します。メッセージを送信すると再開します。\n\n実行中の作業、保留中の通知、プロバイダーの安全性チェックがある場合は解放しません。",
          },
@@ -257,10 +257,10 @@ index 75f2d55795a71d5a2cd9848d3f8878afc3515c0e..e06cd882953ab95afc17901e7fcf16e1
        terminalProfiles: {
          unavailable: "ターミナルプロファイルを管理するにはこのホストに接続してください",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index d4ec87ad8e0f379d34dbbe1a914b6c7ea97e1ddf..45432fb26e7b0d3456434fc4dd0abc8e965679c3 100644
+index 7b4a2e59c66e330bd5b1e82b4b7d86408a08d69f..257026e158f0dc04d527774e0b69896ee041bd3e 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -2897,9 +2897,11 @@ export const ko: TranslationResources = {
+@@ -2943,9 +2943,11 @@ export const ko: TranslationResources = {
            hint: "1시간 동안 활동이 없으면 메모리를 확보합니다.",
            info: "대화를 유지하면서 에이전트 프로세스를 중지합니다. 메시지를 보내면 다시 이어집니다.\n\n진행 중인 작업, 대기 중인 알림, 프로바이더 안전 검사가 있으면 정리하지 않습니다.",
          },
@@ -273,10 +273,10 @@ index d4ec87ad8e0f379d34dbbe1a914b6c7ea97e1ddf..45432fb26e7b0d3456434fc4dd0abc8e
        terminalProfiles: {
          unavailable: "터미널 프로필을 관리하려면 이 호스트에 연결하세요",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 54516fc2dea350cf071b07d22c32bb9014113f76..c741b532fff3e0dd86e490b5dccc0828a5f91b7d 100644
+index fce00730777393779d5d655743e26739309bbbff..cb14237d5054f4d7150aa08c0f6a2d18ed8b92dc 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -2924,9 +2924,11 @@ export const ptBR: TranslationResources = {
+@@ -2971,9 +2971,11 @@ export const ptBR: TranslationResources = {
            hint: "Libera memória após uma hora de inatividade.",
            info: "Encerra o processo do agente e mantém a conversa. Envie uma mensagem para retomar.\n\nTrabalho ativo, notificações pendentes e verificações de segurança do provedor impedem a limpeza.",
          },
@@ -289,10 +289,10 @@ index 54516fc2dea350cf071b07d22c32bb9014113f76..c741b532fff3e0dd86e490b5dccc0828
        terminalProfiles: {
          unavailable: "Conecte-se a este host para gerenciar perfis de terminal",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 9ee2f1746c9a30aef04c05e96d39d340c2c613c8..be21a1a648577a794a590e7fa513201213fca1f0 100644
+index 37a5392f3df1cb15c6779a8390cc6734d54f1120..1aecf8937f27794ba6fbef0870fec49b6fef1fb6 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -2934,9 +2934,11 @@ export const ru: TranslationResources = {
+@@ -2982,9 +2982,11 @@ export const ru: TranslationResources = {
            hint: "Освобождает память после часа бездействия.",
            info: "Останавливает процесс агента, сохраняя разговор. Отправьте сообщение, чтобы продолжить.\n\nАктивная работа, ожидающие уведомления и проверки безопасности провайдера предотвращают очистку.",
          },
@@ -305,10 +305,10 @@ index 9ee2f1746c9a30aef04c05e96d39d340c2c613c8..be21a1a648577a794a590e7fa5132012
        terminalProfiles: {
          unavailable: "Подключитесь к этому хосту, чтобы управлять профилями терминала",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index e2b6762830de7f933da75ee436dec5b0d758aeee..0564e1464a5b4634529a8b8bc8d59a3ea7aa52e9 100644
+index 62a67ad4ae705c7508815015798f6f98a983f675..5b325ff70e9dc54082e56f53faec71d07234a550 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -2852,9 +2852,11 @@ export const zhCN: TranslationResources = {
+@@ -2899,9 +2899,11 @@ export const zhCN: TranslationResources = {
            hint: "空闲一小时后释放内存。",
            info: "停止 Agent 进程，但保留对话。发送消息即可继续。\n\n进行中的工作、待处理的通知和 Provider 安全检查会阻止清理。",
          },
@@ -483,18 +483,18 @@ index 0000000000000000000000000000000000000000..49f25b1527af1a7f0fb33e9fba213cac
 +  return { ...preferences, providerPreferences };
 +}
 diff --git a/packages/app/src/screens/project-settings-screen.tsx b/packages/app/src/screens/project-settings-screen.tsx
-index ae6f31fef1172054bbf707303308259090f635c1..f1655480f648a2de3304d7b5b1f2a5f60bd851d0 100644
+index 762f2f7a4f653fdbf220df2343a240d252e9cd36..c59ea40d55b664ef23aba8be939797804e12256c 100644
 --- a/packages/app/src/screens/project-settings-screen.tsx
 +++ b/packages/app/src/screens/project-settings-screen.tsx
-@@ -29,6 +29,7 @@ import { EditingTextInput as TextInput } from "@/components/ui/text-input";
- import { SettingsTextAreaCard } from "@/components/settings-textarea";
- import { SettingsGroup } from "@/components/settings/headings/settings-group";
- import { SettingsSection } from "@/components/settings/headings/settings-section";
+@@ -32,6 +32,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
+ import type { PageTitleParent } from "@/components/page-layout";
+ import { useIsCompactFormFactor } from "@/constants/layout";
+ import { SettingsDetailHeader } from "@/components/settings";
 +import { WorktreeDefaultSetupHint } from "@/screens/settings/worktree-default-setup";
  import { settingsStyles } from "@/styles/settings";
  import { useProjects } from "@/hooks/use-projects";
  import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
-@@ -389,6 +390,7 @@ function renderContent({
+@@ -386,6 +387,7 @@ function renderContent({
        revision={loadedRevision}
        hasUncommittedWorktreeSetupChanges={hasUncommittedWorktreeSetupChanges}
        repoRoot={selectedHost.repoRoot}
@@ -502,7 +502,7 @@ index ae6f31fef1172054bbf707303308259090f635c1..f1655480f648a2de3304d7b5b1f2a5f6
        queryKey={queryKey}
        client={client}
        onReload={onReload}
-@@ -470,6 +472,7 @@ interface ProjectConfigFormProps {
+@@ -467,6 +469,7 @@ interface ProjectConfigFormProps {
    revision: PaseoConfigRevision | null;
    hasUncommittedWorktreeSetupChanges: boolean;
    repoRoot: string;
@@ -510,7 +510,7 @@ index ae6f31fef1172054bbf707303308259090f635c1..f1655480f648a2de3304d7b5b1f2a5f6
    queryKey: readonly [string, string, string];
    client: DaemonClient;
    onReload: () => void;
-@@ -480,6 +483,7 @@ function ProjectConfigForm({
+@@ -477,6 +480,7 @@ function ProjectConfigForm({
    revision,
    hasUncommittedWorktreeSetupChanges,
    repoRoot,
@@ -518,7 +518,7 @@ index ae6f31fef1172054bbf707303308259090f635c1..f1655480f648a2de3304d7b5b1f2a5f6
    queryKey,
    client,
    onReload,
-@@ -708,6 +712,7 @@ function ProjectConfigForm({
+@@ -705,6 +709,7 @@ function ProjectConfigForm({
              onChangeText={handleSetupChange}
              placeholder="npm install"
            />
@@ -527,10 +527,10 @@ index ae6f31fef1172054bbf707303308259090f635c1..f1655480f648a2de3304d7b5b1f2a5f6
  
          <SettingsSection
 diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
-index 9c0c95248840b9337d43e430adfee33216e1dcbb..ed75fbfd91531af83eb6d611b8e192b56fbe89ff 100644
+index 6e27f7065010cd97f0cd830c82395d27ab2cecb5..c77afad09e9cff58b1c0767c94859093337000af 100644
 --- a/packages/app/src/screens/settings/host-page.tsx
 +++ b/packages/app/src/screens/settings/host-page.tsx
-@@ -68,6 +68,8 @@ import { BrowserToolsOptInCard } from "./browser-tools-card";
+@@ -69,6 +69,8 @@ import { BrowserToolsOptInCard } from "./browser-tools-card";
  import { PaseoToolsCard } from "./paseo-tools-card";
  import { RestartRecoveryCard } from "./restart-recovery-card";
  import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
@@ -539,7 +539,7 @@ index 9c0c95248840b9337d43e430adfee33216e1dcbb..ed75fbfd91531af83eb6d611b8e192b5
  import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
  
  const ThemedRestart = withUnistyles(RotateCw);
-@@ -296,6 +298,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
+@@ -297,6 +299,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
            <AppendSystemPromptCard serverId={serverId} />
            <RestartRecoveryCard serverId={serverId} />
            <IdleRuntimeCleanupCard serverId={serverId} />
@@ -547,7 +547,7 @@ index 9c0c95248840b9337d43e430adfee33216e1dcbb..ed75fbfd91531af83eb6d611b8e192b5
          </SettingsSection>
        ) : (
          <View style={[settingsStyles.card, styles.emptyCard]}>
-@@ -322,6 +325,7 @@ export function HostWorkspacesPage({ serverId }: { serverId: string }) {
+@@ -323,6 +326,7 @@ export function HostWorkspacesPage({ serverId }: { serverId: string }) {
        {isConnected ? (
          <SettingsSection title={t("settings.hostSections.workspaces")}>
            <AutoArchiveMergedWorkspacesCard serverId={serverId} />
@@ -882,19 +882,19 @@ index 0000000000000000000000000000000000000000..af3a2d3827e7fa97734de086e63a8b3d
 +  },
 +}));
 diff --git a/packages/protocol/src/agent-types.ts b/packages/protocol/src/agent-types.ts
-index efbd119c31c86d88271d08bd3ad35ba9722cd810..90c7c2185a6eabfeb7d69718a35ad92cc216c47f 100644
+index c7c5008c273203d9a1dc7313a979de87405e2998..e42d9d6729a6c0f195387c90d05452679e0ff61e 100644
 --- a/packages/protocol/src/agent-types.ts
 +++ b/packages/protocol/src/agent-types.ts
-@@ -134,6 +134,7 @@ export interface ProviderSnapshotEntry {
-   description?: string;
-   iconSvg?: string;
+@@ -136,6 +136,7 @@ export interface ProviderSnapshotEntry {
+   /** The page that helps users set up and troubleshoot this provider. */
+   docsUrl?: string;
    defaultModeId?: string | null;
 +  hostDefaultModeId?: string;
  }
  
  export interface AgentFeatureToggle {
 diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
-index e752304541e3434bd6c1098b88a70d039f1eaac2..2cdaedbe45027e682e41f8a73cb84f52d3a488f1 100644
+index 2487650b1934af3c92d47288bc4ca3dadc505345..51bd686647e82f2435b9695e385c77294ef65a0d 100644
 --- a/packages/protocol/src/messages.ts
 +++ b/packages/protocol/src/messages.ts
 @@ -178,6 +178,8 @@ const MutableDaemonProviderConfigSchema = z
@@ -924,9 +924,9 @@ index e752304541e3434bd6c1098b88a70d039f1eaac2..2cdaedbe45027e682e41f8a73cb84f52
    })
    .partial()
    .passthrough();
-@@ -430,6 +436,9 @@ export const ProviderSnapshotEntrySchema = z.object({
-   description: z.string().optional(),
+@@ -432,6 +438,9 @@ export const ProviderSnapshotEntrySchema = z.object({
    iconSvg: z.string().optional(),
+   docsUrl: z.string().optional(),
    defaultModeId: z.string().nullable().optional(),
 +  // Set only when the host config pins this provider's default mode; clients that
 +  // support features.providerDefaultMode prefer it over a remembered per-device mode.
@@ -934,7 +934,7 @@ index e752304541e3434bd6c1098b88a70d039f1eaac2..2cdaedbe45027e682e41f8a73cb84f52
  });
  
  export const CompactProviderSnapshotModelSchema = AgentModelDefinitionSchema.omit({
-@@ -4146,6 +4155,10 @@ export const ServerInfoStatusPayloadSchema = z
+@@ -4223,6 +4232,10 @@ export const ServerInfoStatusPayloadSchema = z
          agentProfiles: z.boolean().optional(),
          // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
          agentConfigApply: z.boolean().optional(),
@@ -959,12 +959,12 @@ index c94f8ca965d6b2ce3475836e45d1c57a69bb944b..b61d2a6c8f49728c5bdee139cea7a40e
  
  const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi", "omp"] as const;
 diff --git a/packages/server/src/server/agent/agent-sdk-types.ts b/packages/server/src/server/agent/agent-sdk-types.ts
-index 0267876d0dd5a4af86254e621788f8a0e204bd8a..68246d74e973a36e86dbda4c7aedabf12e1a796e 100644
+index 4644f9d95d18af9dfdba821a8fac5049c2a3fda2..7edbccf36c1c87afd1bbf8c791de33f4e2ce395d 100644
 --- a/packages/server/src/server/agent/agent-sdk-types.ts
 +++ b/packages/server/src/server/agent/agent-sdk-types.ts
-@@ -137,6 +137,7 @@ export interface ProviderSnapshotEntry {
-   description?: string;
-   iconSvg?: string;
+@@ -147,6 +147,7 @@ export interface ProviderSnapshotEntry {
+   /** The page that helps users set up and troubleshoot this provider. */
+   docsUrl?: string;
    defaultModeId?: string | null;
 +  hostDefaultModeId?: string;
  }
@@ -1199,18 +1199,18 @@ index 0000000000000000000000000000000000000000..3a99868bc3c36519d4c77dc24840503f
 +  return resolveHostDefaultModeId(input.configured, input.availableModes);
 +}
 diff --git a/packages/server/src/server/agent/provider-snapshot-manager.ts b/packages/server/src/server/agent/provider-snapshot-manager.ts
-index 7e728713beffeafeec4f2c87da3f17a8fe02f8d1..5f9f3d9e2409fb773c9eb01b7ae2094b77431b5b 100644
+index dfc6c887896ee5e344a3d1d942a69a21772b8d25..ee6324199c5eabe962dfabba418ab9a30c1fd6f1 100644
 --- a/packages/server/src/server/agent/provider-snapshot-manager.ts
 +++ b/packages/server/src/server/agent/provider-snapshot-manager.ts
-@@ -51,6 +51,7 @@ import {
- } from "./agent-configuration-validator.js";
- import type { ProviderRegistration } from "@getpaseo/plugin/server/provider";
- import { PluginAgentClientRegistry } from "./plugin-provider.js";
+@@ -58,6 +58,7 @@ import {
+   systemProviderRefreshTimers,
+   type ProviderRefreshTimers,
+ } from "./provider-refresh-schedule.js";
 +import { applyHostDefaultMode, resolveHostDefaultCreateMode } from "./host-default-mode.js";
  
  const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
  const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
-@@ -562,7 +563,13 @@ export class ProviderSnapshotManager {
+@@ -721,7 +722,13 @@ export class ProviderSnapshotManager {
      const parent = input.parent ? this.resolveParent(input.parent) : null;
      return definition.resolveCreateConfig({
        provider: input.provider,
@@ -1225,7 +1225,7 @@ index 7e728713beffeafeec4f2c87da3f17a8fe02f8d1..5f9f3d9e2409fb773c9eb01b7ae2094b
        providerOptions: input.providerOptions,
        parent,
        unattended: input.unattended || parent?.isUnattended === true,
-@@ -1086,7 +1093,13 @@ export class ProviderSnapshotManager {
+@@ -1322,7 +1329,13 @@ export class ProviderSnapshotManager {
          const result = binding?.key
            ? this.catalogs.get(binding.key)?.get(provider)?.result
            : undefined;
@@ -1241,10 +1241,10 @@ index 7e728713beffeafeec4f2c87da3f17a8fe02f8d1..5f9f3d9e2409fb773c9eb01b7ae2094b
        const previous = target.snapshot;
        if (sameSnapshotRecords(previous.records, records)) continue;
 diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
-index df4dd21c1049793c4c34befec6ac09438de5cdc0..183f22a655b233b35d8c1f06f5fd3d88a21a94cf 100644
+index 20850285d59cbd68d2a74bfe38e736e90e83d8d4..ccd5c7542ed1bcf3dbf98837252ef26cc1f8956b 100644
 --- a/packages/server/src/server/bootstrap.ts
 +++ b/packages/server/src/server/bootstrap.ts
-@@ -231,6 +231,10 @@ import { WorkspaceAutoName } from "./workspace-auto-name.js";
+@@ -241,6 +241,10 @@ import { WorkspaceAutoName } from "./workspace-auto-name.js";
  import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
  import { workspaceIdsOnCheckout } from "./workspace-directory.js";
  import { configureGitProcessPolicy } from "../utils/run-git-command.js";
@@ -1255,7 +1255,7 @@ index df4dd21c1049793c4c34befec6ac09438de5cdc0..183f22a655b233b35d8c1f06f5fd3d88
  import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
  import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
  import {
-@@ -479,6 +483,7 @@ export interface PaseoDaemonConfig {
+@@ -489,6 +493,7 @@ export interface PaseoDaemonConfig {
      }>;
    };
    providerOverrides?: Record<string, ProviderOverride>;
@@ -1263,7 +1263,7 @@ index df4dd21c1049793c4c34befec6ac09438de5cdc0..183f22a655b233b35d8c1f06f5fd3d88
    log?: PersistedConfig["log"];
    onLifecycleIntent?: (intent: DaemonLifecycleIntent) => void;
    pushNotificationSender?: PushNotificationSender;
-@@ -607,6 +612,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
+@@ -618,6 +623,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
      pluginsEnabled: config.pluginsEnabled ?? false,
      plugins: config.plugins ?? {},
      skills: { selection: config.skillSelection },
@@ -1271,7 +1271,7 @@ index df4dd21c1049793c4c34befec6ac09438de5cdc0..183f22a655b233b35d8c1f06f5fd3d88
    };
  
    if (config.terminalProfiles !== undefined) {
-@@ -666,6 +672,7 @@ export async function createPaseoDaemon(
+@@ -677,6 +683,7 @@ export async function createPaseoDaemon(
        },
      },
    });
@@ -1392,10 +1392,10 @@ index 0478a145c440b70b85d26ea27fbf58dec28d59a4..b9ce40adf29825536afb6b0e24f2b755
      const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
      tempDirs.push(paseoHome);
 diff --git a/packages/server/src/server/daemon-config-store.ts b/packages/server/src/server/daemon-config-store.ts
-index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15fd2a3e175 100644
+index ba2e51a111618186eab963c325007f07c6dfedee..7d3658abbb529de1a164b4e4900c1b73001c77ee 100644
 --- a/packages/server/src/server/daemon-config-store.ts
 +++ b/packages/server/src/server/daemon-config-store.ts
-@@ -19,6 +19,10 @@ import {
+@@ -20,6 +20,10 @@ import {
  import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
  import type { SpeechSettingsPatch } from "@getpaseo/protocol/speech/rpc-schemas";
  import { mergeSpeechSettingsPatch, type SpeechSettingsOwner } from "./speech/speech-settings.js";
@@ -1406,7 +1406,7 @@ index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15f
  
  export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
  
-@@ -46,6 +50,7 @@ interface SupportedMutableConfigPatch {
+@@ -47,6 +51,7 @@ interface SupportedMutableConfigPatch {
    pluginsEnabled?: boolean;
    plugins?: MutableDaemonConfig["plugins"];
    features?: SpeechSettingsPatch;
@@ -1414,7 +1414,7 @@ index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15f
  }
  
  const SPEECH_PERSISTED_PATHS = ["features.dictation", "features.voiceMode"];
-@@ -259,6 +264,7 @@ const RELOADABLE_PATHS = [
+@@ -268,6 +273,7 @@ const RELOADABLE_PATHS = [
    "agents.metadataGeneration",
    "agents.skills.selection",
    "pluginsEnabled",
@@ -1422,7 +1422,7 @@ index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15f
  ] as const;
  
  const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
-@@ -287,6 +293,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
+@@ -296,6 +302,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
    ["agents.metadataGeneration", "metadataGeneration"],
    ["agents.skills.selection", "skills.selection"],
    ["pluginsEnabled", "pluginsEnabled"],
@@ -1430,7 +1430,7 @@ index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15f
  ]);
  
  function pathBelongsTo(path: string, owner: string): boolean {
-@@ -370,6 +377,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
+@@ -379,6 +386,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
      ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
      ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
      ...(patch.features !== undefined ? { features: patch.features } : {}),
@@ -1438,7 +1438,7 @@ index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15f
    };
  }
  
-@@ -781,6 +789,9 @@ function mergeMutablePatchIntoPersistedConfig(params: {
+@@ -790,6 +798,9 @@ function mergeMutablePatchIntoPersistedConfig(params: {
      ...withSpeech,
      ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
      ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
@@ -1449,7 +1449,7 @@ index c76299945837fda8c1510f47915951d1a7786210..c60739ff16d505696ed6eb13ec40a15f
      ...(agents ? { agents } : { agents: undefined }),
    } as PersistedConfig;
 diff --git a/packages/server/src/server/persisted-config.ts b/packages/server/src/server/persisted-config.ts
-index 3138ec9132c2fb62d1927519ac946131eb6bde94..44c933fc15941c1938c7c8bcd6827352c7bb8e63 100644
+index 5181194b1c9517986e0a48b71931d5cded943dca..759aa9e23b740c07529c427ab5ca02ae5cc13c8d 100644
 --- a/packages/server/src/server/persisted-config.ts
 +++ b/packages/server/src/server/persisted-config.ts
 @@ -71,6 +71,7 @@ const WorktreesConfigSchema = z
@@ -1461,10 +1461,10 @@ index 3138ec9132c2fb62d1927519ac946131eb6bde94..44c933fc15941c1938c7c8bcd6827352
    .strict();
  
 diff --git a/packages/server/src/server/websocket-server.ts b/packages/server/src/server/websocket-server.ts
-index 3672768c5e33b24f908abba95d6eea7e48b33450..b22216e0e801f9f3f3ce218cd5566aea0162c3ef 100644
+index 9c469f1cddaf1d13a823c05769030d10441561b6..11924e40e634a645b419e69f97788ebffd2c07af 100644
 --- a/packages/server/src/server/websocket-server.ts
 +++ b/packages/server/src/server/websocket-server.ts
-@@ -2226,6 +2226,10 @@ export class VoiceAssistantWebSocketServer {
+@@ -2283,6 +2283,10 @@ export class VoiceAssistantWebSocketServer {
          agentProfiles: true,
          // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
          agentConfigApply: true,
@@ -1639,7 +1639,7 @@ index 0000000000000000000000000000000000000000..cd5dfc6e898c8ec7f37c0e0df2a58efd
 +  return value !== undefined ? { worktreeDefaultSetup: value } : {};
 +}
 diff --git a/packages/server/src/utils/worktree.ts b/packages/server/src/utils/worktree.ts
-index 2fc8bc05db73d4bbf8ecdcf91a44be7cfdf584c1..a9c8bdec956bcbf500599ae0edae33d700463a52 100644
+index ee587f14ef50eadcaf30f059e1c61b5030fd08f4..2ceede53c8967a64dc3407962333b30fbf68d460 100644
 --- a/packages/server/src/utils/worktree.ts
 +++ b/packages/server/src/utils/worktree.ts
 @@ -12,6 +12,7 @@ import {
@@ -1650,7 +1650,7 @@ index 2fc8bc05db73d4bbf8ecdcf91a44be7cfdf584c1..a9c8bdec956bcbf500599ae0edae33d7
  export {
    PaseoConfigRawSchema,
    PaseoLifecycleCommandRawSchema,
-@@ -273,7 +274,8 @@ async function readPaseoConfigOrThrow(repoRoot: string): Promise<PaseoConfig | n
+@@ -300,7 +301,8 @@ async function readPaseoConfigOrThrow(repoRoot: string): Promise<PaseoConfig | n
  }
  
  export async function getWorktreeSetupCommands(repoRoot: string): Promise<string[]> {

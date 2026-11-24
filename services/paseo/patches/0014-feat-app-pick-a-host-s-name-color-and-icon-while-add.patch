@@ -203,10 +203,10 @@ index f9ea7a2f8669af110549635942e514055dd21fee..d5a83aa7319ac937ec0d1dacf8e7f674
          <PressHighlight
            style={styles.advancedToggle}
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 7347ce22856b06a2eead2a5ce8cace89c03894f8..a417d9422111674678e05f14050bd07c0b29bdc9 100644
+index 2b6f8c49a416573c4c7ba964806ec83ebef2f395..16463f91f1ba08b87208e5236823208ac7a253a4 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -1860,6 +1860,7 @@ export const ar: TranslationResources = {
+@@ -1897,6 +1897,7 @@ export const ar: TranslationResources = {
        },
      },
      direct: {
@@ -215,10 +215,10 @@ index 7347ce22856b06a2eead2a5ce8cace89c03894f8..a417d9422111674678e05f14050bd07c
        helper: "أدخل عنوان خادم Paseo.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index 7b3b831584c46ec05143c6f74c7644003085104b..50c81dc562785b8fe116baeb072edab13316cf03 100644
+index bfd7423efd23499afba64f8ad1f774f55cf40571..9ca0250a65a84d903504586c32ea29758764d9f6 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -1906,6 +1906,9 @@ export const en = {
+@@ -1944,6 +1944,9 @@ export const en = {
        },
      },
      direct: {
@@ -229,10 +229,10 @@ index 7b3b831584c46ec05143c6f74c7644003085104b..50c81dc562785b8fe116baeb072edab1
        helper: "Enter the address of a Paseo server.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 80de5efb8964f404255a524ee3776648dd44b062..84fb0689e2ec47daa29b7365b9411d218640f720 100644
+index b64110f1e8f124c8bd8129aedd2c2e2e4cc2e6c6..9546d72ca167012dbd616cd7a8bb45a760bdb32c 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -1907,6 +1907,7 @@ export const es: TranslationResources = {
+@@ -1945,6 +1945,7 @@ export const es: TranslationResources = {
        },
      },
      direct: {
@@ -241,10 +241,10 @@ index 80de5efb8964f404255a524ee3776648dd44b062..84fb0689e2ec47daa29b7365b9411d21
        helper: "Ingrese la dirección de un servidorPaseo.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 418d8bff3ccebc653436ec1d5a024fb6a296cef5..ce9774072cdd6ca69587dfb25f82d435ab61eed8 100644
+index 7491da94db5747861826e5316f0ca0585f90a72e..6bc2790f8e482dd9f17b5018c10e60077283db36 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -1906,6 +1906,7 @@ export const fr: TranslationResources = {
+@@ -1943,6 +1943,7 @@ export const fr: TranslationResources = {
        },
      },
      direct: {
@@ -253,10 +253,10 @@ index 418d8bff3ccebc653436ec1d5a024fb6a296cef5..ce9774072cdd6ca69587dfb25f82d435
        helper: "Saisissez l’adresse d’un serveur Paseo.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index fb647a0fd34734ce0c8acc0350e22d07a529244f..a8d47a6b668d40efd77c11e6826c710349a3b8df 100644
+index 1bce757f3aab909e765b271e953174ab50e1f64e..60bd6def4208274f51eda0ee90ace5b12e4c7e49 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -1879,6 +1879,7 @@ export const ja: TranslationResources = {
+@@ -1917,6 +1917,7 @@ export const ja: TranslationResources = {
        },
      },
      direct: {
@@ -265,10 +265,10 @@ index fb647a0fd34734ce0c8acc0350e22d07a529244f..a8d47a6b668d40efd77c11e6826c7103
        helper: "Paseoサーバーのアドレスを入力してください。",
        fields: {
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index e2cd67c0638dc9e3bb8540bb1b4a37a5f3654208..77d3a89cfb12970f2ac617b53f66fd24d32ffa17 100644
+index 6b1c70a9e917ad456692a29705554d9d773c807d..2131cc65c93ad8271eea8d3d26a2e3469a62ff89 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -1871,6 +1871,7 @@ export const ko: TranslationResources = {
+@@ -1908,6 +1908,7 @@ export const ko: TranslationResources = {
        },
      },
      direct: {
@@ -277,10 +277,10 @@ index e2cd67c0638dc9e3bb8540bb1b4a37a5f3654208..77d3a89cfb12970f2ac617b53f66fd24
        helper: "Paseo 서버의 주소를 입력하세요.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 1909defd9328ec657b2da863a78c9d985e3103bb..13f154280a9ff312e06b5b3ee4b9cbb18da161fd 100644
+index 11bf86eb2ca18b7ba5a6eb4d0e40479e5b71754a..ca4d9a0ae11ffac995d1ab10479c707d1aa07f9f 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -1892,6 +1892,7 @@ export const ptBR: TranslationResources = {
+@@ -1930,6 +1930,7 @@ export const ptBR: TranslationResources = {
        },
      },
      direct: {
@@ -289,10 +289,10 @@ index 1909defd9328ec657b2da863a78c9d985e3103bb..13f154280a9ff312e06b5b3ee4b9cbb1
        helper: "Informe o endereço de um servidor Paseo.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 5366b1e8b906f9aa166dbbc359e6f22798899c8a..76c0227496babbac2b713c16fca9af119a2b4c2d 100644
+index 466181b9ac1e6c4f9f61df3ed2abf66d521319ea..784ef655633c0dabfebe9af31a70bbca2921e7f8 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -1891,6 +1891,7 @@ export const ru: TranslationResources = {
+@@ -1930,6 +1930,7 @@ export const ru: TranslationResources = {
        },
      },
      direct: {
@@ -301,10 +301,10 @@ index 5366b1e8b906f9aa166dbbc359e6f22798899c8a..76c0227496babbac2b713c16fca9af11
        helper: "Введите адрес сервера Paseo.",
        fields: {
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index 91fd36dce4e610055028de54228a338dcfe1e633..098fd715f8635df76e56f519b11debde9e0c3dec 100644
+index 17e4c4eab9b7a19695b72206f200c5fdfd0657de..0b89d024a8ebfd11f249259d9ad8f7ee1ac773de 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -1841,6 +1841,7 @@ export const zhCN: TranslationResources = {
+@@ -1878,6 +1878,7 @@ export const zhCN: TranslationResources = {
        },
      },
      direct: {

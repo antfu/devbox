@@ -96,10 +96,10 @@ index fb2f98841e0ccefee8befa33fe6dbad39040fa78..ef8b174554c9ba937913749b9e343474
        ).toBeVisible({ timeout: 30_000 });
      } finally {
 diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
-index 8b7489f5f02e7927470f208987e232ff8471f55c..eaf94e9902abd5e0daf99fe1d3abbe6721cf6157 100644
+index a3566ab0b14706146a8293fd6f1255459fdff41e..e700add8f386980f2b5ccf799089cdc79473543d 100644
 --- a/packages/app/src/components/sidebar-workspace-list.tsx
 +++ b/packages/app/src/components/sidebar-workspace-list.tsx
-@@ -31,7 +31,7 @@ import {
+@@ -32,7 +32,7 @@ import {
    type ActiveWorkspaceSelection,
  } from "@/stores/navigation-active-workspace-store";
  import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -108,7 +108,7 @@ index 8b7489f5f02e7927470f208987e232ff8471f55c..eaf94e9902abd5e0daf99fe1d3abbe67
  import type { Theme } from "@/styles/theme";
  import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
  import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
-@@ -120,7 +120,6 @@ import {
+@@ -122,7 +122,6 @@ import {
    SidebarWorkspaceTrailingContent,
    useSidebarWorkspaceTrailing,
  } from "@/components/sidebar/workspace-trailing";
@@ -116,7 +116,7 @@ index 8b7489f5f02e7927470f208987e232ff8471f55c..eaf94e9902abd5e0daf99fe1d3abbe67
  import { PressHighlight } from "@/components/ui/press-highlight";
  import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
  import { Shortcut } from "@/components/ui/shortcut";
-@@ -789,73 +788,6 @@ function NewWorktreeButton({
+@@ -790,73 +789,6 @@ function NewWorktreeButton({
    );
  }
  
@@ -190,7 +190,7 @@ index 8b7489f5f02e7927470f208987e232ff8471f55c..eaf94e9902abd5e0daf99fe1d3abbe67
  function ProjectHeaderRow({
    project,
    displayName,
-@@ -1792,15 +1724,6 @@ function ProjectBlock({
+@@ -1781,15 +1713,6 @@ function ProjectBlock({
            ) : null}
          </>
        );
@@ -206,7 +206,7 @@ index 8b7489f5f02e7927470f208987e232ff8471f55c..eaf94e9902abd5e0daf99fe1d3abbe67
      }
    }
  
-@@ -2613,51 +2536,6 @@ const styles = StyleSheet.create((theme) => ({
+@@ -2602,51 +2525,6 @@ const styles = StyleSheet.create((theme) => ({
      paddingBottom: theme.spacing[3],
    },
    workspaceListContainer: {},

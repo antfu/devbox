@@ -462,10 +462,10 @@ index 0000000000000000000000000000000000000000..e412b4235c0261a804ebd4a2fdda0824
 +  await replaceHostIcons(icons);
 +}
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index 6c3caba234efdb1506157c1b5848d6e6c0d2e4ec..7347ce22856b06a2eead2a5ce8cace89c03894f8 100644
+index 7d7bcc5f290e67954781e815a2e11183a2704f56..2b6f8c49a416573c4c7ba964806ec83ebef2f395 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -1926,6 +1926,7 @@ export const ar: TranslationResources = {
+@@ -1963,6 +1963,7 @@ export const ar: TranslationResources = {
        },
      },
      link: {
@@ -473,7 +473,7 @@ index 6c3caba234efdb1506157c1b5848d6e6c0d2e4ec..7347ce22856b06a2eead2a5ce8cace89
        title: "الصق رابط الاقتران",
        helper: "الصق رابط الاقتران من الخادم الخاص بك.",
        label: "رابط الاقتران",
-@@ -2791,6 +2792,7 @@ export const ar: TranslationResources = {
+@@ -2837,6 +2838,7 @@ export const ar: TranslationResources = {
        },
      },
      host: {
@@ -482,10 +482,10 @@ index 6c3caba234efdb1506157c1b5848d6e6c0d2e4ec..7347ce22856b06a2eead2a5ce8cace89
          guidance: "أزل هذا المضيف ثم أضفه مرة أخرى بكلمة المرور التي يطلبها هذا الخادم.",
        },
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index 63c4c77433b21da3d196da7fa67d2217c0feb704..7b3b831584c46ec05143c6f74c7644003085104b 100644
+index db4ed59cc4887e60df4713a6a873d804acf5b5b4..bfd7423efd23499afba64f8ad1f774f55cf40571 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -1971,6 +1971,14 @@ export const en = {
+@@ -2009,6 +2009,14 @@ export const en = {
        },
      },
      link: {
@@ -500,7 +500,7 @@ index 63c4c77433b21da3d196da7fa67d2217c0feb704..7b3b831584c46ec05143c6f74c764400
        title: "Paste pairing link",
        helper: "Paste the pairing link from your server.",
        label: "Pairing link",
-@@ -2908,6 +2916,20 @@ export const en = {
+@@ -2955,6 +2963,20 @@ export const en = {
        },
      },
      host: {
@@ -522,10 +522,10 @@ index 63c4c77433b21da3d196da7fa67d2217c0feb704..7b3b831584c46ec05143c6f74c764400
          guidance: "Remove this host and add it again with the password this daemon asks for.",
        },
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index bf7f88c48b5f794d045f084d706b35f794313aab..80de5efb8964f404255a524ee3776648dd44b062 100644
+index bee530d8d700f8040f22c773d8108d94986d5f3e..b64110f1e8f124c8bd8129aedd2c2e2e4cc2e6c6 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -1973,6 +1973,7 @@ export const es: TranslationResources = {
+@@ -2011,6 +2011,7 @@ export const es: TranslationResources = {
        },
      },
      link: {
@@ -533,7 +533,7 @@ index bf7f88c48b5f794d045f084d706b35f794313aab..80de5efb8964f404255a524ee3776648
        title: "Pegar enlace de emparejamiento",
        helper: "Pegue el enlace de emparejamiento de su servidor.",
        label: "Enlace de emparejamiento",
-@@ -2814,6 +2815,7 @@ export const es: TranslationResources = {
+@@ -2861,6 +2862,7 @@ export const es: TranslationResources = {
        },
      },
      host: {
@@ -542,10 +542,10 @@ index bf7f88c48b5f794d045f084d706b35f794313aab..80de5efb8964f404255a524ee3776648
          guidance: "Elimina este host y vuelve a añadirlo con la contraseña que pide este daemon.",
        },
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 24a39d62d3c7346f0efe297a7f704f9529301427..418d8bff3ccebc653436ec1d5a024fb6a296cef5 100644
+index ecb20e8abd83e385e57f743944674c50455cd58a..7491da94db5747861826e5316f0ca0585f90a72e 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -1972,6 +1972,7 @@ export const fr: TranslationResources = {
+@@ -2009,6 +2009,7 @@ export const fr: TranslationResources = {
        },
      },
      link: {
@@ -553,7 +553,7 @@ index 24a39d62d3c7346f0efe297a7f704f9529301427..418d8bff3ccebc653436ec1d5a024fb6
        title: "Coller le lien d’association",
        helper: "Collez le lien d’association fourni par votre serveur.",
        label: "Lien d’association",
-@@ -2817,6 +2818,7 @@ export const fr: TranslationResources = {
+@@ -2862,6 +2863,7 @@ export const fr: TranslationResources = {
        },
      },
      host: {
@@ -562,10 +562,10 @@ index 24a39d62d3c7346f0efe297a7f704f9529301427..418d8bff3ccebc653436ec1d5a024fb6
          guidance:
            "Supprimez cet hôte puis ajoutez-le à nouveau avec le mot de passe demandé par ce daemon.",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 567f8388d435f320129b1cbf91476fd743d4ae61..fb647a0fd34734ce0c8acc0350e22d07a529244f 100644
+index ae323b5336572889801c056f5b80f8dfc750f6de..1bce757f3aab909e765b271e953174ab50e1f64e 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -1944,6 +1944,7 @@ export const ja: TranslationResources = {
+@@ -1982,6 +1982,7 @@ export const ja: TranslationResources = {
        },
      },
      link: {
@@ -573,7 +573,7 @@ index 567f8388d435f320129b1cbf91476fd743d4ae61..fb647a0fd34734ce0c8acc0350e22d07
        title: "ペアリングリンクを貼り付け",
        helper: "サーバーからのペアリングリンクを貼り付けてください。",
        label: "ペアリングリンク",
-@@ -2781,6 +2782,7 @@ export const ja: TranslationResources = {
+@@ -2828,6 +2829,7 @@ export const ja: TranslationResources = {
        },
      },
      host: {
@@ -582,10 +582,10 @@ index 567f8388d435f320129b1cbf91476fd743d4ae61..fb647a0fd34734ce0c8acc0350e22d07
          guidance:
            "このホストを削除し、このデーモンが求めるパスワードを入力して追加し直してください。",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index d0c6b267caba5531a5fac2294fb35547a0bd13aa..e2cd67c0638dc9e3bb8540bb1b4a37a5f3654208 100644
+index 8af587264a82bf4d47f01ef052b97d2d8c3476fd..6b1c70a9e917ad456692a29705554d9d773c807d 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -1935,6 +1935,7 @@ export const ko: TranslationResources = {
+@@ -1972,6 +1972,7 @@ export const ko: TranslationResources = {
        },
      },
      link: {
@@ -593,7 +593,7 @@ index d0c6b267caba5531a5fac2294fb35547a0bd13aa..e2cd67c0638dc9e3bb8540bb1b4a37a5
        title: "페어링 링크 붙여넣기",
        helper: "서버에서 받은 페어링 링크를 붙여넣으세요.",
        label: "페어링 링크",
-@@ -2769,6 +2770,7 @@ export const ko: TranslationResources = {
+@@ -2815,6 +2816,7 @@ export const ko: TranslationResources = {
        },
      },
      host: {
@@ -602,10 +602,10 @@ index d0c6b267caba5531a5fac2294fb35547a0bd13aa..e2cd67c0638dc9e3bb8540bb1b4a37a5
          guidance: "이 호스트를 제거한 뒤 이 데몬이 요구하는 비밀번호로 다시 추가하세요.",
        },
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 184350f79d1303c90a02821424ab3c1fbce139b3..1909defd9328ec657b2da863a78c9d985e3103bb 100644
+index 31ef4d270479241a12de054c615d906653b0bdc6..11bf86eb2ca18b7ba5a6eb4d0e40479e5b71754a 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -1958,6 +1958,7 @@ export const ptBR: TranslationResources = {
+@@ -1996,6 +1996,7 @@ export const ptBR: TranslationResources = {
        },
      },
      link: {
@@ -613,7 +613,7 @@ index 184350f79d1303c90a02821424ab3c1fbce139b3..1909defd9328ec657b2da863a78c9d98
        title: "Colar link de pareamento",
        helper: "Cole o link de pareamento do seu servidor.",
        label: "Link de pareamento",
-@@ -2795,6 +2796,7 @@ export const ptBR: TranslationResources = {
+@@ -2842,6 +2843,7 @@ export const ptBR: TranslationResources = {
        },
      },
      host: {
@@ -622,10 +622,10 @@ index 184350f79d1303c90a02821424ab3c1fbce139b3..1909defd9328ec657b2da863a78c9d98
          guidance: "Remova este host e adicione-o novamente com a senha que este daemon pede.",
        },
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 7f3a419f0494427bdc8c81c2929dc5dd3ab61276..5366b1e8b906f9aa166dbbc359e6f22798899c8a 100644
+index e7ab17a74bf06755ffedf28382229331455f2ef9..466181b9ac1e6c4f9f61df3ed2abf66d521319ea 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -1957,6 +1957,7 @@ export const ru: TranslationResources = {
+@@ -1996,6 +1996,7 @@ export const ru: TranslationResources = {
        },
      },
      link: {
@@ -633,7 +633,7 @@ index 7f3a419f0494427bdc8c81c2929dc5dd3ab61276..5366b1e8b906f9aa166dbbc359e6f227
        title: "Вставить ссылку для сопряжения",
        helper: "Вставьте ссылку на сопряжение с вашего сервера.",
        label: "Ссылка на сопряжение",
-@@ -2801,6 +2802,7 @@ export const ru: TranslationResources = {
+@@ -2849,6 +2850,7 @@ export const ru: TranslationResources = {
        },
      },
      host: {
@@ -642,10 +642,10 @@ index 7f3a419f0494427bdc8c81c2929dc5dd3ab61276..5366b1e8b906f9aa166dbbc359e6f227
          guidance:
            "Удалите этот хост и добавьте его снова с паролем, который запрашивает этот демон.",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index 35e4ef4a7be8239d59bf760181e487ca69f8f41b..91fd36dce4e610055028de54228a338dcfe1e633 100644
+index b3604a39f3b55962e155912351b78eef47ee109f..17e4c4eab9b7a19695b72206f200c5fdfd0657de 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -1905,6 +1905,7 @@ export const zhCN: TranslationResources = {
+@@ -1942,6 +1942,7 @@ export const zhCN: TranslationResources = {
        },
      },
      link: {
@@ -653,7 +653,7 @@ index 35e4ef4a7be8239d59bf760181e487ca69f8f41b..91fd36dce4e610055028de54228a338d
        title: "粘贴配对链接",
        helper: "粘贴来自 server 的配对链接。",
        label: "配对链接",
-@@ -2725,6 +2726,7 @@ export const zhCN: TranslationResources = {
+@@ -2771,6 +2772,7 @@ export const zhCN: TranslationResources = {
        },
      },
      host: {
@@ -662,10 +662,10 @@ index 35e4ef4a7be8239d59bf760181e487ca69f8f41b..91fd36dce4e610055028de54228a338d
          guidance: "移除此主机，然后使用此守护进程要求的密码重新添加。",
        },
 diff --git a/packages/app/src/runtime/host-runtime.ts b/packages/app/src/runtime/host-runtime.ts
-index 42ebf9f85b28884b4b9b1655bd98959813a92a70..20611f7da9486beaf78590da749795e2139bda26 100644
+index 64f753311e41b6c382e211b8c29c4bcc81a88cc8..fa14f37f6855a048f14b07b863bd2581ef8c7f48 100644
 --- a/packages/app/src/runtime/host-runtime.ts
 +++ b/packages/app/src/runtime/host-runtime.ts
-@@ -2271,6 +2271,12 @@ export class HostRuntimeStore {
+@@ -2420,6 +2420,12 @@ export class HostRuntimeStore {
      await this.persistHosts();
    }
  
@@ -769,10 +769,10 @@ index 0000000000000000000000000000000000000000..5b765f4fc562efd5698d7c7524c3c880
 +  );
 +}
 diff --git a/packages/app/src/screens/settings/host-page.tsx b/packages/app/src/screens/settings/host-page.tsx
-index ed75fbfd91531af83eb6d611b8e192b56fbe89ff..1dbc2165a3198c756aa0ef642f4e6ed0f719ea26 100644
+index c77afad09e9cff58b1c0767c94859093337000af..cbe1339ac6477aa7351887f8d69ce9b463de4aea 100644
 --- a/packages/app/src/screens/settings/host-page.tsx
 +++ b/packages/app/src/screens/settings/host-page.tsx
-@@ -53,6 +53,7 @@ import { ProvidersSection } from "@/screens/settings/providers-section";
+@@ -54,6 +54,7 @@ import { openProviderSettings } from "@/navigation/settings-navigation";
  import { HostUsageSection } from "@/usage";
  import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
  import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -780,7 +780,7 @@ index ed75fbfd91531af83eb6d611b8e192b56fbe89ff..1dbc2165a3198c756aa0ef642f4e6ed0
  import { useSessionStore } from "@/stores/session-store";
  import { settingsStyles } from "@/styles/settings";
  import type { HostConnection, HostProfile } from "@/types/host-connection";
-@@ -384,6 +385,7 @@ export function HostSettingsPage({
+@@ -389,6 +390,7 @@ export function HostSettingsPage({
        <HostConnectionError serverId={serverId} />
  
        <HostAppearanceSection host={host} />

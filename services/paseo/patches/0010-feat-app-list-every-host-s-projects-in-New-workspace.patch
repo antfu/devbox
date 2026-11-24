@@ -19,10 +19,10 @@ Fork-Change: F-15
  5 files changed, 146 insertions(+), 6 deletions(-)
 
 diff --git a/packages/app/src/screens/new-workspace-screen.tsx b/packages/app/src/screens/new-workspace-screen.tsx
-index 96d076224df704ed6a84bdff00ddc0984d1171bd..8a5071b59a6436759f99cb62b040bce7c663ff8c 100644
+index e26fd6eae49b2c601387efd4514f23f5c4fabd73..26947f46564f700fb431eef511a81364806f07f7 100644
 --- a/packages/app/src/screens/new-workspace-screen.tsx
 +++ b/packages/app/src/screens/new-workspace-screen.tsx
-@@ -979,6 +979,7 @@ export function NewWorkspaceScreen({
+@@ -1045,6 +1045,7 @@ export function NewWorkspaceScreen({
      routeProjectContextViewKey,
      lastActiveProject,
      allowAllProjects: supportsWorkspaceMultiplicity,

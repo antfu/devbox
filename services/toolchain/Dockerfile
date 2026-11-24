@@ -8,7 +8,7 @@
 # the tag moves with every node and Debian release, and a new base rebuilds every layer of every image, about
 # 2 GB to download. Bump the digest on purpose, e.g. when moving to a new paseo release:
 # `docker buildx imagetools inspect node:22-bookworm-slim` prints the current one.
-ARG NODE_IMAGE=node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:170fab707454b1350981adcdc2f536ec21f24d06d7f008e8d40064afeacb8a94
 FROM ${NODE_IMAGE}
 
 # Layers run from the least to the most often changed, so an edit near the bottom keeps the heavy layers

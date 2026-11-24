@@ -53,10 +53,10 @@ Fork-Change: F-10
  create mode 100644 packages/app/src/screens/settings/quick-actions-section.tsx
 
 diff --git a/packages/app/src/components/sidebar-workspace-list.tsx b/packages/app/src/components/sidebar-workspace-list.tsx
-index eaf94e9902abd5e0daf99fe1d3abbe6721cf6157..0f2876b700b655d38241a7369f2ee484099c35b0 100644
+index e700add8f386980f2b5ccf799089cdc79473543d..ae75700d681c5cb2e999abd076c5da21be2e78e6 100644
 --- a/packages/app/src/components/sidebar-workspace-list.tsx
 +++ b/packages/app/src/components/sidebar-workspace-list.tsx
-@@ -349,7 +349,7 @@ export function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewS
+@@ -350,7 +350,7 @@ export function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewS
        {isHovered ? (
          <ThemedExternalLink size={12} uniProps={foregroundColorMapping} />
        ) : (
@@ -627,10 +627,10 @@ index 4de297f26cf0b85d66c9c13001c091f1819665d6..b66e57085914395df3bce9bdea7992c8
    return <Icon size={size} strokeWidth={strokeWidth} uniProps={color} />;
  }
 diff --git a/packages/app/src/i18n/resources/ar.ts b/packages/app/src/i18n/resources/ar.ts
-index d84568834d7a29044ad45d3e3c5a01664220d465..f3e47159a7d2b4f3d40119d36ab254bd87179930 100644
+index b6e8a754d7482ecee67cc685884016bea38f45c1..6af50aa6756bc815a68be69395c85746b3d90764 100644
 --- a/packages/app/src/i18n/resources/ar.ts
 +++ b/packages/app/src/i18n/resources/ar.ts
-@@ -1025,6 +1025,7 @@ export const ar: TranslationResources = {
+@@ -1033,6 +1033,7 @@ export const ar: TranslationResources = {
          failedOpen: "فشل في فتح مساحة العمل",
        },
        pr: {
@@ -638,7 +638,7 @@ index d84568834d7a29044ad45d3e3c5a01664220d465..f3e47159a7d2b4f3d40119d36ab254bd
          actions: {
            viewPullRequest: "عرض",
            openOn: "فتح على {{brand}}",
-@@ -2334,7 +2335,9 @@ export const ar: TranslationResources = {
+@@ -2377,7 +2378,9 @@ export const ar: TranslationResources = {
        editProject: "تحرير{{projectName}}",
      },
      groupInfo: "حول{{title}}",
@@ -649,10 +649,10 @@ index d84568834d7a29044ad45d3e3c5a01664220d465..f3e47159a7d2b4f3d40119d36ab254bd
        chat: "الدردشة",
        appearance: "مظهر",
 diff --git a/packages/app/src/i18n/resources/en.ts b/packages/app/src/i18n/resources/en.ts
-index cb21744068c19fcbcd140761c642b66234b1a762..742a4bc8ec914d9cf131fd403952dd891eccf919 100644
+index 6290afeb72d89611770d578171a7576d916fc56a..44c15725d9e732bca8c4a3073129a095a25fd2f1 100644
 --- a/packages/app/src/i18n/resources/en.ts
 +++ b/packages/app/src/i18n/resources/en.ts
-@@ -1035,6 +1035,22 @@ export const en = {
+@@ -1044,6 +1044,22 @@ export const en = {
          failedOpen: "Failed to open workspace",
        },
        pr: {
@@ -675,7 +675,7 @@ index cb21744068c19fcbcd140761c642b66234b1a762..742a4bc8ec914d9cf131fd403952dd89
          actions: {
            viewPullRequest: "View",
            openOn: "Open on {{brand}}",
-@@ -2326,7 +2342,14 @@ export const en = {
+@@ -2370,7 +2386,14 @@ export const en = {
        editProject: "Edit {{projectName}}",
      },
      groupInfo: "About {{title}}",
@@ -691,10 +691,10 @@ index cb21744068c19fcbcd140761c642b66234b1a762..742a4bc8ec914d9cf131fd403952dd89
        chat: "Chat",
        appearance: "Appearance",
 diff --git a/packages/app/src/i18n/resources/es.ts b/packages/app/src/i18n/resources/es.ts
-index 625baf8f797f6df25c1cfa3d4847081e079b1f74..49dd1d94f3580636473015056735564758a17287 100644
+index 0a85305a01c7a89afecc0d545328ac47bfe993aa..6b8d98e9cafc3ea2bbd91a60cc5bdcd72b05a087 100644
 --- a/packages/app/src/i18n/resources/es.ts
 +++ b/packages/app/src/i18n/resources/es.ts
-@@ -1058,6 +1058,7 @@ export const es: TranslationResources = {
+@@ -1067,6 +1067,7 @@ export const es: TranslationResources = {
          failedOpen: "No se pudo abrir el espacio de trabajo",
        },
        pr: {
@@ -702,7 +702,7 @@ index 625baf8f797f6df25c1cfa3d4847081e079b1f74..49dd1d94f35806364730150567355647
          actions: {
            viewPullRequest: "Ver",
            openOn: "Abrir en {{brand}}",
-@@ -2347,7 +2348,9 @@ export const es: TranslationResources = {
+@@ -2391,7 +2392,9 @@ export const es: TranslationResources = {
        editProject: "Editar{{projectName}}",
      },
      groupInfo: "Acerca de{{title}}",
@@ -713,10 +713,10 @@ index 625baf8f797f6df25c1cfa3d4847081e079b1f74..49dd1d94f35806364730150567355647
        chat: "Chat",
        appearance: "Apariencia",
 diff --git a/packages/app/src/i18n/resources/fr.ts b/packages/app/src/i18n/resources/fr.ts
-index 1233d91f00373c2a7ce66de1f32394ac35155fad..77d1c467b70e534a93769bc2799d23ff8b0e29ff 100644
+index bf0aa527864798d9a75fb554bc386a0c2cc0eb46..aac9621ea5908f5108584ac861e848bce2d52529 100644
 --- a/packages/app/src/i18n/resources/fr.ts
 +++ b/packages/app/src/i18n/resources/fr.ts
-@@ -1051,6 +1051,7 @@ export const fr: TranslationResources = {
+@@ -1059,6 +1059,7 @@ export const fr: TranslationResources = {
          failedOpen: "Impossible d’ouvrir l’espace de travail",
        },
        pr: {
@@ -724,7 +724,7 @@ index 1233d91f00373c2a7ce66de1f32394ac35155fad..77d1c467b70e534a93769bc2799d23ff
          actions: {
            viewPullRequest: "Voir",
            openOn: "Ouvrir sur {{brand}}",
-@@ -2348,7 +2349,9 @@ export const fr: TranslationResources = {
+@@ -2391,7 +2392,9 @@ export const fr: TranslationResources = {
        editProject: "Modifier {{projectName}}",
      },
      groupInfo: "À propos de {{title}}",
@@ -735,10 +735,10 @@ index 1233d91f00373c2a7ce66de1f32394ac35155fad..77d1c467b70e534a93769bc2799d23ff
        chat: "Discussion",
        appearance: "Apparence",
 diff --git a/packages/app/src/i18n/resources/ja.ts b/packages/app/src/i18n/resources/ja.ts
-index 1b67a365ee7250710abe614880ab6e001430ccca..6d49636ef6998a942134d0abd0020fd8d865719d 100644
+index 2030f6288ba3bce626968857673caf42bf473e2a..5ef6c60b2a3373c03aa560cdfd27a3a6e3fe31fa 100644
 --- a/packages/app/src/i18n/resources/ja.ts
 +++ b/packages/app/src/i18n/resources/ja.ts
-@@ -1038,6 +1038,7 @@ export const ja: TranslationResources = {
+@@ -1047,6 +1047,7 @@ export const ja: TranslationResources = {
          failedOpen: "ワークスペースを開けませんでした",
        },
        pr: {
@@ -746,7 +746,7 @@ index 1b67a365ee7250710abe614880ab6e001430ccca..6d49636ef6998a942134d0abd0020fd8
          actions: {
            viewPullRequest: "表示",
            openOn: "{{brand}}で開く",
-@@ -2321,7 +2322,9 @@ export const ja: TranslationResources = {
+@@ -2365,7 +2366,9 @@ export const ja: TranslationResources = {
        editProject: "{{projectName}}を編集",
      },
      groupInfo: "{{title}}について",
@@ -757,10 +757,10 @@ index 1b67a365ee7250710abe614880ab6e001430ccca..6d49636ef6998a942134d0abd0020fd8
        chat: "チャット",
        appearance: "外観",
 diff --git a/packages/app/src/i18n/resources/ko.ts b/packages/app/src/i18n/resources/ko.ts
-index 10f48f38e9d8af605fbcc5b331b5c622c8bafa48..a42a9d5fcdb67c92e9239aecbab2b1473014358b 100644
+index 810ec1f5a1a52b5ff9b774aa6f55c0508aea3911..8f6fe50270caefae6efa5ba5d8b6079407f76156 100644
 --- a/packages/app/src/i18n/resources/ko.ts
 +++ b/packages/app/src/i18n/resources/ko.ts
-@@ -1032,6 +1032,7 @@ export const ko: TranslationResources = {
+@@ -1040,6 +1040,7 @@ export const ko: TranslationResources = {
          failedOpen: "워크스페이스를 열지 못했습니다",
        },
        pr: {
@@ -768,7 +768,7 @@ index 10f48f38e9d8af605fbcc5b331b5c622c8bafa48..a42a9d5fcdb67c92e9239aecbab2b147
          actions: {
            viewPullRequest: "보기",
            openOn: "{{brand}}에서 열기",
-@@ -2309,7 +2310,9 @@ export const ko: TranslationResources = {
+@@ -2352,7 +2353,9 @@ export const ko: TranslationResources = {
        editProject: "{{projectName}} 편집",
      },
      groupInfo: "{{title}} 정보",
@@ -779,10 +779,10 @@ index 10f48f38e9d8af605fbcc5b331b5c622c8bafa48..a42a9d5fcdb67c92e9239aecbab2b147
        chat: "채팅",
        appearance: "모양",
 diff --git a/packages/app/src/i18n/resources/pt-BR.ts b/packages/app/src/i18n/resources/pt-BR.ts
-index 2184bfe2d2e53ca33eaedcf1859355e5b69d3c59..363b3b13bc9feaae9049098a590fbd57ad2b5df3 100644
+index d34db490cde1f6e331257eeb9ac3690883180093..f0de40da5ef0313b64c1171120bd7203a8a067a4 100644
 --- a/packages/app/src/i18n/resources/pt-BR.ts
 +++ b/packages/app/src/i18n/resources/pt-BR.ts
-@@ -1048,6 +1048,7 @@ export const ptBR: TranslationResources = {
+@@ -1057,6 +1057,7 @@ export const ptBR: TranslationResources = {
          failedOpen: "Falha ao abrir workspace",
        },
        pr: {
@@ -790,7 +790,7 @@ index 2184bfe2d2e53ca33eaedcf1859355e5b69d3c59..363b3b13bc9feaae9049098a590fbd57
          actions: {
            viewPullRequest: "Ver",
            openOn: "Abrir no {{brand}}",
-@@ -2332,7 +2333,9 @@ export const ptBR: TranslationResources = {
+@@ -2376,7 +2377,9 @@ export const ptBR: TranslationResources = {
        editProject: "Editar {{projectName}}",
      },
      groupInfo: "Sobre {{title}}",
@@ -801,10 +801,10 @@ index 2184bfe2d2e53ca33eaedcf1859355e5b69d3c59..363b3b13bc9feaae9049098a590fbd57
        chat: "Chat",
        appearance: "Aparência",
 diff --git a/packages/app/src/i18n/resources/ru.ts b/packages/app/src/i18n/resources/ru.ts
-index 43ce118aaac10619c0cb367846927bb4c4101afd..db7cb7333a9fc7caf039c401eaefda56dea4a745 100644
+index 6bdafe8263129997c22544323d73eae2eff8a3bb..3dae4e2fa9657cc0c60766990d6beca5f64c34e6 100644
 --- a/packages/app/src/i18n/resources/ru.ts
 +++ b/packages/app/src/i18n/resources/ru.ts
-@@ -1042,6 +1042,7 @@ export const ru: TranslationResources = {
+@@ -1052,6 +1052,7 @@ export const ru: TranslationResources = {
          failedOpen: "Не удалось открыть рабочее пространство",
        },
        pr: {
@@ -812,7 +812,7 @@ index 43ce118aaac10619c0cb367846927bb4c4101afd..db7cb7333a9fc7caf039c401eaefda56
          actions: {
            viewPullRequest: "Просмотреть",
            openOn: "Открыть на {{brand}}",
-@@ -2333,7 +2334,9 @@ export const ru: TranslationResources = {
+@@ -2378,7 +2379,9 @@ export const ru: TranslationResources = {
        editProject: "Изменить {{projectName}}",
      },
      groupInfo: "О разделе «{{title}}»",
@@ -823,10 +823,10 @@ index 43ce118aaac10619c0cb367846927bb4c4101afd..db7cb7333a9fc7caf039c401eaefda56
        chat: "Чат",
        appearance: "Оформление",
 diff --git a/packages/app/src/i18n/resources/zh-CN.ts b/packages/app/src/i18n/resources/zh-CN.ts
-index 33c5577087c96079b1920816e99ae56ec2197498..cfdd032b81b3269d8e71b46f2826bc9268b3e9d5 100644
+index 89d71cba0eef363828be73773bde9926dcfbb8e1..d74f1046d3b53edae3d17411c6a4e15e57bceba1 100644
 --- a/packages/app/src/i18n/resources/zh-CN.ts
 +++ b/packages/app/src/i18n/resources/zh-CN.ts
-@@ -1017,6 +1017,7 @@ export const zhCN: TranslationResources = {
+@@ -1025,6 +1025,7 @@ export const zhCN: TranslationResources = {
          failedOpen: "打开 workspace 失败",
        },
        pr: {
@@ -834,7 +834,7 @@ index 33c5577087c96079b1920816e99ae56ec2197498..cfdd032b81b3269d8e71b46f2826bc92
          actions: {
            viewPullRequest: "查看",
            openOn: "在 {{brand}} 上打开",
-@@ -2275,7 +2276,9 @@ export const zhCN: TranslationResources = {
+@@ -2318,7 +2319,9 @@ export const zhCN: TranslationResources = {
        editProject: "编辑 {{projectName}}",
      },
      groupInfo: "关于 {{title}}",
@@ -865,7 +865,7 @@ index c4abe7a3fd30d8517fa4663f82ad5f616c4257f1..90e893a4ee142ff95003c0455996ecb3
    );
  });
 diff --git a/packages/app/src/screens/settings-screen.tsx b/packages/app/src/screens/settings-screen.tsx
-index 9f8de1cb731809c10b4cd3563bf505e121ca9586..d5ad879e12db1e70b6d0ed1f17cbb4adc2e73417 100644
+index 7cce8746ba6c1e1505c58b1d23b571b29d721043..7df01393f384c193a39f8558b0e24dee6f2c878d 100644
 --- a/packages/app/src/screens/settings-screen.tsx
 +++ b/packages/app/src/screens/settings-screen.tsx
 @@ -39,6 +39,7 @@ import {
@@ -884,7 +884,7 @@ index 9f8de1cb731809c10b4cd3563bf505e121ca9586..d5ad879e12db1e70b6d0ed1f17cbb4ad
  import { SidebarNavSection } from "@/screens/settings/sidebar/sidebar-nav-section";
  import { SendingSection } from "@/screens/settings/general/sending-section";
  import {
-@@ -174,6 +176,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
+@@ -175,6 +177,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
      Content: SidebarNavSection,
    },
    { id: "chat", labelKey: "settings.sections.chat", icon: MessageSquare, Content: ChatSection },
@@ -992,7 +992,7 @@ index 0000000000000000000000000000000000000000..261f8ee839ddbb521f0bac1814b3aaba
 +  },
 +}));
 diff --git a/packages/app/src/utils/host-routes.ts b/packages/app/src/utils/host-routes.ts
-index f258c6ba5b19cacb4e5c8dbce4bf39ccedc65d02..6baf1829c89d8059a6ba753c4bb04117cada423f 100644
+index 14db64125d09fccaf2c3b607164933910a849120..2654dee0c84625f947a165913ec5cb0bcfa95696 100644
 --- a/packages/app/src/utils/host-routes.ts
 +++ b/packages/app/src/utils/host-routes.ts
 @@ -494,6 +494,7 @@ export const SETTINGS_SECTION_SLUGS = [
